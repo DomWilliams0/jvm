@@ -1,8 +1,8 @@
 use jvm::{Jvm, JvmArgs};
-use std::error::Error;
 use log::*;
+use std::error::Error;
 
-fn main() -> Result<(), Box<dyn Error>>{
+fn main() -> Result<(), Box<dyn Error>> {
     env_logger::builder()
         .filter_level(LevelFilter::Debug)
         .init();

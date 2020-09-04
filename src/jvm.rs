@@ -1,18 +1,19 @@
-use std::path::PathBuf;
-use log::*;
-use thiserror::*;
+use crate::classpath::ClassPath;
+use crate::properties::SystemProperties;
 use crate::JvmResult;
-use crate::class::ClassLoader;
+use itertools::Itertools;
+use log::*;
+use std::path::PathBuf;
+use thiserror::*;
 
 pub struct Jvm {
-    loader: ClassLoader,
+    // loader: ClassLoader,
     main: String,
 }
 
 #[derive(Default, Debug)]
 pub struct JvmArgs {
-    // TODO bootstrap classpath
-    pub classpath: Vec<PathBuf>,
+    pub properties: SystemProperties,
     pub main: String,
 }
 
@@ -23,36 +24,47 @@ pub enum ArgError {
 
     #[error("Missing main class")]
     MissingMain,
+
+    #[error("Missing boot classpath")]
+    MissingBoot,
 }
 
 impl Jvm {
     pub fn new(args: JvmArgs) -> JvmResult<Self> {
-        let loader = ClassLoader::new(args.classpath);
-        Ok(Self {loader, main: args.main})
+        // TODO load java/lang/* with native bootstrap classloader
+
+        // TODO set all properties in gnu/classpath/VMSystemProperties.preinit
+
+        Ok(Self { main: args.main })
     }
 
     pub fn run_main(&mut self) -> JvmResult<()> {
-        // TODO this is a playground for now
-        let path = self.loader.find(&self.main).expect("bad main");
-        info!("found main at {:?}", path);
-
-        let bytes = std::fs::read(path).expect("io");
-        let class = javaclass::load_from_buffer(&bytes).expect("bad class");
-        info!("class: {:?}", class);
+        // // TODO this is a playground for now
+        // let path = self.loader.find(&self.main).expect("bad main");
+        // info!("found main at {:?}", path);
+        //
+        // let bytes = std::fs::read(path).expect("io");
+        // let class = javaclass::load_from_buffer(&bytes).expect("bad class");
+        // info!("class: {:?}", class);
 
         Ok(())
     }
 }
 
 impl JvmArgs {
-    pub fn parse(mut args: impl Iterator<Item=String>) -> Result<Self, ArgError> {
+    pub fn parse(mut args: impl Iterator<Item = String>) -> Result<Self, ArgError> {
         let mut jvm_args = Self::default();
 
         // TODO actually parse args with something like clap
         jvm_args.main = args.next().ok_or(ArgError::MissingMain)?;
 
-        jvm_args.classpath.extend(args.map(PathBuf::from));
+        let bootclasspath = ClassPath::new(vec![args.next().ok_or(ArgError::MissingBoot)?.into()]);
+        let classpath = ClassPath::new(args.map(PathBuf::from).collect_vec());
 
+        jvm_args.properties.set_path("java.class.path", &classpath);
+        jvm_args
+            .properties
+            .set_path("sun.boot.class.path", &bootclasspath);
 
         Ok(jvm_args)
     }

@@ -1,7 +1,7 @@
-
+mod classpath;
 mod error;
 mod jvm;
-mod class;
+mod properties;
 
-pub use jvm::{Jvm, JvmArgs};
 pub use error::{JvmError, JvmResult};
+pub use jvm::{Jvm, JvmArgs};
