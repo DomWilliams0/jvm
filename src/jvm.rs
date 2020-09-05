@@ -77,7 +77,7 @@ impl Jvm {
     }
 
     pub fn run_main(&mut self) -> JvmResult<()> {
-        todo!()
+        panic!("good job getting this far")
     }
 
     pub fn destroy(&mut self) -> JvmResult<()> {

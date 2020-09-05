@@ -8,10 +8,12 @@ use parking_lot::RwLock;
 use crate::alloc::VmRef;
 use crate::error::Throwable;
 use crate::jvm::JvmGlobalState;
+use std::thread::ThreadId;
 
 /// Each thread has its own in TLS
 pub struct JvmThreadState {
     jvm: Arc<JvmGlobalState>,
+    thread_handle: ThreadId,
     // TODO other thread data like frames, current class, exception
     exception: RefCell<Option<VmRef<Throwable /* TODO vmobject */>>>,
 }
@@ -118,6 +120,7 @@ impl JvmThreadState {
     pub fn new(jvm: Arc<JvmGlobalState>) -> Self {
         Self {
             jvm,
+            thread_handle: std::thread::current().id(),
             exception: RefCell::new(None),
         }
     }
@@ -128,5 +131,9 @@ impl JvmThreadState {
             debug!("overwrote old exception with new exception: {:?}", old);
         }
         debug!("set exception: {:?}", current.as_ref().unwrap());
+    }
+
+    pub fn thread(&self) -> ThreadId {
+        self.thread_handle
     }
 }

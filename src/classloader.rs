@@ -8,7 +8,7 @@ use crate::alloc::VmRef;
 use crate::class::{Class, Object};
 use crate::classpath::ClassPath;
 use crate::error::{Throwables, VmResult};
-use crate::JvmResult;
+use crate::thread;
 use javaclass::ClassError;
 
 pub struct ClassLoader {
@@ -23,6 +23,7 @@ enum LoadState {
     // TODO linked?
 }
 
+#[derive(Clone)]
 pub enum WhichLoader {
     Bootstrap,
     User(VmRef<Object>),
@@ -42,8 +43,38 @@ impl ClassLoader {
         class_name: &str,
         bytes: &[u8],
         loader: WhichLoader,
-    ) -> JvmResult<VmRef<Class>> {
-        todo!()
+    ) -> VmResult<VmRef<Class>> {
+        // TODO register class "package" with loader (https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-5.html#jvms-5.3)
+
+        // load class
+        let loaded = match javaclass::load_from_buffer(&bytes) {
+            Ok(cls) => cls,
+            Err(err) => {
+                // TODO actually instantiate exceptions
+                let exc = match err {
+                    ClassError::Unsupported(_) => Throwables::UnsupportedClassVersionError,
+                    ClassError::Io(_) => Throwables::Other("IOError"),
+                    _ => Throwables::ClassFormatError,
+                };
+                return Err(exc);
+            }
+        };
+
+        // link loaded .class
+        let linked = Class::link(class_name, loaded, loader, self)?;
+
+        self.classes.insert(
+            class_name.to_owned(),
+            (LoadState::Loaded(thread::get().thread()), linked.clone()),
+        );
+
+        // link
+        // - TODO verify class
+        // - prepare (initialise static fields)
+        // - resolve all symbolic dependencies and load them too
+        // initialise (https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-5.html#jvms-5.5)
+
+        Ok(linked)
     }
 
     // TODO ClassLoaderRef that holds an upgradable rwlock guard, so no need to hold the lock for the whole method
@@ -71,33 +102,7 @@ impl ClassLoader {
         // TODO array classes are treated differently
 
         let class_bytes = self.find_boot_class(class_name)?;
-
-        // TODO register class "package" (https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-5.html#jvms-5.3)
-
-        // load class
-        let loaded = match javaclass::load_from_buffer(&class_bytes) {
-            Ok(cls) => cls,
-            Err(err) => {
-                // TODO actually instantiate exceptions
-                let exc = match err {
-                    ClassError::Unsupported(_) => Throwables::UnsupportedClassVersionError,
-                    ClassError::Io(_) => Throwables::Other("IOError"),
-                    _ => Throwables::ClassFormatError,
-                };
-                return Err(exc);
-            }
-        };
-
-        // link loaded .class
-        let linked = Class::link(class_name, loaded, self)?;
-
-        // link
-        // - TODO verify class
-        // - prepare (initialise static fields)
-        // - resolve all symbolic dependencies and load them too
-        // initialise (https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-5.html#jvms-5.5)
-
-        todo!("{:?}", class_name)
+        self.define_class(class_name, &class_bytes, loader)
     }
 
     fn find_boot_class(&self, class_name: &str) -> VmResult<Vec<u8>> {
@@ -115,14 +120,9 @@ impl ClassLoader {
         Ok(bytes)
     }
 
-    // fn link_class(&mut self, class_name: &str, parsed_class: javaclass::ClassFile) -> VmResult<VmRef<Class>> {
-    //
-    //
-    //     todo!()
-    // }
-
     pub fn init_bootstrap_classes(&mut self) -> VmResult<()> {
-        self.load_class("java/lang/ClassLoader", WhichLoader::Bootstrap)?;
+        // self.load_class("java/lang/ClassLoader", WhichLoader::Bootstrap)?;
+        self.load_class("java/util/HashMap", WhichLoader::Bootstrap)?;
         Ok(())
     }
 }

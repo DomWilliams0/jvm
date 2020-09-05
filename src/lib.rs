@@ -1,5 +1,5 @@
+pub use self::jvm::{Jvm, JvmArgs};
 pub use error::{JvmError, JvmResult};
-pub use jvm::{Jvm, JvmArgs};
 
 mod alloc;
 mod class;
