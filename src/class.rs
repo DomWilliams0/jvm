@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::mem::MaybeUninit;
 
-use javaclass::attribute::SourceFile;
-use javaclass::{AccessFlags, ClassError, FieldAccessFlags};
+use cafebabe::attribute::SourceFile;
+use cafebabe::{AccessFlags, ClassError, FieldAccessFlags};
 use lazy_static::lazy_static;
 use log::*;
 use strum_macros::EnumDiscriminants;
@@ -11,8 +11,8 @@ use crate::alloc::{InternedString, NativeString, VmRef};
 use crate::classloader::{ClassLoader, WhichLoader};
 use crate::error::{Throwables, VmResult};
 use crate::types::DataValue;
+use cafebabe::mutf8::mstr;
 use itertools::Itertools;
-use javaclass::mutf8::mstr;
 
 pub struct Class {
     name: InternedString,
@@ -54,7 +54,7 @@ pub struct Field {
 impl Class {
     pub fn link(
         expected_name: &mstr,
-        loaded: javaclass::ClassFile,
+        loaded: cafebabe::ClassFile,
         loader: WhichLoader,
         classloader: &mut ClassLoader,
     ) -> VmResult<VmRef<Self>> {

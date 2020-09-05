@@ -1,5 +1,5 @@
 use crate::class::Object;
-use javaclass::mutf8::MString;
+use cafebabe::mutf8::MString;
 use std::sync::Arc;
 
 // TODO gc arena

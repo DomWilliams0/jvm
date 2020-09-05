@@ -9,8 +9,8 @@ use crate::class::{Class, Object};
 use crate::classpath::ClassPath;
 use crate::error::{Throwables, VmResult};
 use crate::thread;
-use javaclass::mutf8::{mstr, MString};
-use javaclass::ClassError;
+use cafebabe::mutf8::{mstr, MString};
+use cafebabe::ClassError;
 
 pub struct ClassLoader {
     classes: HashMap<InternedString, (LoadState, VmRef<Class>)>,
@@ -48,7 +48,7 @@ impl ClassLoader {
         // TODO register class "package" with loader (https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-5.html#jvms-5.3)
 
         // load class
-        let loaded = match javaclass::load_from_buffer(&bytes) {
+        let loaded = match cafebabe::load_from_buffer(&bytes) {
             Ok(cls) => cls,
             Err(err) => {
                 // TODO actually instantiate exceptions
