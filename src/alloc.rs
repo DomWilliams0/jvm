@@ -1,4 +1,5 @@
 use crate::class::Object;
+use javaclass::mutf8::MString;
 use std::sync::Arc;
 
 // TODO gc arena
@@ -6,9 +7,9 @@ pub type VmRef<T> = Arc<T>;
 
 // TODO actually intern strings
 
-pub type NativeString = String;
+pub type NativeString = MString;
 
-pub type InternedString = String;
+pub type InternedString = MString;
 
 // TODO method on VmRef
 pub fn is_null(vmref: &VmRef<Object>) -> bool {

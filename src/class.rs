@@ -12,6 +12,7 @@ use crate::classloader::{ClassLoader, WhichLoader};
 use crate::error::{Throwables, VmResult};
 use crate::types::DataValue;
 use itertools::Itertools;
+use javaclass::mutf8::mstr;
 
 pub struct Class {
     name: InternedString,
@@ -52,7 +53,7 @@ pub struct Field {
 
 impl Class {
     pub fn link(
-        expected_name: &str,
+        expected_name: &mstr,
         loaded: javaclass::ClassFile,
         loader: WhichLoader,
         classloader: &mut ClassLoader,
@@ -94,7 +95,7 @@ impl Class {
                 let super_class = classloader.load_class(super_name, loader.clone())?;
                 Some(super_class)
             }
-            Err(ClassError::NoSuper) if name == "java/lang/Object" => {
+            Err(ClassError::NoSuper) if name.to_utf8() == "java/lang/Object" => {
                 // the one exception, no super class expected
                 None
             }

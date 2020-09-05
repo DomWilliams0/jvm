@@ -9,6 +9,7 @@ use crate::class::{Class, Object};
 use crate::classpath::ClassPath;
 use crate::error::{Throwables, VmResult};
 use crate::thread;
+use javaclass::mutf8::{mstr, MString};
 use javaclass::ClassError;
 
 pub struct ClassLoader {
@@ -40,7 +41,7 @@ impl ClassLoader {
 
     pub fn define_class(
         &mut self,
-        class_name: &str,
+        class_name: &mstr,
         bytes: &[u8],
         loader: WhichLoader,
     ) -> VmResult<VmRef<Class>> {
@@ -79,7 +80,7 @@ impl ClassLoader {
     }
 
     // TODO ClassLoaderRef that holds an upgradable rwlock guard, so no need to hold the lock for the whole method
-    pub fn load_class(&mut self, class_name: &str, loader: WhichLoader) -> VmResult<VmRef<Class>> {
+    pub fn load_class(&mut self, class_name: &mstr, loader: WhichLoader) -> VmResult<VmRef<Class>> {
         // check if loading is needed
         if let Some((state, obj)) = self.classes.get(class_name) {
             match state {
@@ -102,7 +103,7 @@ impl ClassLoader {
 
         // TODO array classes are treated differently
 
-        let class_bytes = self.find_boot_class(class_name)?;
+        let class_bytes = self.find_boot_class(class_name.to_utf8().as_ref())?;
         self.define_class(class_name, &class_bytes, loader)
     }
 
@@ -124,13 +125,16 @@ impl ClassLoader {
     pub fn init_bootstrap_classes(&mut self) -> VmResult<()> {
         let classes = [
             "java/lang/ClassLoader",
-            // "java/lang/String",
+            "java/lang/String",
             "java/lang/Object",
             "java/util/HashMap",
         ];
 
         for class in classes.iter() {
-            self.load_class(class, WhichLoader::Bootstrap)?;
+            self.load_class(
+                mstr::from_utf8(class.as_bytes()).as_ref(),
+                WhichLoader::Bootstrap,
+            )?;
         }
 
         Ok(())

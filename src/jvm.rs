@@ -15,7 +15,7 @@ use crate::thread::JvmThreadState;
 use crate::{thread, JvmResult};
 
 pub struct Jvm {
-    main: NativeString,
+    main: String,
     state: Arc<JvmGlobalState>,
 }
 
@@ -27,7 +27,7 @@ pub struct JvmGlobalState {
 #[derive(Default, Debug)]
 pub struct JvmArgs {
     properties: SystemProperties,
-    main: NativeString,
+    main: String,
 
     bootclasspath: Arc<ClassPath>,
     userclasspath: Arc<ClassPath>,
@@ -36,7 +36,7 @@ pub struct JvmArgs {
 #[derive(Debug, Error)]
 pub enum ArgError {
     #[error("Unknown argument: {0}")]
-    Unknown(NativeString),
+    Unknown(String),
 
     #[error("Missing main class")]
     MissingMain,
