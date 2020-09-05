@@ -22,6 +22,8 @@ pub enum Throwables {
     NoClassDefFoundError,
     LinkageError,
     ClassNotFoundException,
+    ClassFormatError,
+    UnsupportedClassVersionError,
 
     Other(&'static str),
 }
@@ -60,6 +62,8 @@ impl Throwables {
             Throwables::NoClassDefFoundError => "java/lang/NoClassDefFoundError",
             Throwables::LinkageError => "java/lang/LinkageError",
             Throwables::ClassNotFoundException => "java/lang/ClassNotFoundException",
+            Throwables::ClassFormatError => "java/lang/ClassFormatError",
+            Throwables::UnsupportedClassVersionError => "java/lang/UnsupportedClassVersionError",
             Throwables::Other(s) => s,
         }
     }

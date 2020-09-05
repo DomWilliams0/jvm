@@ -5,13 +5,11 @@ use std::thread::ThreadId;
 use log::*;
 
 use crate::alloc::VmRef;
+use crate::class::{Class, Object};
 use crate::classpath::ClassPath;
 use crate::error::{Throwables, VmResult};
 use crate::JvmResult;
-
-pub struct Object {}
-
-pub struct Class {}
+use javaclass::ClassError;
 
 pub struct ClassLoader {
     classes: HashMap<String, (LoadState, VmRef<Class>)>,
@@ -68,9 +66,36 @@ impl ClassLoader {
             }
         }
 
+        // TODO actually update and use load state
+
+        // TODO array classes are treated differently
+
         let class_bytes = self.find_boot_class(class_name)?;
 
         // TODO register class "package" (https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-5.html#jvms-5.3)
+
+        // load class
+        let loaded = match javaclass::load_from_buffer(&class_bytes) {
+            Ok(cls) => cls,
+            Err(err) => {
+                // TODO actually instantiate exceptions
+                let exc = match err {
+                    ClassError::Unsupported(_) => Throwables::UnsupportedClassVersionError,
+                    ClassError::Io(_) => Throwables::Other("IOError"),
+                    _ => Throwables::ClassFormatError,
+                };
+                return Err(exc);
+            }
+        };
+
+        // link loaded .class
+        let linked = Class::link(class_name, loaded, self)?;
+
+        // link
+        // - TODO verify class
+        // - prepare (initialise static fields)
+        // - resolve all symbolic dependencies and load them too
+        // initialise (https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-5.html#jvms-5.5)
 
         todo!("{:?}", class_name)
     }
@@ -89,6 +114,12 @@ impl ClassLoader {
 
         Ok(bytes)
     }
+
+    // fn link_class(&mut self, class_name: &str, parsed_class: javaclass::ClassFile) -> VmResult<VmRef<Class>> {
+    //
+    //
+    //     todo!()
+    // }
 
     pub fn init_bootstrap_classes(&mut self) -> VmResult<()> {
         self.load_class("java/lang/ClassLoader", WhichLoader::Bootstrap)?;

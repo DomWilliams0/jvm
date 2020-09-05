@@ -1,3 +1,4 @@
+use log::*;
 use std::path::PathBuf;
 
 use itertools::Itertools;
@@ -16,6 +17,7 @@ impl ClassPath {
         self.0.iter().find_map(|dir| {
             let mut file = dir.join(class_name);
             file.set_extension("class");
+            trace!("checking {}", file.display());
             if file.is_file() {
                 Some(file)
             } else {
