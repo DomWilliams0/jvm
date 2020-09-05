@@ -6,6 +6,7 @@ use log::*;
 use parking_lot::RwLock;
 use thiserror::*;
 
+use crate::alloc::NativeString;
 use crate::classloader::ClassLoader;
 use crate::classpath::ClassPath;
 use crate::error::ResultExt;
@@ -14,7 +15,7 @@ use crate::thread::JvmThreadState;
 use crate::{thread, JvmResult};
 
 pub struct Jvm {
-    main: String,
+    main: NativeString,
     state: Arc<JvmGlobalState>,
 }
 
@@ -26,7 +27,7 @@ pub struct JvmGlobalState {
 #[derive(Default, Debug)]
 pub struct JvmArgs {
     properties: SystemProperties,
-    main: String,
+    main: NativeString,
 
     bootclasspath: Arc<ClassPath>,
     userclasspath: Arc<ClassPath>,
@@ -34,8 +35,8 @@ pub struct JvmArgs {
 
 #[derive(Debug, Error)]
 pub enum ArgError {
-    #[error("Unknown argument: _0")]
-    Unknown(String),
+    #[error("Unknown argument: {0}")]
+    Unknown(NativeString),
 
     #[error("Missing main class")]
     MissingMain,

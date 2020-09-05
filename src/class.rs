@@ -1,15 +1,21 @@
-use log::*;
-
-use crate::alloc::VmRef;
-use crate::classloader::{ClassLoader, WhichLoader};
-use crate::error::{Throwables, VmResult};
-use javaclass::attribute::SourceFile;
-use javaclass::ClassError;
+use std::collections::HashMap;
 use std::mem::MaybeUninit;
 
+use javaclass::attribute::SourceFile;
+use javaclass::{AccessFlags, ClassError, FieldAccessFlags};
+use lazy_static::lazy_static;
+use log::*;
+use strum_macros::EnumDiscriminants;
+
+use crate::alloc::{InternedString, NativeString, VmRef};
+use crate::classloader::{ClassLoader, WhichLoader};
+use crate::error::{Throwables, VmResult};
+use crate::types::DataValue;
+use itertools::Itertools;
+
 pub struct Class {
-    name: String,
-    source_file: Option<String>,
+    name: InternedString,
+    source_file: Option<NativeString>,
 
     /// java/lang/Class instance
     /// TODO weak reference for cyclic?
@@ -19,10 +25,29 @@ pub struct Class {
     super_class: Option<VmRef<Class>>,
 
     interfaces: Vec<VmRef<Class>>,
+    fields: Vec<Field>,
+
+    // name -> value. disgusting
+    static_field_values: HashMap<NativeString, DataValue>,
 }
 
 pub struct Object {
     class: VmRef<Class>,
+}
+
+lazy_static! {
+    pub static ref NULL: VmRef<Object> = {
+        let null_class = MaybeUninit::zeroed();
+        let null_class = unsafe { null_class.assume_init() };
+        VmRef::new(Object { class: null_class })
+    };
+}
+
+pub struct Field {
+    name: NativeString,
+    desc: NativeString,
+
+    flags: FieldAccessFlags,
 }
 
 impl Class {
@@ -96,6 +121,21 @@ impl Class {
             vec
         };
 
+        let fields: Vec<_> = loaded
+            .fields()
+            .map(|f| Field {
+                name: f.name.to_owned(),
+                desc: f.descriptor.to_owned(),
+                flags: f.access_flags,
+            })
+            .collect();
+
+        // TODO static field values
+        let static_field_values = Default::default();
+        // fields.iter().filter_map(|f| if f.flags.is_static() {
+        //     Some(f)
+        // }else {None}).collect_vec();
+
         // alloc self with uninitialised object ptr
         let vm_class = VmRef::new(Self {
             name,
@@ -103,6 +143,8 @@ impl Class {
             class_object: MaybeUninit::zeroed(),
             super_class,
             interfaces,
+            static_field_values,
+            fields,
         });
 
         // alloc java/lang/Class
@@ -124,4 +166,8 @@ impl Class {
     }
 }
 
-impl Object {}
+impl Object {
+    pub fn is_null(&self) -> bool {
+        VmRef::ptr_eq(&self.class, &NULL.class)
+    }
+}

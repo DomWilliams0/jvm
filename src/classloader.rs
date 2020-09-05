@@ -4,7 +4,7 @@ use std::thread::ThreadId;
 
 use log::*;
 
-use crate::alloc::VmRef;
+use crate::alloc::{InternedString, VmRef};
 use crate::class::{Class, Object};
 use crate::classpath::ClassPath;
 use crate::error::{Throwables, VmResult};
@@ -12,7 +12,7 @@ use crate::thread;
 use javaclass::ClassError;
 
 pub struct ClassLoader {
-    classes: HashMap<String, (LoadState, VmRef<Class>)>,
+    classes: HashMap<InternedString, (LoadState, VmRef<Class>)>,
     bootclasspath: Arc<ClassPath>,
 }
 
@@ -51,6 +51,7 @@ impl ClassLoader {
             Ok(cls) => cls,
             Err(err) => {
                 // TODO actually instantiate exceptions
+                warn!("class loading failed: {}", err);
                 let exc = match err {
                     ClassError::Unsupported(_) => Throwables::UnsupportedClassVersionError,
                     ClassError::Io(_) => Throwables::Other("IOError"),
@@ -121,8 +122,17 @@ impl ClassLoader {
     }
 
     pub fn init_bootstrap_classes(&mut self) -> VmResult<()> {
-        // self.load_class("java/lang/ClassLoader", WhichLoader::Bootstrap)?;
-        self.load_class("java/util/HashMap", WhichLoader::Bootstrap)?;
+        let classes = [
+            "java/lang/ClassLoader",
+            // "java/lang/String",
+            "java/lang/Object",
+            "java/util/HashMap",
+        ];
+
+        for class in classes.iter() {
+            self.load_class(class, WhichLoader::Bootstrap)?;
+        }
+
         Ok(())
     }
 }
