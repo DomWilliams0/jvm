@@ -1,6 +1,8 @@
-use jvm::{Jvm, JvmArgs};
-use log::*;
 use std::error::Error;
+
+use log::*;
+
+use jvm::{Jvm, JvmArgs};
 
 fn main() -> Result<(), Box<dyn Error>> {
     env_logger::builder()

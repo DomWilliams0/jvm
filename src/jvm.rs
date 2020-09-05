@@ -1,20 +1,35 @@
-use crate::classpath::ClassPath;
-use crate::properties::SystemProperties;
-use crate::JvmResult;
+use std::path::PathBuf;
+use std::sync::Arc;
+
 use itertools::Itertools;
 use log::*;
-use std::path::PathBuf;
+use parking_lot::RwLock;
 use thiserror::*;
 
+use crate::classloader::ClassLoader;
+use crate::classpath::ClassPath;
+use crate::error::ResultExt;
+use crate::properties::SystemProperties;
+use crate::thread::JvmThreadState;
+use crate::{thread, JvmResult};
+
 pub struct Jvm {
-    // loader: ClassLoader,
     main: String,
+    state: Arc<JvmGlobalState>,
+}
+
+/// Each thread shares a reference through an Arc
+pub struct JvmGlobalState {
+    classloader: RwLock<ClassLoader>,
 }
 
 #[derive(Default, Debug)]
 pub struct JvmArgs {
-    pub properties: SystemProperties,
-    pub main: String,
+    properties: SystemProperties,
+    main: String,
+
+    bootclasspath: Arc<ClassPath>,
+    userclasspath: Arc<ClassPath>,
 }
 
 #[derive(Debug, Error)]
@@ -30,24 +45,44 @@ pub enum ArgError {
 }
 
 impl Jvm {
+    // TODO "catch" any exception during init, and log it properly with stacktrace etc
     pub fn new(args: JvmArgs) -> JvmResult<Self> {
-        // TODO load java/lang/* with native bootstrap classloader
+        let classloader = ClassLoader::new(args.bootclasspath.clone());
+
+        // create global JVM state
+        let global = Arc::new(JvmGlobalState {
+            classloader: RwLock::new(classloader),
+        });
+
+        let jvm = Jvm {
+            main: args.main,
+            state: global.clone(),
+        };
+
+        // initialise main thread TLS
+        thread::initialise(Arc::new(JvmThreadState::new(global)));
+
+        // load system classes
+        {
+            let mut cl = jvm.state.classloader.write();
+            if let Err(e) = cl.init_bootstrap_classes().throw() {
+                error!("failed to initialise bootstrap classes: {}", e);
+                return Err(e);
+            }
+        }
 
         // TODO set all properties in gnu/classpath/VMSystemProperties.preinit
 
-        Ok(Self { main: args.main })
+        Ok(jvm)
     }
 
     pub fn run_main(&mut self) -> JvmResult<()> {
-        // // TODO this is a playground for now
-        // let path = self.loader.find(&self.main).expect("bad main");
-        // info!("found main at {:?}", path);
-        //
-        // let bytes = std::fs::read(path).expect("io");
-        // let class = javaclass::load_from_buffer(&bytes).expect("bad class");
-        // info!("class: {:?}", class);
+        todo!()
+    }
 
-        Ok(())
+    pub fn destroy(&mut self) -> JvmResult<()> {
+        // TODO wait for threads to die, unintialise TLS, assert this is the last ref to global state
+        todo!()
     }
 }
 
@@ -65,6 +100,9 @@ impl JvmArgs {
         jvm_args
             .properties
             .set_path("sun.boot.class.path", &bootclasspath);
+
+        jvm_args.bootclasspath = Arc::new(bootclasspath);
+        jvm_args.userclasspath = Arc::new(classpath);
 
         Ok(jvm_args)
     }

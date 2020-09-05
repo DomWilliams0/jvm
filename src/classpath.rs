@@ -1,5 +1,8 @@
-use itertools::Itertools;
 use std::path::PathBuf;
+
+use itertools::Itertools;
+
+// TODO enum for path type, zip/jar or directory
 
 #[derive(Default, Debug)]
 pub struct ClassPath(Vec<PathBuf>);

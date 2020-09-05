@@ -1,7 +1,8 @@
-use crate::classpath::ClassPath;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::iter::FromIterator;
+
+use crate::classpath::ClassPath;
 
 #[derive(Debug)]
 pub struct SystemProperties(HashMap<&'static str, SystemProperty>);
