@@ -1,13 +1,15 @@
-# TODOs (34)
+# TODOs (36)
  * [src/alloc.rs](src/alloc.rs) (3)
    * `// TODO gc arena`
    * `// TODO actually intern strings`
    * `// TODO methods on VmRef newtype`
- * [src/class.rs](src/class.rs) (6)
+ * [src/class.rs](src/class.rs) (8)
    * `/// TODO weak reference for cyclic?`
    * `// TODO just allocate an object instead of this unsafeness`
+   * `// TODO method attributes`
    * `// TODO verify constant pool offsets so we can raise a single classformaterror then trust it`
    * `// TODO preparation? https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-5.html#jvms-5.4.2`
+   * `// TODO do verification first to throw ClassFormatErrors, then this should not throw any classformaterrors`
    * `// TODO set obj->vmdata field to vm_class`
    * `// TODO not quite correct toString`
  * [src/classloader.rs](src/classloader.rs) (9)

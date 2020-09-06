@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::mem::MaybeUninit;
 
 use cafebabe::attribute::SourceFile;
-use cafebabe::{AccessFlags, ClassError, FieldAccessFlags};
+use cafebabe::{AccessFlags, ClassError, FieldAccessFlags, MethodAccessFlags};
 use lazy_static::lazy_static;
 use log::*;
 
@@ -28,6 +28,7 @@ pub struct Class {
 
     interfaces: Vec<VmRef<Class>>,
     fields: Vec<Field>,
+    methods: Vec<Method>,
 
     // name -> value. disgusting
     static_field_values: HashMap<NativeString, DataValue>,
@@ -50,8 +51,15 @@ lazy_static! {
 pub struct Field {
     name: NativeString,
     desc: NativeString,
-
     flags: FieldAccessFlags,
+}
+
+#[derive(Debug)]
+pub struct Method {
+    name: NativeString,
+    desc: NativeString,
+    flags: MethodAccessFlags,
+    // TODO method attributes
 }
 
 impl Class {
@@ -125,6 +133,15 @@ impl Class {
             vec
         };
 
+        let methods: Vec<_> = loaded
+            .methods()
+            .map(|m| Method {
+                name: m.name.to_owned(),
+                desc: m.descriptor.to_owned(),
+                flags: m.access_flags,
+            })
+            .collect();
+
         let fields: Vec<_> = loaded
             .fields()
             .map(|f| Field {
@@ -134,6 +151,8 @@ impl Class {
             })
             .collect();
 
+        // preparation step - initialise static fields
+        // TODO do verification first to throw ClassFormatErrors, then this should not throw any classformaterrors
         let static_field_values = {
             let mut map =
                 HashMap::with_capacity(fields.iter().filter(|f| f.flags.is_static()).count());
@@ -164,6 +183,7 @@ impl Class {
             class_object: MaybeUninit::zeroed(),
             super_class,
             interfaces,
+            methods,
             static_field_values,
             fields,
         });
