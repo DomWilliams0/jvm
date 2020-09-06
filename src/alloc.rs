@@ -11,18 +11,22 @@ pub type NativeString = MString;
 
 pub type InternedString = MString;
 
-// TODO method on VmRef
-pub fn is_null(vmref: &VmRef<Object>) -> bool {
+// TODO methods on VmRef newtype
+pub fn vmref_is_null(vmref: &VmRef<Object>) -> bool {
     vmref.is_null()
+}
+
+pub fn vmref_ptr<O>(vmref: &VmRef<O>) -> u64 {
+    Arc::as_ptr(vmref) as u64
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::alloc::is_null;
+    use crate::alloc::vmref_is_null;
     use crate::class::NULL;
 
     #[test]
     fn null_is_null() {
-        assert!(is_null(&NULL));
+        assert!(vmref_is_null(&NULL));
     }
 }

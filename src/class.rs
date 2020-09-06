@@ -5,15 +5,16 @@ use cafebabe::attribute::SourceFile;
 use cafebabe::{AccessFlags, ClassError, FieldAccessFlags};
 use lazy_static::lazy_static;
 use log::*;
-use strum_macros::EnumDiscriminants;
 
-use crate::alloc::{InternedString, NativeString, VmRef};
+use crate::alloc::{vmref_ptr, InternedString, NativeString, VmRef};
 use crate::classloader::{ClassLoader, WhichLoader};
 use crate::error::{Throwables, VmResult};
-use crate::types::DataValue;
+use crate::types::{DataType, DataValue};
 use cafebabe::mutf8::mstr;
-use itertools::Itertools;
 
+use std::fmt::{Debug, Formatter};
+
+#[derive(Debug)]
 pub struct Class {
     name: InternedString,
     source_file: Option<NativeString>,
@@ -38,12 +39,14 @@ pub struct Object {
 
 lazy_static! {
     pub static ref NULL: VmRef<Object> = {
+        // TODO just allocate an object instead of this unsafeness
         let null_class = MaybeUninit::zeroed();
         let null_class = unsafe { null_class.assume_init() };
         VmRef::new(Object { class: null_class })
     };
 }
 
+#[derive(Debug)]
 pub struct Field {
     name: NativeString,
     desc: NativeString,
@@ -95,7 +98,7 @@ impl Class {
                 let super_class = classloader.load_class(super_name, loader.clone())?;
                 Some(super_class)
             }
-            Err(ClassError::NoSuper) if name.to_utf8() == "java/lang/Object" => {
+            Err(ClassError::NoSuper) if name.as_bytes() == b"java/lang/Object" => {
                 // the one exception, no super class expected
                 None
             }
@@ -131,11 +134,28 @@ impl Class {
             })
             .collect();
 
-        // TODO static field values
-        let static_field_values = Default::default();
-        // fields.iter().filter_map(|f| if f.flags.is_static() {
-        //     Some(f)
-        // }else {None}).collect_vec();
+        let static_field_values = {
+            let mut map =
+                HashMap::with_capacity(fields.iter().filter(|f| f.flags.is_static()).count());
+            for field in &fields {
+                if field.flags.is_static() {
+                    let value = match DataType::from_descriptor(&field.desc) {
+                        Some(dt) => {
+                            trace!("static field {:?} has type {:?}", field.name, dt);
+                            dt.default_value()
+                        }
+                        None => {
+                            warn!("unknown type descriptor {:?}", field.desc);
+                            return Err(Throwables::ClassFormatError);
+                        }
+                    };
+
+                    map.insert(field.name.clone(), value);
+                }
+            }
+
+            map
+        };
 
         // alloc self with uninitialised object ptr
         let vm_class = VmRef::new(Self {
@@ -170,5 +190,17 @@ impl Class {
 impl Object {
     pub fn is_null(&self) -> bool {
         VmRef::ptr_eq(&self.class, &NULL.class)
+    }
+}
+
+impl Debug for Object {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if self.is_null() {
+            write!(f, "null")
+        } else {
+            // TODO not quite correct toString
+            let ptr = vmref_ptr(&self.class);
+            write!(f, "{:?}@{:x}", self.class.name, ptr)
+        }
     }
 }

@@ -6,7 +6,6 @@ use log::*;
 use parking_lot::RwLock;
 use thiserror::*;
 
-use crate::alloc::NativeString;
 use crate::classloader::ClassLoader;
 use crate::classpath::ClassPath;
 use crate::error::ResultExt;

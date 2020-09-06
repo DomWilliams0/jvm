@@ -24,7 +24,7 @@ enum LoadState {
     // TODO linked?
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum WhichLoader {
     Bootstrap,
     User(VmRef<Object>),
@@ -45,6 +45,7 @@ impl ClassLoader {
         bytes: &[u8],
         loader: WhichLoader,
     ) -> VmResult<VmRef<Class>> {
+        debug!("defining class {:?} with {:?} loader", class_name, loader);
         // TODO register class "package" with loader (https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-5.html#jvms-5.3)
 
         // load class
@@ -76,6 +77,7 @@ impl ClassLoader {
         // - resolve all symbolic dependencies and load them too
         // initialise (https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-5.html#jvms-5.5)
 
+        debug!("class: {:#?}", linked);
         Ok(linked)
     }
 
@@ -108,7 +110,7 @@ impl ClassLoader {
     }
 
     fn find_boot_class(&self, class_name: &str) -> VmResult<Vec<u8>> {
-        trace!("looking for class {:?}", class_name);
+        trace!("looking for class {}", class_name);
 
         let path = self
             .bootclasspath
