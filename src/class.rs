@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 use std::mem::MaybeUninit;
 
-use cafebabe::attribute::SourceFile;
-use cafebabe::{AccessFlags, ClassError, FieldAccessFlags, MethodAccessFlags};
+use cafebabe::{attribute, AccessFlags, ClassError, FieldAccessFlags, MethodAccessFlags};
 use lazy_static::lazy_static;
 use log::*;
 
@@ -12,6 +11,7 @@ use crate::error::{Throwables, VmResult};
 use crate::types::{DataType, DataValue};
 use cafebabe::mutf8::mstr;
 
+use cafebabe::attribute::Code;
 use std::fmt::{Debug, Formatter};
 
 #[derive(Debug)]
@@ -59,7 +59,16 @@ pub struct Method {
     name: NativeString,
     desc: NativeString,
     flags: MethodAccessFlags,
-    // TODO method attributes
+
+    /// Only present if not native or abstract
+    code: Option<attribute::Code>,
+    attributes: Vec<attribute::OwnedAttribute>,
+}
+
+pub enum MethodLookupResult<'a> {
+    Found(&'a Method),
+    FoundMultiple,
+    NotFound,
 }
 
 impl Class {
@@ -85,7 +94,7 @@ impl Class {
         }
 
         let name = defined_class_name.to_owned();
-        let source_file = match loaded.attribute::<SourceFile>() {
+        let source_file = match loaded.attribute::<attribute::SourceFile>() {
             Ok(src) => {
                 trace!("source file: {:?}", src.0);
                 Some(src.0)
@@ -133,14 +142,62 @@ impl Class {
             vec
         };
 
-        let methods: Vec<_> = loaded
-            .methods()
-            .map(|m| Method {
-                name: m.name.to_owned(),
-                desc: m.descriptor.to_owned(),
-                flags: m.access_flags,
-            })
-            .collect();
+        let methods = {
+            let methods = loaded.methods();
+            let mut vec = Vec::with_capacity(methods.len());
+            for method in methods {
+                let method: &cafebabe::MethodInfo = method; // ide
+
+                let mut attributes = {
+                    let mut vec = Vec::with_capacity(method.attributes.len());
+                    for attr in method.attributes.iter() {
+                        let attr = attr.to_owned(loaded.constant_pool()).map_err(|e| {
+                            warn!("invalid attribute {:?}: {}", attr.name, e);
+                            Throwables::ClassFormatError
+                        })?;
+                        vec.push(attr);
+                    }
+
+                    vec
+                };
+                let code = {
+                    let idx = attributes
+                        .iter()
+                        .position(|a| matches!(a, attribute::OwnedAttribute::Code(_)));
+                    if let Some(idx) = idx {
+                        if method
+                            .access_flags
+                            .intersects(MethodAccessFlags::ABSTRACT | MethodAccessFlags::NATIVE)
+                        {
+                            warn!(
+                                "abstract or native method {:?} has Code attribute",
+                                method.name
+                            );
+                            return Err(Throwables::ClassFormatError);
+                        }
+
+                        // pop from attributes list
+                        let code = match attributes.swap_remove(idx) {
+                            attribute::OwnedAttribute::Code(code) => code,
+                            _ => unreachable!(),
+                        };
+
+                        Some(code)
+                    } else {
+                        None
+                    }
+                };
+
+                vec.push(Method {
+                    name: method.name.to_owned(),
+                    desc: method.descriptor.to_owned(),
+                    flags: method.access_flags,
+                    code,
+                    attributes,
+                })
+            }
+            vec
+        };
 
         let fields: Vec<_> = loaded
             .fields()
@@ -205,6 +262,44 @@ impl Class {
 
         Ok(vm_class)
     }
+
+    fn find_method(
+        &self,
+        name: &mstr,
+        desc: &mstr,
+        flags: MethodAccessFlags,
+    ) -> MethodLookupResult {
+        let mut matching = self.methods.iter().filter(|m| {
+            m.flags.contains(flags) && m.name.as_mstr() == name && m.desc.as_mstr() == desc
+        });
+
+        let first = matching.next();
+        let next = matching.next();
+
+        match (first, next) {
+            (Some(m), None) => MethodLookupResult::Found(m),
+            (Some(_), Some(_)) => MethodLookupResult::FoundMultiple,
+            _ => MethodLookupResult::NotFound,
+        }
+    }
+
+    pub fn find_static_constructor(&self) -> MethodLookupResult {
+        self.find_method(
+            mstr::from_utf8(b"<clinit>").as_ref(),
+            mstr::from_mutf8(b"()V").as_ref(),
+            MethodAccessFlags::STATIC,
+        )
+    }
+}
+
+impl<'a> MethodLookupResult<'a> {
+    fn ok(self) -> Option<&'a Method> {
+        if let MethodLookupResult::Found(m) = self {
+            Some(m)
+        } else {
+            None
+        }
+    }
 }
 
 impl Object {
@@ -222,5 +317,11 @@ impl Debug for Object {
             let ptr = vmref_ptr(&self.class);
             write!(f, "{:?}@{:x}", self.class.name, ptr)
         }
+    }
+}
+
+impl Method {
+    pub fn code(&self) -> Option<&Code> {
+        self.code.as_ref()
     }
 }

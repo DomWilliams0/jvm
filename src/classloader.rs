@@ -5,7 +5,7 @@ use std::thread::ThreadId;
 use log::*;
 
 use crate::alloc::{InternedString, VmRef};
-use crate::class::{Class, Object};
+use crate::class::{Class, MethodLookupResult, Object};
 use crate::classpath::ClassPath;
 use crate::error::{Throwables, VmResult};
 use crate::thread;
@@ -64,21 +64,31 @@ impl ClassLoader {
         };
 
         // link loaded .class
-        let linked = Class::link(class_name, loaded, loader, self)?;
+        let class = Class::link(class_name, loaded, loader, self)?;
 
         self.classes.insert(
             class_name.to_owned(),
-            (LoadState::Loaded(thread::get().thread()), linked.clone()),
+            (LoadState::Loaded(thread::get().thread()), class.clone()),
         );
 
-        // link
-        // - TODO verify class
-        // - prepare (initialise static fields)
-        // - resolve all symbolic dependencies and load them too
-        // initialise (https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-5.html#jvms-5.5)
+        // initialisation - run static constructor
+        match class.find_static_constructor() {
+            MethodLookupResult::FoundMultiple => {
+                warn!("class has multiple static constructors");
+                return Err(Throwables::ClassFormatError);
+            }
+            MethodLookupResult::NotFound => { /* no problem */ }
+            MethodLookupResult::Found(m) => {
+                let code = m.code().ok_or_else(|| {
+                    warn!("static constructor has no code");
+                    Throwables::ClassFormatError
+                })?;
+                todo!("execute <clinit>");
+            }
+        }
 
-        debug!("class: {:#?}", linked);
-        Ok(linked)
+        debug!("class: {:#?}", class);
+        Ok(class)
     }
 
     // TODO ClassLoaderRef that holds an upgradable rwlock guard, so no need to hold the lock for the whole method
