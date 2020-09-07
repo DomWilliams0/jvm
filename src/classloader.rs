@@ -79,6 +79,8 @@ impl ClassLoader {
             }
             MethodLookupResult::NotFound => { /* no problem */ }
             MethodLookupResult::Found(m) => {
+                debug!("running static constructor for {:?}", class.name());
+
                 let thread = thread::get();
                 let mut interpreter = thread.interpreter_mut();
                 if let Err(e) = interpreter.execute_method(class.clone(), m, None /* static */) {

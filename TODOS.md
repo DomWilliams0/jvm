@@ -31,7 +31,7 @@
    * `// TODO validate local var slot in case of wide vars`
    * `// TODO tests for operand stack and local var array`
    * `// TODO instead of options, enum {Instance(obj), Static(class)}`
- * [src/interpreter/insn.rs](src/interpreter/insn.rs) (2)
+ * [src/interpreter/insn/bytecode.rs](src/interpreter/insn/bytecode.rs) (2)
    * `// TODO temporary, dont log every single instruction`
    * `// TODO verified version of Bytecode that doesn't do all the safety checks for speed e.g. fn parse_unverified(bytes) -> Self`
  * [src/interpreter/interp.rs](src/interpreter/interp.rs) (6)
