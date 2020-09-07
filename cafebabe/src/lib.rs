@@ -11,7 +11,7 @@ pub use error::{ClassError, ClassResult};
 pub use load::load_from_buffer;
 pub use types::{
     AccessFlags, ClassAccessFlags, CommonAccessFlags, FieldAccessFlags, MethodAccessFlags,
-    MethodInfo, RawAttribute,
+    MethodInfo, RawAttribute, FieldInfo,
 };
 
 pub use mutf8;

@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::mem::MaybeUninit;
 
 use cafebabe::{attribute, AccessFlags, ClassError, FieldAccessFlags, MethodAccessFlags};
@@ -13,6 +12,7 @@ use cafebabe::mutf8::mstr;
 
 use crate::constant_pool::RuntimeConstantPool;
 use crate::monitor::{Monitor, MonitorGuard};
+use crate::storage::{FieldMapStorage, Storage};
 use crate::thread;
 use cafebabe::attribute::Code;
 use std::cell::UnsafeCell;
@@ -40,8 +40,7 @@ pub struct Class {
 
     constant_pool: RuntimeConstantPool,
 
-    // name -> value. disgusting
-    static_field_values: HashMap<NativeString, DataValue>,
+    static_field_values: FieldMapStorage,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -61,21 +60,17 @@ struct LockedClassState(UnsafeCell<ClassState>);
 pub struct Object {
     class: VmRef<Class>,
     monitor: Monitor,
+    fields: FieldMapStorage,
 }
 
 lazy_static! {
-    pub static ref NULL: VmRef<Object> = {
-        // TODO just allocate an object instead of this unsafeness
-        let null_class = MaybeUninit::zeroed();
-        let null_class = unsafe { null_class.assume_init() };
-        VmRef::new(Object::new(null_class))
-    };
+    pub static ref NULL: VmRef<Object> = VmRef::new(Object::new_null());
 }
 
 #[derive(Debug)]
 pub struct Field {
     name: NativeString,
-    desc: NativeString,
+    desc: DataType,
     flags: FieldAccessFlags,
 }
 
@@ -224,38 +219,42 @@ impl Class {
             vec
         };
 
-        let fields: Vec<_> = loaded
-            .fields()
-            .map(|f| Field {
-                name: f.name.to_owned(),
-                desc: f.descriptor.to_owned(),
-                flags: f.access_flags,
-            })
-            .collect();
+        let fields = {
+            let mut vec = Vec::with_capacity(loaded.fields().len());
+
+            for field in loaded.fields() {
+                let field: &cafebabe::FieldInfo = field; // ide
+                let desc = DataType::from_descriptor(field.descriptor).ok_or_else(|| {
+                    warn!(
+                        "invalid field descriptor on {:?}: {:?}",
+                        field.name, field.descriptor
+                    );
+                    Throwables::ClassFormatError
+                })?;
+
+                vec.push(Field {
+                    name: field.name.to_owned(),
+                    desc,
+                    flags: field.access_flags,
+                })
+            }
+
+            vec
+        };
 
         // preparation step - initialise static fields
         // TODO do verification first to throw ClassFormatErrors, then this should not throw any classformaterrors
         let static_field_values = {
-            let mut map =
-                HashMap::with_capacity(fields.iter().filter(|f| f.flags.is_static()).count());
+            let mut static_fields = FieldMapStorage::with_capacity(
+                fields.iter().filter(|f| f.flags.is_static()).count(),
+            );
             for field in &fields {
                 if field.flags.is_static() {
-                    let value = match DataType::from_descriptor(&field.desc) {
-                        Some(dt) => {
-                            trace!("static field {:?} has type {:?}", field.name, dt);
-                            dt.default_value()
-                        }
-                        None => {
-                            warn!("unknown type descriptor {:?}", field.desc);
-                            return Err(Throwables::ClassFormatError);
-                        }
-                    };
-
-                    map.insert(field.name.clone(), value);
+                    static_fields.put(field.name.clone(), field.desc.clone().default_value());
                 }
             }
 
-            map
+            static_fields
         };
 
         let constant_pool =
@@ -495,10 +494,32 @@ impl MethodLookupResult {
 }
 
 impl Object {
+    /// Only use this to create the sentinel NULL value
+    fn new_null() -> Self {
+        // TODO just allocate an object instead of this unsafeness
+        let null_class = MaybeUninit::zeroed();
+        let null_class = unsafe { null_class.assume_init() };
+        Object {
+            class: null_class,
+            monitor: Monitor::new(),
+            fields: FieldMapStorage::with_capacity(0),
+        }
+    }
+
     pub(crate) fn new(class: VmRef<Class>) -> Self {
+        // TODO inherit superclass fields too
+        let fields = {
+            let mut map = FieldMapStorage::with_capacity(class.fields.len());
+            for field in class.fields.iter() {
+                map.put(field.name.clone(), field.desc.clone().default_value());
+            }
+
+            map
+        };
         Object {
             class,
             monitor: Monitor::new(),
+            fields,
         }
     }
 
@@ -516,6 +537,17 @@ impl Object {
 
     pub fn enter_monitor(&self) -> MonitorGuard {
         self.monitor.enter()
+    }
+
+    pub fn get_field_by_name<F: From<DataValue>>(&self, name: &mstr) -> Option<F> {
+        self.fields.get(name).map(F::from)
+    }
+
+    /// Panics if no field with given name
+    pub fn set_field_by_name<F: Into<DataValue>>(&self, name: &mstr, value: F) {
+        let value = value.into();
+        debug!("setting field {:?} value to {:?}", name, value);
+        assert!(self.fields.set(name, value), "no such field {:?}", name);
     }
 }
 

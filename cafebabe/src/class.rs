@@ -130,7 +130,7 @@ impl<'c> ClassFile<'c> {
         self.interfaces.len()
     }
 
-    pub fn fields(&self) -> impl Iterator<Item = &FieldInfo> {
+    pub fn fields(&self) -> impl ExactSizeIterator<Item = &FieldInfo> {
         self.fields.iter()
     }
 

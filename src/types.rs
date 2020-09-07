@@ -4,10 +4,10 @@ use crate::alloc::{NativeString, VmRef};
 use crate::class::Object;
 use cafebabe::mutf8::mstr;
 use itertools::Itertools;
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 
 // TODO more efficient packing of data types, dont want huge enum discriminant taking up all the space
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum DataType {
     Boolean,
     ReturnAddress,
@@ -22,12 +22,12 @@ pub enum DataType {
     Reference(ReferenceDataType),
 }
 // TODO interned strings for class names?
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum ReferenceDataType {
     Class(NativeString),
     Array { dims: u8, elements: Box<DataType> },
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum DataValue {
     Boolean(bool),
     ReturnAddress(usize),
@@ -134,6 +134,37 @@ impl DataValue {
         DataValue::Reference(reference_data, reference)
     }
 }
+
+macro_rules! impl_data_value_type {
+    ($ty:ty, $variant:ident) => {
+        impl From<$ty> for DataValue {
+            fn from(v: $ty) -> Self {
+                Self::$variant(v)
+            }
+        }
+
+        impl TryInto<$ty> for DataValue {
+            type Error = ();
+
+            fn try_into(self) -> Result<$ty, Self::Error> {
+                if let Self::$variant(v) = self {
+                    Ok(v)
+                } else {
+                    Err(())
+                }
+            }
+        }
+    };
+}
+
+impl_data_value_type!(bool, Boolean);
+impl_data_value_type!(i8, Byte);
+impl_data_value_type!(i16, Short);
+impl_data_value_type!(i32, Int);
+impl_data_value_type!(i64, Long);
+impl_data_value_type!(u16, Char);
+impl_data_value_type!(f32, Float);
+impl_data_value_type!(f64, Double);
 
 #[cfg(test)]
 mod tests {

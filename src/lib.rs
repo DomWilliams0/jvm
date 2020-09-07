@@ -13,5 +13,6 @@ mod interpreter;
 mod jvm;
 mod monitor;
 mod properties;
+mod storage;
 mod thread;
 mod types;

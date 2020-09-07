@@ -1,4 +1,4 @@
-# TODOs (67)
+# TODOs (70)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -21,9 +21,8 @@
    * `// TODO actually intern strings`
    * `// TODO methods on VmRef newtype`
    * `// TODO oom error`
- * [src/class.rs](src/class.rs) (10)
+ * [src/class.rs](src/class.rs) (11)
    * `/// TODO weak reference for cyclic?`
-   * `// TODO just allocate an object instead of this unsafeness`
    * `// TODO verify constant pool offsets so we can raise a single classformaterror then trust it`
    * `// TODO preparation? https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-5.html#jvms-5.4.2`
    * `// TODO do verification first to throw ClassFormatErrors, then this should not throw any classformaterrors`
@@ -31,6 +30,8 @@
    * `// TODO initialise final static fields from ConstantValue attrs`
    * `return Err(Throwables::ClassFormatError); // TODO different exception`
    * `// TODO specific exception type e.g. ExceptionInInitializerError`
+   * `// TODO just allocate an object instead of this unsafeness`
+   * `// TODO inherit superclass fields too`
    * `// TODO not quite correct toString`
  * [src/classloader.rs](src/classloader.rs) (7)
    * `// TODO types for str to differentiate java/lang/Object, java.lang.Object and descrptors e.g. Ljava/lang/Object;`
@@ -55,9 +56,11 @@
  * [src/interpreter/insn/bytecode.rs](src/interpreter/insn/bytecode.rs) (2)
    * `// TODO temporary, dont log every single instruction`
    * `// TODO verified version of Bytecode that doesn't do all the safety checks for speed e.g. fn parse_unverified(bytes) -> Self`
- * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (5)
+ * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (7)
    * `// TODO n variations`
    * `// TODO intern string`
+   * `// TODO call string constructor`
+   * `// TODO char array`
    * `} // TODO int/float`
    * `// TODO class symbolic reference`
    * `// TODO instantiate string`

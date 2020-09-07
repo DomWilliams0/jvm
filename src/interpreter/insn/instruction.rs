@@ -260,6 +260,9 @@ impl Ldc {
                 let string_class = frame.ensure_loaded(&mstr::from_utf8(b"java/lang/String"))?;
 
                 let string_instance = vmref_alloc_object(string_class)?;
+                // TODO call string constructor
+                // TODO char array
+                // string_instance.set_field_by_name(&mstr::from_utf8(b"count"), 100);
             } // TODO int/float
               // TODO class symbolic reference
         }
