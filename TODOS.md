@@ -1,4 +1,21 @@
-# TODOs (49)
+# TODOs (62)
+ * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
+   * `// TODO validate combinations`
+   * `// TODO detect dups with same name & descriptor`
+   * `// TODO detect dups with same name & descriptor`
+ * [cafebabe/src/constant_pool/attribute.rs](cafebabe/src/constant_pool/attribute.rs) (2)
+   * `// TODO exception handlers`
+   * `// TODO attributes`
+ * [cafebabe/src/constant_pool/item.rs](cafebabe/src/constant_pool/item.rs) (4)
+   * `// TODO handle specific versions tags were introduced`
+   * `// TODO float might need extra parsing`
+   * `// TODO double might need extra parsing`
+   * `// TODO is_loadable()`
+ * [cafebabe/src/types.rs](cafebabe/src/types.rs) (4)
+   * `// TODO resolve constant pool entries`
+   * `// TODO reduce duplication`
+   * `// TODO validate combinations`
+   * `// TODO validate combinations`
  * [src/alloc.rs](src/alloc.rs) (3)
    * `// TODO gc arena`
    * `// TODO actually intern strings`
