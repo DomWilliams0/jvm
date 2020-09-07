@@ -1,4 +1,4 @@
-# TODOs (62)
+# TODOs (67)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -16,10 +16,11 @@
    * `// TODO reduce duplication`
    * `// TODO validate combinations`
    * `// TODO validate combinations`
- * [src/alloc.rs](src/alloc.rs) (3)
+ * [src/alloc.rs](src/alloc.rs) (4)
    * `// TODO gc arena`
    * `// TODO actually intern strings`
    * `// TODO methods on VmRef newtype`
+   * `// TODO oom error`
  * [src/class.rs](src/class.rs) (10)
    * `/// TODO weak reference for cyclic?`
    * `// TODO just allocate an object instead of this unsafeness`
@@ -54,16 +55,20 @@
  * [src/interpreter/insn/bytecode.rs](src/interpreter/insn/bytecode.rs) (2)
    * `// TODO temporary, dont log every single instruction`
    * `// TODO verified version of Bytecode that doesn't do all the safety checks for speed e.g. fn parse_unverified(bytes) -> Self`
- * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (3)
-   * `type ExecuteResult = (); // TODO`
+ * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (5)
    * `// TODO n variations`
+   * `// TODO intern string`
+   * `} // TODO int/float`
+   * `// TODO class symbolic reference`
    * `// TODO instantiate string`
- * [src/interpreter/interp.rs](src/interpreter/interp.rs) (5)
+ * [src/interpreter/interp.rs](src/interpreter/interp.rs) (7)
    * `// TODO get current class`
    * `// TODO get current method`
    * `// TODO get current frame`
    * `// TODO native frames`
    * `// TODO verify, "compile" and cache instructions`
+   * `// TODO abrupt exit with proper exception creation`
+   * `// TODO handle return`
  * [src/jvm.rs](src/jvm.rs) (4)
    * `// TODO "catch" any exception during init, and log it properly with stacktrace etc`
    * `// TODO set all properties in gnu/classpath/VMSystemProperties.preinit`

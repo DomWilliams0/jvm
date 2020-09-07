@@ -1,4 +1,6 @@
-use crate::class::Object;
+use crate::class::{Class, Object};
+use crate::error::{Throwable, Throwables, VmResult};
+
 use cafebabe::mutf8::MString;
 use std::sync::Arc;
 
@@ -18,6 +20,16 @@ pub fn vmref_is_null(vmref: &VmRef<Object>) -> bool {
 
 pub fn vmref_ptr<O>(vmref: &VmRef<O>) -> u64 {
     Arc::as_ptr(vmref) as u64
+}
+
+pub fn vmref_alloc_object(cls: VmRef<Class>) -> VmResult<VmRef<Object>> {
+    // TODO oom error
+    Ok(VmRef::new(Object::new(cls)))
+}
+
+pub fn vmref_alloc_exception(throwable: Throwables) -> VmResult<VmRef<Throwable>> {
+    let class_name = throwable.symbol();
+    Ok(VmRef::new(Throwable { class_name }))
 }
 
 #[cfg(test)]

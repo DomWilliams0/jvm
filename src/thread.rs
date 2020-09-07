@@ -6,6 +6,7 @@ use log::*;
 use parking_lot::RwLock;
 
 use crate::alloc::VmRef;
+
 use crate::error::Throwable;
 use crate::interpreter::Interpreter;
 use crate::jvm::JvmGlobalState;
@@ -141,5 +142,9 @@ impl JvmThreadState {
 
     pub fn interpreter_mut(&self) -> RefMut<Interpreter> {
         self.interpreter.borrow_mut()
+    }
+
+    pub fn global(&self) -> &JvmGlobalState {
+        &self.jvm
     }
 }

@@ -5,6 +5,9 @@ use crate::types::DataValue;
 
 use log::*;
 
+use crate::error::VmResult;
+use crate::thread;
+use cafebabe::mutf8::mstr;
 use std::sync::Arc;
 
 enum StackValue {
@@ -132,5 +135,20 @@ impl Frame {
                 code: code.code.clone(),
             }))
         }
+    }
+}
+
+impl JavaFrame {
+    /// Ensure the given class is loaded, linked and initialised
+    pub fn ensure_loaded(&self, class_name: &mstr) -> VmResult<VmRef<Class>> {
+        let loader = self.class.loader().clone();
+        thread::get()
+            .global()
+            .class_loader()
+            .load_class(class_name, loader)
+            .and_then(|c| {
+                c.ensure_init()?;
+                Ok(c)
+            })
     }
 }

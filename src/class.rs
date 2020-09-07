@@ -25,6 +25,7 @@ pub struct Class {
     name: InternedString,
     source_file: Option<NativeString>,
     state: LockedClassState,
+    loader: WhichLoader,
 
     /// java/lang/Class instance
     /// TODO weak reference for cyclic?
@@ -268,6 +269,7 @@ impl Class {
             name,
             source_file,
             state: LockedClassState::default(),
+            loader,
             class_object: MaybeUninit::zeroed(),
             super_class,
             interfaces,
@@ -327,6 +329,10 @@ impl Class {
 
     pub const fn constant_pool(&self) -> &RuntimeConstantPool {
         &self.constant_pool
+    }
+
+    pub const fn loader(&self) -> &WhichLoader {
+        &self.loader
     }
 
     fn class_object(&self) -> &VmRef<Object> {
@@ -489,7 +495,7 @@ impl MethodLookupResult {
 }
 
 impl Object {
-    fn new(class: VmRef<Class>) -> Self {
+    pub(crate) fn new(class: VmRef<Class>) -> Self {
         Object {
             class,
             monitor: Monitor::new(),

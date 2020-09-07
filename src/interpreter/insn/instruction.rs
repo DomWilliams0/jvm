@@ -1,10 +1,19 @@
+#![allow(unused_variables)]
+
+use crate::alloc::vmref_alloc_object;
+use crate::constant_pool::Entry;
+
 use crate::interpreter::error::InterpreterError;
 use crate::interpreter::frame::JavaFrame;
 use crate::interpreter::insn::bytecode::Reader;
 use crate::thread::JvmThreadState;
+use cafebabe::mutf8::mstr;
 use std::fmt::Debug;
 
-type ExecuteResult = (); // TODO
+pub enum ExecuteResult {
+    Continue,
+    Return,
+}
 
 pub trait Instruction: Debug {
     fn name(&self) -> &'static str;
@@ -244,6 +253,16 @@ impl Ldc {
             .loadable_entry(self.0 as u16)
             .and_then(|e| if e.is_long_or_double() { None } else { Some(e) })
             .ok_or_else(|| InterpreterError::NotLoadable(self.0 as u16))?;
+
+        match entry {
+            Entry::String(s) => {
+                // TODO intern string
+                let string_class = frame.ensure_loaded(&mstr::from_utf8(b"java/lang/String"))?;
+
+                let string_instance = vmref_alloc_object(string_class)?;
+            } // TODO int/float
+              // TODO class symbolic reference
+        }
 
         // TODO instantiate string
         unimplemented!()

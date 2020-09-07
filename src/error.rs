@@ -17,14 +17,14 @@ pub enum JvmError {
 pub type VmResult<T> = Result<T, Throwables>;
 
 /// Well-known throwables
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Throwables {
     NoClassDefFoundError,
     LinkageError,
     ClassNotFoundException,
     ClassFormatError,
     UnsupportedClassVersionError,
-
+    OutOfMemoryError,
     Other(&'static str),
 }
 
@@ -33,7 +33,7 @@ pub struct Throwable {
     // TODO reference to class instead of name
     // TODO reference to cause
     // TODO backtrace
-    class_name: &'static str,
+    pub class_name: &'static str,
 }
 
 pub trait ResultExt<T> {
@@ -64,6 +64,7 @@ impl Throwables {
             Throwables::ClassNotFoundException => "java/lang/ClassNotFoundException",
             Throwables::ClassFormatError => "java/lang/ClassFormatError",
             Throwables::UnsupportedClassVersionError => "java/lang/UnsupportedClassVersionError",
+            Throwables::OutOfMemoryError => "java/lang/OutOfMemoryError",
             Throwables::Other(s) => s,
         }
     }

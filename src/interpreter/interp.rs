@@ -1,9 +1,10 @@
-use crate::alloc::VmRef;
+use crate::alloc::{vmref_alloc_exception, VmRef};
 use crate::class::{Class, Method, Object};
+use log::*;
 
 use crate::interpreter::error::InterpreterError;
 use crate::interpreter::frame::{Frame, FrameStack};
-use crate::interpreter::insn::Bytecode;
+use crate::interpreter::insn::{Bytecode, ExecuteResult};
 use crate::thread;
 
 pub enum ProgramCounter {
@@ -42,7 +43,22 @@ impl Interpreter {
                 let bytecode = Bytecode::parse(&frame.code)?;
 
                 for insn in bytecode.instructions() {
-                    let result = insn.execute(frame, &thread)?;
+                    match insn.execute(frame, &thread) {
+                        Err(InterpreterError::ExceptionRaised(exc)) => {
+                            // TODO abrupt exit with proper exception creation
+                            thread.set_exception(vmref_alloc_exception(exc)?);
+                            todo!("handle exception")
+                        }
+                        Err(e) => {
+                            error!("interpreter error: {}", e);
+                            return Err(e);
+                        }
+                        Ok(ExecuteResult::Continue) => {}
+                        Ok(ExecuteResult::Return) => {
+                            // TODO handle return
+                            todo!("return")
+                        }
+                    }
                 }
             }
         }

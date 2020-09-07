@@ -102,3 +102,9 @@ impl JvmArgs {
         Ok(jvm_args)
     }
 }
+
+impl JvmGlobalState {
+    pub(crate) fn class_loader(&self) -> &ClassLoader {
+        &self.classloader
+    }
+}

@@ -259,8 +259,8 @@ impl MethodAccessFlags {
 
 #[cfg(test)]
 mod tests {
-    use mutf8::mstr;
-    use std::borrow::Cow;
+
+
 
     #[allow(non_snake_case)]
     #[test]
