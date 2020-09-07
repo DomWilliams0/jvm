@@ -1,25 +1,26 @@
-# TODOs (47)
+# TODOs (49)
  * [src/alloc.rs](src/alloc.rs) (3)
    * `// TODO gc arena`
    * `// TODO actually intern strings`
    * `// TODO methods on VmRef newtype`
- * [src/class.rs](src/class.rs) (7)
+ * [src/class.rs](src/class.rs) (10)
    * `/// TODO weak reference for cyclic?`
    * `// TODO just allocate an object instead of this unsafeness`
    * `// TODO verify constant pool offsets so we can raise a single classformaterror then trust it`
    * `// TODO preparation? https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-5.html#jvms-5.4.2`
    * `// TODO do verification first to throw ClassFormatErrors, then this should not throw any classformaterrors`
    * `// TODO set obj->vmdata field to vm_class`
+   * `// TODO initialise final static fields from ConstantValue attrs`
+   * `return Err(Throwables::ClassFormatError); // TODO different exception`
+   * `// TODO specific exception type e.g. ExceptionInInitializerError`
    * `// TODO not quite correct toString`
- * [src/classloader.rs](src/classloader.rs) (9)
-   * `// TODO linked?`
+ * [src/classloader.rs](src/classloader.rs) (7)
    * `// TODO types for str to differentiate java/lang/Object, java.lang.Object and descrptors e.g. Ljava/lang/Object;`
    * `// TODO register class "package" with loader (https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-5.html#jvms-5.3)`
    * `// TODO actually instantiate exceptions`
-   * `return Err(Throwables::ClassFormatError); // TODO different exception`
-   * `// TODO ClassLoaderRef that holds an upgradable rwlock guard, so no need to hold the lock for the whole method`
-   * `// TODO actually update and use load state`
+   * `// TODO run user classloader first`
    * `// TODO array classes are treated differently`
+   * `// TODO wait for other thread to finish loading`
    * `let bytes = std::fs::read(path).expect("io error"); // TODO java.lang.IOError`
  * [src/classpath.rs](src/classpath.rs) (1)
    * `// TODO enum for path type, zip/jar or directory`
@@ -36,9 +37,10 @@
  * [src/interpreter/insn/bytecode.rs](src/interpreter/insn/bytecode.rs) (2)
    * `// TODO temporary, dont log every single instruction`
    * `// TODO verified version of Bytecode that doesn't do all the safety checks for speed e.g. fn parse_unverified(bytes) -> Self`
- * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (2)
+ * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (3)
    * `type ExecuteResult = (); // TODO`
    * `// TODO n variations`
+   * `// TODO instantiate string`
  * [src/interpreter/interp.rs](src/interpreter/interp.rs) (5)
    * `// TODO get current class`
    * `// TODO get current method`

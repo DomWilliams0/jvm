@@ -1,7 +1,5 @@
-use crate::error::{Throwables, VmResult};
 use cafebabe::mutf8::MString;
 use cafebabe::{ClassResult, Item};
-use log::*;
 use std::fmt::{Debug, Formatter};
 
 #[derive(Debug)]

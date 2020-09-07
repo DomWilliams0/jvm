@@ -11,6 +11,7 @@ mod constant_pool;
 mod error;
 mod interpreter;
 mod jvm;
+mod monitor;
 mod properties;
 mod thread;
 mod types;

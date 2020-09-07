@@ -245,6 +245,7 @@ impl Ldc {
             .and_then(|e| if e.is_long_or_double() { None } else { Some(e) })
             .ok_or_else(|| InterpreterError::NotLoadable(self.0 as u16))?;
 
+        // TODO instantiate string
         unimplemented!()
     }
 }

@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use itertools::Itertools;
 use log::*;
-use parking_lot::RwLock;
+
 use thiserror::*;
 
 use crate::classloader::ClassLoader;
@@ -20,7 +20,7 @@ pub struct Jvm {
 
 /// Each thread shares a reference through an Arc
 pub struct JvmGlobalState {
-    classloader: RwLock<ClassLoader>,
+    classloader: ClassLoader,
 }
 
 #[derive(Default, Debug)]
@@ -50,9 +50,7 @@ impl Jvm {
         let classloader = ClassLoader::new(args.bootclasspath.clone());
 
         // create global JVM state
-        let global = Arc::new(JvmGlobalState {
-            classloader: RwLock::new(classloader),
-        });
+        let global = Arc::new(JvmGlobalState { classloader });
 
         let jvm = Jvm {
             main: args.main,
@@ -63,12 +61,9 @@ impl Jvm {
         thread::initialise(Arc::new(JvmThreadState::new(global)));
 
         // load system classes
-        {
-            let mut cl = jvm.state.classloader.write();
-            if let Err(e) = cl.init_bootstrap_classes().throw() {
-                error!("failed to initialise bootstrap classes: {}", e);
-                return Err(e);
-            }
+        if let Err(e) = jvm.state.classloader.init_bootstrap_classes().throw() {
+            error!("failed to initialise bootstrap classes: {}", e);
+            return Err(e);
         }
 
         // TODO set all properties in gnu/classpath/VMSystemProperties.preinit

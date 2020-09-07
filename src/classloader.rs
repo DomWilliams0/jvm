@@ -1,27 +1,30 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::thread::ThreadId;
 
 use log::*;
 
 use crate::alloc::{InternedString, VmRef};
-use crate::class::{Class, MethodLookupResult, Object};
+use crate::class::{Class, Object};
 use crate::classpath::ClassPath;
 use crate::error::{Throwables, VmResult};
-use crate::thread;
+
 use cafebabe::mutf8::mstr;
 use cafebabe::ClassError;
+use parking_lot::RwLock;
+use std::thread::ThreadId;
+use strum_macros::EnumDiscriminants;
 
 pub struct ClassLoader {
-    classes: HashMap<InternedString, (LoadState, VmRef<Class>)>,
+    classes: RwLock<HashMap<InternedString, LoadState>>,
     bootclasspath: Arc<ClassPath>,
 }
 
+#[derive(Clone, Debug, EnumDiscriminants)]
 enum LoadState {
     Unloaded,
-    Loading(ThreadId),
-    Loaded(ThreadId),
-    // TODO linked?
+    Loading(ThreadId, WhichLoader),
+    Loaded(ThreadId, VmRef<Class>),
+    Failed,
 }
 
 #[derive(Clone, Debug)]
@@ -37,15 +40,42 @@ impl ClassLoader {
             classes: Default::default(),
         }
     }
+
+    fn load_state(&self, class_name: &mstr) -> LoadState {
+        let guard = self.classes.read();
+        match guard.get(class_name) {
+            None => LoadState::Unloaded,
+            Some(state) => state.clone(),
+        }
+    }
+
+    fn update_state(&self, class_name: &mstr, state: LoadState) {
+        trace!(
+            "updating loading state of {:?} to {:?}",
+            class_name,
+            LoadStateDiscriminants::from(&state)
+        );
+
+        let mut guard = self.classes.write();
+        match guard.get_mut(class_name) {
+            None => {
+                guard.insert(class_name.to_owned(), state);
+            }
+            Some(s) => {
+                *s = state;
+            }
+        }
+    }
+
     // TODO types for str to differentiate java/lang/Object, java.lang.Object and descrptors e.g. Ljava/lang/Object;
 
-    pub fn define_class(
-        &mut self,
+    /// Loads class file and links it
+    fn do_load(
+        &self,
         class_name: &mstr,
         bytes: &[u8],
         loader: WhichLoader,
     ) -> VmResult<VmRef<Class>> {
-        debug!("defining class {:?} with {:?} loader", class_name, loader);
         // TODO register class "package" with loader (https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-5.html#jvms-5.3)
 
         // load class
@@ -64,62 +94,55 @@ impl ClassLoader {
         };
 
         // link loaded .class
-        let class = Class::link(class_name, loaded, loader, self)?;
-
-        self.classes.insert(
-            class_name.to_owned(),
-            (LoadState::Loaded(thread::get().thread()), class.clone()),
-        );
-
-        // initialisation - run static constructor
-        match class.find_static_constructor() {
-            MethodLookupResult::FoundMultiple => {
-                warn!("class has multiple static constructors");
-                return Err(Throwables::ClassFormatError);
-            }
-            MethodLookupResult::NotFound => { /* no problem */ }
-            MethodLookupResult::Found(m) => {
-                debug!("running static constructor for {:?}", class.name());
-
-                let thread = thread::get();
-                let mut interpreter = thread.interpreter_mut();
-                if let Err(e) = interpreter.execute_method(class.clone(), m, None /* static */) {
-                    warn!("static constructor failed: {}", e);
-                    return Err(Throwables::ClassFormatError); // TODO different exception
-                }
-            }
-        }
-
-        debug!("class: {:#?}", class);
-        Ok(class)
+        Class::link(class_name, loaded, loader, self)
     }
 
-    // TODO ClassLoaderRef that holds an upgradable rwlock guard, so no need to hold the lock for the whole method
-    pub fn load_class(&mut self, class_name: &mstr, loader: WhichLoader) -> VmResult<VmRef<Class>> {
-        // check if loading is needed
-        if let Some((state, obj)) = self.classes.get(class_name) {
-            match state {
-                LoadState::Loaded(_) => {
-                    // already loaded, nothing to do
-                    return Ok(obj.clone());
-                }
-
-                LoadState::Unloaded => unreachable!(
-                    "class {:?} shouldnt be loaded with unloaded state",
-                    class_name
-                ),
-                LoadState::Loading(t) => {
-                    unimplemented!("class {:?} is being loaded by thread {:?}", class_name, t)
-                }
-            }
-        }
-
-        // TODO actually update and use load state
-
+    /// Loads and creates Class object with ClassState::Uninitialised
+    pub fn load_class(&self, class_name: &mstr, loader: WhichLoader) -> VmResult<VmRef<Class>> {
+        // TODO run user classloader first
         // TODO array classes are treated differently
 
+        // check if loading is needed
+        match self.load_state(class_name) {
+            LoadState::Loading(t, l) => {
+                if t == current_thread() {
+                    // this thread is already loading this class, keep going
+                } else {
+                    // TODO wait for other thread to finish loading
+                    todo!("wait for other thread")
+                }
+            }
+            LoadState::Loaded(_, cls) => {
+                return Ok(cls);
+            }
+            LoadState::Unloaded | LoadState::Failed => {}
+        }
+
+        // loading is required, update shared state
+        self.update_state(
+            class_name,
+            LoadState::Loading(current_thread(), loader.clone()),
+        );
+
+        // load and link
         let class_bytes = self.find_boot_class(class_name.to_utf8().as_ref())?;
-        self.define_class(class_name, &class_bytes, loader)
+        let linked_class = match self.do_load(class_name, &class_bytes, loader) {
+            Err(e) => {
+                self.update_state(class_name, LoadState::Failed);
+                warn!("failed to load class {:?}: {:?}", class_name, e);
+                return Err(e);
+            }
+            Ok(class) => {
+                self.update_state(
+                    class_name,
+                    LoadState::Loaded(current_thread(), class.clone()),
+                );
+                debug!("loaded class {:?} successfully", class_name);
+                class
+            }
+        };
+
+        Ok(linked_class)
     }
 
     fn find_boot_class(&self, class_name: &str) -> VmResult<Vec<u8>> {
@@ -137,7 +160,7 @@ impl ClassLoader {
         Ok(bytes)
     }
 
-    pub fn init_bootstrap_classes(&mut self) -> VmResult<()> {
+    pub fn init_bootstrap_classes(&self) -> VmResult<()> {
         let classes = [
             "java/lang/ClassLoader",
             "java/lang/String",
@@ -149,9 +172,14 @@ impl ClassLoader {
             self.load_class(
                 mstr::from_utf8(class.as_bytes()).as_ref(),
                 WhichLoader::Bootstrap,
-            )?;
+            )
+            .and_then(|class| class.ensure_init())?;
         }
 
         Ok(())
     }
+}
+
+pub fn current_thread() -> ThreadId {
+    std::thread::current().id()
 }

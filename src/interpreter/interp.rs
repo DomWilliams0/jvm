@@ -42,7 +42,7 @@ impl Interpreter {
                 let bytecode = Bytecode::parse(&frame.code)?;
 
                 for insn in bytecode.instructions() {
-                    insn.execute(frame, &thread);
+                    let result = insn.execute(frame, &thread)?;
                 }
             }
         }
