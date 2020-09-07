@@ -9,7 +9,7 @@ use crate::class::{Class, MethodLookupResult, Object};
 use crate::classpath::ClassPath;
 use crate::error::{Throwables, VmResult};
 use crate::thread;
-use cafebabe::mutf8::{mstr, MString};
+use cafebabe::mutf8::mstr;
 use cafebabe::ClassError;
 
 pub struct ClassLoader {
@@ -79,11 +79,12 @@ impl ClassLoader {
             }
             MethodLookupResult::NotFound => { /* no problem */ }
             MethodLookupResult::Found(m) => {
-                let code = m.code().ok_or_else(|| {
-                    warn!("static constructor has no code");
-                    Throwables::ClassFormatError
-                })?;
-                todo!("execute <clinit>");
+                let thread = thread::get();
+                let mut interpreter = thread.interpreter_mut();
+                if let Err(e) = interpreter.execute_method(class.clone(), m, None /* static */) {
+                    warn!("static constructor failed: {}", e);
+                    return Err(Throwables::ClassFormatError); // TODO different exception
+                }
             }
         }
 

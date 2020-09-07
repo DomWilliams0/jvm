@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{RefCell, RefMut};
 use std::mem::MaybeUninit;
 use std::sync::Arc;
 
@@ -7,6 +7,7 @@ use parking_lot::RwLock;
 
 use crate::alloc::VmRef;
 use crate::error::Throwable;
+use crate::interpreter::Interpreter;
 use crate::jvm::JvmGlobalState;
 use std::thread::ThreadId;
 
@@ -14,8 +15,8 @@ use std::thread::ThreadId;
 pub struct JvmThreadState {
     jvm: Arc<JvmGlobalState>,
     thread_handle: ThreadId,
-    // TODO other thread data like frames, current class, exception
     exception: RefCell<Option<VmRef<Throwable /* TODO vmobject */>>>,
+    interpreter: RefCell<Interpreter>,
 }
 
 thread_local! {
@@ -119,6 +120,7 @@ pub fn get() -> Arc<JvmThreadState> {
 impl JvmThreadState {
     pub fn new(jvm: Arc<JvmGlobalState>) -> Self {
         Self {
+            interpreter: RefCell::new(Interpreter::default()),
             jvm,
             thread_handle: std::thread::current().id(),
             exception: RefCell::new(None),
@@ -135,5 +137,9 @@ impl JvmThreadState {
 
     pub fn thread(&self) -> ThreadId {
         self.thread_handle
+    }
+
+    pub fn interpreter_mut(&self) -> RefMut<Interpreter> {
+        self.interpreter.borrow_mut()
     }
 }

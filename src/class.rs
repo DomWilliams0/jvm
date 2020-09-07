@@ -28,7 +28,7 @@ pub struct Class {
 
     interfaces: Vec<VmRef<Class>>,
     fields: Vec<Field>,
-    methods: Vec<Method>,
+    methods: Vec<VmRef<Method>>,
 
     // name -> value. disgusting
     static_field_values: HashMap<NativeString, DataValue>,
@@ -65,8 +65,8 @@ pub struct Method {
     attributes: Vec<attribute::OwnedAttribute>,
 }
 
-pub enum MethodLookupResult<'a> {
-    Found(&'a Method),
+pub enum MethodLookupResult {
+    Found(VmRef<Method>),
     FoundMultiple,
     NotFound,
 }
@@ -188,13 +188,13 @@ impl Class {
                     }
                 };
 
-                vec.push(Method {
+                vec.push(VmRef::new(Method {
                     name: method.name.to_owned(),
                     desc: method.descriptor.to_owned(),
                     flags: method.access_flags,
                     code,
                     attributes,
-                })
+                }))
             }
             vec
         };
@@ -277,7 +277,7 @@ impl Class {
         let next = matching.next();
 
         match (first, next) {
-            (Some(m), None) => MethodLookupResult::Found(m),
+            (Some(m), None) => MethodLookupResult::Found(m.clone()),
             (Some(_), Some(_)) => MethodLookupResult::FoundMultiple,
             _ => MethodLookupResult::NotFound,
         }
@@ -290,10 +290,14 @@ impl Class {
             MethodAccessFlags::STATIC,
         )
     }
+
+    pub fn name(&self) -> &mstr {
+        &self.name
+    }
 }
 
-impl<'a> MethodLookupResult<'a> {
-    fn ok(self) -> Option<&'a Method> {
+impl MethodLookupResult {
+    fn ok(self) -> Option<VmRef<Method>> {
         if let MethodLookupResult::Found(m) = self {
             Some(m)
         } else {
@@ -305,6 +309,14 @@ impl<'a> MethodLookupResult<'a> {
 impl Object {
     pub fn is_null(&self) -> bool {
         VmRef::ptr_eq(&self.class, &NULL.class)
+    }
+
+    pub fn class(&self) -> Option<VmRef<Class>> {
+        if self.is_null() {
+            None
+        } else {
+            Some(self.class.clone())
+        }
     }
 }
 
@@ -323,5 +335,13 @@ impl Debug for Object {
 impl Method {
     pub fn code(&self) -> Option<&Code> {
         self.code.as_ref()
+    }
+
+    pub fn name(&self) -> &mstr {
+        &self.name
+    }
+
+    pub fn flags(&self) -> MethodAccessFlags {
+        self.flags
     }
 }

@@ -114,6 +114,27 @@ impl DataType {
     }
 }
 
+impl DataValue {
+    pub fn is_wide(&self) -> bool {
+        match self {
+            DataValue::Long(_) | DataValue::Double(_) => true,
+            _ => false,
+        }
+    }
+
+    /// Must be non null
+    pub fn reference(reference: VmRef<Object>) -> Self {
+        let reference_data = ReferenceDataType::Class(
+            reference
+                .class()
+                .expect("should be non null")
+                .name()
+                .to_owned(),
+        );
+        DataValue::Reference(reference_data, reference)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::types::{DataType, ReferenceDataType};
