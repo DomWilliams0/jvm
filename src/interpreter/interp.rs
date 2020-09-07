@@ -4,6 +4,7 @@ use crate::class::{Class, Method, Object};
 use crate::interpreter::error::InterpreterError;
 use crate::interpreter::frame::{Frame, FrameDeets, FrameStack};
 use crate::interpreter::insn::Bytecode;
+use crate::thread;
 
 pub enum ProgramCounter {
     Java(usize),
@@ -27,21 +28,21 @@ impl Interpreter {
         this: Option<VmRef<Object>>,
     ) -> Result<(), InterpreterError> {
         // push new frame
-        let frame = Frame::new_from_method(method, class, this)?;
+        let mut frame = Frame::new_from_method(method, class, this)?;
+        let thread = thread::get();
 
-        match frame.deets() {
+        match frame.deets_mut() {
             FrameDeets::Native => {
                 // TODO native frames
                 unimplemented!()
             }
-            FrameDeets::Java { code, .. } => {
+            FrameDeets::Java(frame) => {
                 // get bytecode
                 // TODO verify, "compile" and cache instructions
-
-                let bytecode = Bytecode::parse(code)?;
+                let bytecode = Bytecode::parse(&frame.code)?;
 
                 for insn in bytecode.instructions() {
-                    // TODO execute
+                    insn.execute(frame, &thread);
                 }
             }
         }

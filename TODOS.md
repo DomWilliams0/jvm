@@ -34,13 +34,14 @@
  * [src/interpreter/insn/bytecode.rs](src/interpreter/insn/bytecode.rs) (2)
    * `// TODO temporary, dont log every single instruction`
    * `// TODO verified version of Bytecode that doesn't do all the safety checks for speed e.g. fn parse_unverified(bytes) -> Self`
- * [src/interpreter/interp.rs](src/interpreter/interp.rs) (6)
+ * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (1)
+   * `// TODO n variations`
+ * [src/interpreter/interp.rs](src/interpreter/interp.rs) (5)
    * `// TODO get current class`
    * `// TODO get current method`
    * `// TODO get current frame`
    * `// TODO native frames`
    * `// TODO verify, "compile" and cache instructions`
-   * `// TODO execute`
  * [src/jvm.rs](src/jvm.rs) (4)
    * `// TODO "catch" any exception during init, and log it properly with stacktrace etc`
    * `// TODO set all properties in gnu/classpath/VMSystemProperties.preinit`

@@ -16,12 +16,14 @@ pub struct LocalVariables(Vec<StackValue>);
 pub struct OperandStack(Vec<DataValue>);
 pub struct FrameStack(Vec<Frame>);
 
+pub struct JavaFrame {
+    pub local_vars: LocalVariables,
+    pub operand_stack: OperandStack,
+    pub code: Arc<[u8]>,
+}
+
 pub enum FrameDeets {
-    Java {
-        local_vars: LocalVariables,
-        operand_stack: OperandStack,
-        code: Arc<[u8]>,
-    },
+    Java(JavaFrame),
     Native,
 }
 
@@ -115,7 +117,7 @@ impl Frame {
                 InterpreterError::NoCode
             })?;
 
-            FrameDeets::Java {
+            FrameDeets::Java(JavaFrame {
                 local_vars: match this {
                     Some(this) => LocalVariables::new_instance(
                         code.max_locals as usize,
@@ -125,7 +127,7 @@ impl Frame {
                 },
                 operand_stack: OperandStack::new(code.max_stack as usize),
                 code: code.code.clone(),
-            }
+            })
         };
 
         Ok(Frame {
@@ -135,7 +137,7 @@ impl Frame {
         })
     }
 
-    pub fn deets(&self) -> &FrameDeets {
-        &self.deets
+    pub fn deets_mut(&mut self) -> &mut FrameDeets {
+        &mut self.deets
     }
 }

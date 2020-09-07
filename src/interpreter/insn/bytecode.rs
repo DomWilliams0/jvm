@@ -1,18 +1,19 @@
 use crate::interpreter::error::InterpreterError;
-use crate::interpreter::insn::Instruction;
-use crate::interpreter::insn::*;
+use crate::interpreter::insn::instruction::Instruction;
+use crate::interpreter::insn::instruction::*;
+use crate::interpreter::insn::opcode::Opcode;
 use dynstack::{dyn_push, DynStack};
 use num_enum::TryFromPrimitive;
 
 pub struct Bytecode(DynStack<dyn Instruction>);
 
-struct Reader<'b> {
+pub(crate) struct Reader<'b> {
     stream: &'b [u8],
     cursor: usize,
 }
 
 impl<'b> Reader<'b> {
-    fn read_n(&mut self, n: usize) -> Result<&[u8], InterpreterError> {
+    pub(crate) fn read_n(&mut self, n: usize) -> Result<&[u8], InterpreterError> {
         let end = self.cursor + n;
         if end > self.stream.len() {
             Err(InterpreterError::IncompleteInstruction(self.cursor))
@@ -23,22 +24,23 @@ impl<'b> Reader<'b> {
         }
     }
 
-    fn read_1(&mut self) -> Result<u8, InterpreterError> {
+    pub(crate) fn read_1(&mut self) -> Result<u8, InterpreterError> {
         self.read_n(1).map(|b| b[0])
     }
 }
 
 #[inline]
 fn parse_insn(
-    reader: &mut Reader,
+    _reader: &mut Reader,
     _output: &mut DynStack<dyn Instruction>,
     insn: u8,
 ) -> Result<(), InterpreterError> {
     macro_rules! insn {
-        ($insn:expr) => {{
+        ($insn:ident) => {{
+            let insn = $insn::parse(_reader)?;
             // TODO temporary, dont log every single instruction
-            log::trace!("parsed insn {}", $insn.name());
-            dyn_push!(_output, $insn);
+            log::trace!("parsed insn {:?}", insn);
+            dyn_push!(_output, insn);
         }};
     }
 
@@ -46,8 +48,155 @@ fn parse_insn(
         Opcode::try_from_primitive(insn).map_err(|_| InterpreterError::InvalidInstruction(insn))?;
 
     match opcode {
-        Opcode::Aload0 => insn!(Aload0),
-        Opcode::Aload => insn!(Aload(reader.read_1()?)),
+        // Opcode::Aaload => insn!(Aaload),
+        // Opcode::Aastore => insn!(Aastore),
+        // Opcode::AconstNull => insn!(AconstNull),
+        // Opcode::Aload => insn!(Aload),
+        // Opcode::Aload0 => insn!(Aload0),
+        // Opcode::Anewarray => insn!(Anewarray),
+        // Opcode::Areturn => insn!(Areturn),
+        // Opcode::Arraylength => insn!(Arraylength),
+        // Opcode::Astore => insn!(Astore),
+        // Opcode::Astore0 => insn!(Astore0),
+        // Opcode::Athrow => insn!(Athrow),
+        // Opcode::Baload => insn!(Baload),
+        // Opcode::Bastore => insn!(Bastore),
+        // Opcode::Bipush => insn!(Bipush),
+        // Opcode::Caload => insn!(Caload),
+        // Opcode::Castore => insn!(Castore),
+        // Opcode::Checkcast => insn!(Checkcast),
+        // Opcode::D2F => insn!(D2F),
+        // Opcode::D2I => insn!(D2I),
+        // Opcode::D2L => insn!(D2L),
+        // Opcode::Dadd => insn!(Dadd),
+        // Opcode::Daload => insn!(Daload),
+        // Opcode::Dastore => insn!(Dastore),
+        // Opcode::Dcmpg => insn!(Dcmpg),
+        // Opcode::Dconst0 => insn!(Dconst0),
+        // Opcode::Ddiv => insn!(Ddiv),
+        // Opcode::Dload => insn!(Dload),
+        // Opcode::Dload0 => insn!(Dload0),
+        // Opcode::Dmul => insn!(Dmul),
+        // Opcode::Dneg => insn!(Dneg),
+        // Opcode::Drem => insn!(Drem),
+        // Opcode::Dreturn => insn!(Dreturn),
+        // Opcode::Dstore => insn!(Dstore),
+        // Opcode::Dstore0 => insn!(Dstore0),
+        // Opcode::Dsub => insn!(Dsub),
+        Opcode::Dup => insn!(Dup),
+        // Opcode::Dup2 => insn!(Dup2),
+        // Opcode::Dup2X1 => insn!(Dup2X1),
+        // Opcode::Dup2X2 => insn!(Dup2X2),
+        // Opcode::DupX1 => insn!(DupX1),
+        // Opcode::DupX2 => insn!(DupX2),
+        // Opcode::F2D => insn!(F2D),
+        // Opcode::F2I => insn!(F2I),
+        // Opcode::F2L => insn!(F2L),
+        // Opcode::Fadd => insn!(Fadd),
+        // Opcode::Faload => insn!(Faload),
+        // Opcode::Fastore => insn!(Fastore),
+        // Opcode::Fcmpg => insn!(Fcmpg),
+        // Opcode::Fconst0 => insn!(Fconst0),
+        // Opcode::Fdiv => insn!(Fdiv),
+        // Opcode::Fload => insn!(Fload),
+        // Opcode::Fload0 => insn!(Fload0),
+        // Opcode::Fmul => insn!(Fmul),
+        // Opcode::Fneg => insn!(Fneg),
+        // Opcode::Frem => insn!(Frem),
+        // Opcode::Freturn => insn!(Freturn),
+        // Opcode::Fstore => insn!(Fstore),
+        // Opcode::Fstore0 => insn!(Fstore0),
+        // Opcode::Fsub => insn!(Fsub),
+        // Opcode::Getfield => insn!(Getfield),
+        // Opcode::Getstatic => insn!(Getstatic),
+        // Opcode::Goto => insn!(Goto),
+        // Opcode::GotoW => insn!(GotoW),
+        // Opcode::I2B => insn!(I2B),
+        // Opcode::I2C => insn!(I2C),
+        // Opcode::I2D => insn!(I2D),
+        // Opcode::I2F => insn!(I2F),
+        // Opcode::I2L => insn!(I2L),
+        // Opcode::I2S => insn!(I2S),
+        // Opcode::Iadd => insn!(Iadd),
+        // Opcode::Iaload => insn!(Iaload),
+        // Opcode::Iand => insn!(Iand),
+        // Opcode::Iastore => insn!(Iastore),
+        // Opcode::IconstM1 => insn!(IconstM1),
+        // Opcode::Idiv => insn!(Idiv),
+        // Opcode::IfAcmpeq => insn!(IfAcmpeq),
+        // Opcode::IfIcmpeq => insn!(IfIcmpeq),
+        // Opcode::Ifeq => insn!(Ifeq),
+        // Opcode::Ifnonnull => insn!(Ifnonnull),
+        // Opcode::Ifnull => insn!(Ifnull),
+        // Opcode::Iinc => insn!(Iinc),
+        // Opcode::Iload => insn!(Iload),
+        // Opcode::Iload0 => insn!(Iload0),
+        // Opcode::Imul => insn!(Imul),
+        // Opcode::Ineg => insn!(Ineg),
+        // Opcode::Instanceof => insn!(Instanceof),
+        // Opcode::Invokedynamic => insn!(Invokedynamic),
+        // Opcode::Invokeinterface => insn!(Invokeinterface),
+        Opcode::Invokespecial => insn!(Invokespecial),
+        Opcode::Invokestatic => insn!(Invokestatic),
+        // Opcode::Invokevirtual => insn!(Invokevirtual),
+        // Opcode::Ior => insn!(Ior),
+        // Opcode::Irem => insn!(Irem),
+        // Opcode::Ireturn => insn!(Ireturn),
+        // Opcode::Ishl => insn!(Ishl),
+        // Opcode::Ishr => insn!(Ishr),
+        // Opcode::Istore => insn!(Istore),
+        // Opcode::Istore0 => insn!(Istore0),
+        // Opcode::Isub => insn!(Isub),
+        // Opcode::Iushr => insn!(Iushr),
+        // Opcode::Ixor => insn!(Ixor),
+        // Opcode::Jsr => insn!(Jsr),
+        // Opcode::JsrW => insn!(JsrW),
+        // Opcode::L2D => insn!(L2D),
+        // Opcode::L2F => insn!(L2F),
+        // Opcode::L2I => insn!(L2I),
+        // Opcode::Ladd => insn!(Ladd),
+        // Opcode::Laload => insn!(Laload),
+        // Opcode::Land => insn!(Land),
+        // Opcode::Lastore => insn!(Lastore),
+        // Opcode::Lcmp => insn!(Lcmp),
+        // Opcode::Lconst0 => insn!(Lconst0),
+        Opcode::Ldc => insn!(Ldc),
+        // Opcode::Ldc2W => insn!(Ldc2W),
+        // Opcode::LdcW => insn!(LdcW),
+        // Opcode::Ldiv => insn!(Ldiv),
+        // Opcode::Lload => insn!(Lload),
+        // Opcode::Lload0 => insn!(Lload0),
+        // Opcode::Lmul => insn!(Lmul),
+        // Opcode::Lneg => insn!(Lneg),
+        // Opcode::Lookupswitch => insn!(Lookupswitch),
+        // Opcode::Lor => insn!(Lor),
+        // Opcode::Lrem => insn!(Lrem),
+        // Opcode::Lreturn => insn!(Lreturn),
+        // Opcode::Lshl => insn!(Lshl),
+        // Opcode::Lshr => insn!(Lshr),
+        // Opcode::Lstore => insn!(Lstore),
+        // Opcode::Lstore0 => insn!(Lstore0),
+        // Opcode::Lsub => insn!(Lsub),
+        // Opcode::Lushr => insn!(Lushr),
+        // Opcode::Lxor => insn!(Lxor),
+        // Opcode::Monitorenter => insn!(Monitorenter),
+        // Opcode::Monitorexit => insn!(Monitorexit),
+        // Opcode::Multianewarray => insn!(Multianewarray),
+        Opcode::New => insn!(New),
+        // Opcode::Newarray => insn!(Newarray),
+        // Opcode::Nop => insn!(Nop),
+        // Opcode::Pop => insn!(Pop),
+        // Opcode::Pop2 => insn!(Pop2),
+        // Opcode::Putfield => insn!(Putfield),
+        Opcode::Putstatic => insn!(Putstatic),
+        // Opcode::Ret => insn!(Ret),
+        Opcode::Return => insn!(Return),
+        // Opcode::Saload => insn!(Saload),
+        // Opcode::Sastore => insn!(Sastore),
+        // Opcode::Sipush => insn!(Sipush),
+        // Opcode::Swap => insn!(Swap),
+        // Opcode::Tableswitch => insn!(Tableswitch),
+        // Opcode::Wide => insn!(Wide),
         o => {
             return Err(InterpreterError::UnimplementedOpcode(o));
         }
@@ -83,167 +232,24 @@ impl Bytecode {
     }
 }
 
-#[derive(TryFromPrimitive, Debug, Clone)]
-#[repr(u8)]
-pub enum Opcode {
-    Nop = 0x0,
-    AconstNull = 0x1,
-    IconstM1 = 0x2,
-    Lconst0 = 0x9,
-    Fconst0 = 0xb,
-    Dconst0 = 0xe,
-    Bipush = 0x10,
-    Sipush = 0x11,
-    Ldc = 0x12,
-    LdcW = 0x13,
-    Ldc2W = 0x14,
-    Iload = 0x15,
-    Lload = 0x16,
-    Fload = 0x17,
-    Dload = 0x18,
-    Aload = 0x19,
-    Iload0 = 0x1a,
-    Lload0 = 0x1e,
-    Fload0 = 0x22,
-    Dload0 = 0x26,
-    Aload0 = 0x2a,
-    Iaload = 0x2e,
-    Laload = 0x2f,
-    Faload = 0x30,
-    Daload = 0x31,
-    Aaload = 0x32,
-    Baload = 0x33,
-    Caload = 0x34,
-    Saload = 0x35,
-    Istore = 0x36,
-    Lstore = 0x37,
-    Fstore = 0x38,
-    Dstore = 0x39,
-    Astore = 0x3a,
-    Istore0 = 0x3b,
-    Lstore0 = 0x3f,
-    Fstore0 = 0x43,
-    Dstore0 = 0x47,
-    Astore0 = 0x4b,
-    Iastore = 0x4f,
-    Lastore = 0x50,
-    Fastore = 0x51,
-    Dastore = 0x52,
-    Aastore = 0x53,
-    Bastore = 0x54,
-    Castore = 0x55,
-    Sastore = 0x56,
-    Pop = 0x57,
-    Pop2 = 0x58,
-    Dup = 0x59,
-    DupX1 = 0x5a,
-    DupX2 = 0x5b,
-    Dup2 = 0x5c,
-    Dup2X1 = 0x5d,
-    Dup2X2 = 0x5e,
-    Swap = 0x5f,
-    Iadd = 0x60,
-    Ladd = 0x61,
-    Fadd = 0x62,
-    Dadd = 0x63,
-    Isub = 0x64,
-    Lsub = 0x65,
-    Fsub = 0x66,
-    Dsub = 0x67,
-    Imul = 0x68,
-    Lmul = 0x69,
-    Fmul = 0x6a,
-    Dmul = 0x6b,
-    Idiv = 0x6c,
-    Ldiv = 0x6d,
-    Fdiv = 0x6e,
-    Ddiv = 0x6f,
-    Irem = 0x70,
-    Lrem = 0x71,
-    Frem = 0x72,
-    Drem = 0x73,
-    Ineg = 0x74,
-    Lneg = 0x75,
-    Fneg = 0x76,
-    Dneg = 0x77,
-    Ishl = 0x78,
-    Lshl = 0x79,
-    Ishr = 0x7a,
-    Lshr = 0x7b,
-    Iushr = 0x7c,
-    Lushr = 0x7d,
-    Iand = 0x7e,
-    Land = 0x7f,
-    Ior = 0x80,
-    Lor = 0x81,
-    Ixor = 0x82,
-    Lxor = 0x83,
-    Iinc = 0x84,
-    I2L = 0x85,
-    I2F = 0x86,
-    I2D = 0x87,
-    L2I = 0x88,
-    L2F = 0x89,
-    L2D = 0x8a,
-    F2I = 0x8b,
-    F2L = 0x8c,
-    F2D = 0x8d,
-    D2I = 0x8e,
-    D2L = 0x8f,
-    D2F = 0x90,
-    I2B = 0x91,
-    I2C = 0x92,
-    I2S = 0x93,
-    Lcmp = 0x94,
-    Fcmpg = 0x96,
-    Dcmpg = 0x98,
-    Ifeq = 0x99,
-    IfIcmpeq = 0x9f,
-    IfAcmpeq = 0xa5,
-    Goto = 0xa7,
-    Jsr = 0xa8,
-    Ret = 0xa9,
-    Tableswitch = 0xaa,
-    Lookupswitch = 0xab,
-    Ireturn = 0xac,
-    Lreturn = 0xad,
-    Freturn = 0xae,
-    Dreturn = 0xaf,
-    Areturn = 0xb0,
-    Return = 0xb1,
-    Getstatic = 0xb2,
-    Putstatic = 0xb3,
-    Getfield = 0xb4,
-    Putfield = 0xb5,
-    Invokevirtual = 0xb6,
-    Invokespecial = 0xb7,
-    Invokestatic = 0xb8,
-    Invokeinterface = 0xb9,
-    Invokedynamic = 0xba,
-    New = 0xbb,
-    Newarray = 0xbc,
-    Anewarray = 0xbd,
-    Arraylength = 0xbe,
-    Athrow = 0xbf,
-    Checkcast = 0xc0,
-    Instanceof = 0xc1,
-    Monitorenter = 0xc2,
-    Monitorexit = 0xc3,
-    Wide = 0xc4,
-    Multianewarray = 0xc5,
-    Ifnull = 0xc6,
-    Ifnonnull = 0xc7,
-    GotoW = 0xc8,
-    JsrW = 0xc9,
-    Breakpoint = 0xca,
-    Impdep1 = 0xfe,
-    Impdep2 = 0xff,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use itertools::Itertools;
+
+    #[test]
+    fn reader() {
+        let bytes = vec![1, 2, 3, 4, 5];
+        let mut reader = Reader {
+            stream: bytes.as_slice(),
+            cursor: 0,
+        };
+
+        assert_eq!(reader.read_1().unwrap(), 1);
+        assert_eq!(reader.read_1().unwrap(), 2);
+        assert_eq!(reader.read_1().unwrap(), 3);
+        assert_eq!(reader.read_n(2).unwrap(), [4, 5]);
+    }
 
     #[test]
     fn parse_simple_aloads() {
