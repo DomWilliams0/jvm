@@ -4,10 +4,16 @@ use crate::interpreter::insn::bytecode::Reader;
 use crate::thread::JvmThreadState;
 use std::fmt::Debug;
 
+type ExecuteResult = (); // TODO
+
 pub trait Instruction: Debug {
     fn name(&self) -> &'static str;
 
-    fn execute(&self, frame: &mut JavaFrame, thread: &JvmThreadState);
+    fn execute(
+        &self,
+        frame: &mut JavaFrame,
+        thread: &JvmThreadState,
+    ) -> Result<ExecuteResult, InterpreterError>;
 }
 
 macro_rules! insn_common {
@@ -18,7 +24,11 @@ macro_rules! insn_common {
             }
 
             #[inline]
-            fn execute(&self, frame: &mut JavaFrame, thread: &JvmThreadState) {
+            fn execute(
+                &self,
+                frame: &mut JavaFrame,
+                thread: &JvmThreadState,
+            ) -> Result<ExecuteResult, InterpreterError> {
                 self.do_execute(frame, thread)
             }
         }
@@ -224,43 +234,77 @@ insn_0!(Return, "return");
 // insn_n!(Wide, "wide");
 
 impl Ldc {
-    fn do_execute(&self, frame: &mut JavaFrame, thread: &JvmThreadState) {
+    fn do_execute(
+        &self,
+        frame: &mut JavaFrame,
+        thread: &JvmThreadState,
+    ) -> Result<ExecuteResult, InterpreterError> {
+        let pool = frame.class.constant_pool();
+        let entry = pool
+            .loadable_entry(self.0 as u16)
+            .and_then(|e| if e.is_long_or_double() { None } else { Some(e) })
+            .ok_or_else(|| InterpreterError::NotLoadable(self.0 as u16))?;
+
         unimplemented!()
     }
 }
 
 impl Invokespecial {
-    fn do_execute(&self, frame: &mut JavaFrame, thread: &JvmThreadState) {
+    fn do_execute(
+        &self,
+        frame: &mut JavaFrame,
+        thread: &JvmThreadState,
+    ) -> Result<ExecuteResult, InterpreterError> {
         unimplemented!()
     }
 }
 
 impl Invokestatic {
-    fn do_execute(&self, frame: &mut JavaFrame, thread: &JvmThreadState) {
+    fn do_execute(
+        &self,
+        frame: &mut JavaFrame,
+        thread: &JvmThreadState,
+    ) -> Result<ExecuteResult, InterpreterError> {
         unimplemented!()
     }
 }
 
 impl Putstatic {
-    fn do_execute(&self, frame: &mut JavaFrame, thread: &JvmThreadState) {
+    fn do_execute(
+        &self,
+        frame: &mut JavaFrame,
+        thread: &JvmThreadState,
+    ) -> Result<ExecuteResult, InterpreterError> {
         unimplemented!()
     }
 }
 
 impl New {
-    fn do_execute(&self, frame: &mut JavaFrame, thread: &JvmThreadState) {
+    fn do_execute(
+        &self,
+        frame: &mut JavaFrame,
+        thread: &JvmThreadState,
+    ) -> Result<ExecuteResult, InterpreterError> {
         unimplemented!()
     }
 }
 
 impl Dup {
-    fn do_execute(&self, frame: &mut JavaFrame, thread: &JvmThreadState) {
+    fn do_execute(
+        &self,
+        frame: &mut JavaFrame,
+        thread: &JvmThreadState,
+    ) -> Result<ExecuteResult, InterpreterError> {
         unimplemented!()
     }
 }
 
 impl Return {
-    fn do_execute(&self, frame: &mut JavaFrame, thread: &JvmThreadState) {
+    fn do_execute(
+        &self,
+        frame: &mut JavaFrame,
+        thread: &JvmThreadState,
+    ) -> Result<ExecuteResult, InterpreterError> {
         unimplemented!()
     }
 }

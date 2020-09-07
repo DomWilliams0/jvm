@@ -11,6 +11,7 @@ use crate::error::{Throwables, VmResult};
 use crate::types::{DataType, DataValue};
 use cafebabe::mutf8::mstr;
 
+use crate::constant_pool::RuntimeConstantPool;
 use cafebabe::attribute::Code;
 use std::fmt::{Debug, Formatter};
 
@@ -29,6 +30,8 @@ pub struct Class {
     interfaces: Vec<VmRef<Class>>,
     fields: Vec<Field>,
     methods: Vec<VmRef<Method>>,
+
+    constant_pool: RuntimeConstantPool,
 
     // name -> value. disgusting
     static_field_values: HashMap<NativeString, DataValue>,
@@ -233,6 +236,12 @@ impl Class {
             map
         };
 
+        let constant_pool =
+            RuntimeConstantPool::from_cafebabe(loaded.constant_pool()).map_err(|e| {
+                warn!("invalid constant pool: {}", e);
+                Throwables::ClassFormatError
+            })?;
+
         // alloc self with uninitialised object ptr
         let vm_class = VmRef::new(Self {
             name,
@@ -241,6 +250,7 @@ impl Class {
             super_class,
             interfaces,
             methods,
+            constant_pool,
             static_field_values,
             fields,
         });
@@ -293,6 +303,10 @@ impl Class {
 
     pub fn name(&self) -> &mstr {
         &self.name
+    }
+
+    pub const fn constant_pool(&self) -> &RuntimeConstantPool {
+        &self.constant_pool
     }
 }
 

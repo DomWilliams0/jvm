@@ -7,6 +7,7 @@ mod alloc;
 mod class;
 mod classloader;
 mod classpath;
+mod constant_pool;
 mod error;
 mod interpreter;
 mod jvm;

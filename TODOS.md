@@ -1,4 +1,4 @@
-# TODOs (45)
+# TODOs (47)
  * [src/alloc.rs](src/alloc.rs) (3)
    * `// TODO gc arena`
    * `// TODO actually intern strings`
@@ -23,6 +23,8 @@
    * `let bytes = std::fs::read(path).expect("io error"); // TODO java.lang.IOError`
  * [src/classpath.rs](src/classpath.rs) (1)
    * `// TODO enum for path type, zip/jar or directory`
+ * [src/constant_pool.rs](src/constant_pool.rs) (1)
+   * `// TODO A numeric constant of type long or double OR A symbolic reference to a`
  * [src/error.rs](src/error.rs) (3)
    * `// TODO reference to class instead of name`
    * `// TODO reference to cause`
@@ -34,7 +36,8 @@
  * [src/interpreter/insn/bytecode.rs](src/interpreter/insn/bytecode.rs) (2)
    * `// TODO temporary, dont log every single instruction`
    * `// TODO verified version of Bytecode that doesn't do all the safety checks for speed e.g. fn parse_unverified(bytes) -> Self`
- * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (1)
+ * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (2)
+   * `type ExecuteResult = (); // TODO`
    * `// TODO n variations`
  * [src/interpreter/interp.rs](src/interpreter/interp.rs) (5)
    * `// TODO get current class`

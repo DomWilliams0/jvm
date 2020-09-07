@@ -2,7 +2,7 @@ use crate::alloc::VmRef;
 use crate::class::{Class, Method, Object};
 
 use crate::interpreter::error::InterpreterError;
-use crate::interpreter::frame::{Frame, FrameDeets, FrameStack};
+use crate::interpreter::frame::{Frame, FrameStack};
 use crate::interpreter::insn::Bytecode;
 use crate::thread;
 
@@ -31,12 +31,12 @@ impl Interpreter {
         let mut frame = Frame::new_from_method(method, class, this)?;
         let thread = thread::get();
 
-        match frame.deets_mut() {
-            FrameDeets::Native => {
+        match &mut frame {
+            Frame::Native(_) => {
                 // TODO native frames
                 unimplemented!()
             }
-            FrameDeets::Java(frame) => {
+            Frame::Java(frame) => {
                 // get bytecode
                 // TODO verify, "compile" and cache instructions
                 let bytecode = Bytecode::parse(&frame.code)?;

@@ -14,4 +14,7 @@ pub enum InterpreterError {
 
     #[error("No code provided")]
     NoCode,
+
+    #[error("Constant pool entry is not present or loadable")]
+    NotLoadable(u16),
 }

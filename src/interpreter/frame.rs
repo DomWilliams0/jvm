@@ -17,20 +17,21 @@ pub struct OperandStack(Vec<DataValue>);
 pub struct FrameStack(Vec<Frame>);
 
 pub struct JavaFrame {
+    pub class: VmRef<Class>,
+    pub method: VmRef<Method>,
     pub local_vars: LocalVariables,
     pub operand_stack: OperandStack,
     pub code: Arc<[u8]>,
 }
 
-pub enum FrameDeets {
-    Java(JavaFrame),
-    Native,
+pub struct NativeFrame {
+    pub class: VmRef<Class>,
+    pub method: VmRef<Method>,
 }
 
-pub struct Frame {
-    class: VmRef<Class>,
-    method: VmRef<Method>,
-    deets: FrameDeets,
+pub enum Frame {
+    Java(JavaFrame),
+    Native(NativeFrame),
 }
 
 impl LocalVariables {
@@ -109,15 +110,17 @@ impl Frame {
         class: VmRef<Class>,
         this: Option<VmRef<Object>>,
     ) -> Result<Self, InterpreterError> {
-        let deets = if method.flags().is_native() {
-            FrameDeets::Native
+        if method.flags().is_native() {
+            Ok(Frame::Native(NativeFrame { class, method }))
         } else {
             let code = method.code().ok_or_else(|| {
                 warn!("method {:?}:{:?} has no code", class.name(), method.name());
                 InterpreterError::NoCode
             })?;
 
-            FrameDeets::Java(JavaFrame {
+            Ok(Frame::Java(JavaFrame {
+                class,
+                method: method.clone(),
                 local_vars: match this {
                     Some(this) => LocalVariables::new_instance(
                         code.max_locals as usize,
@@ -127,17 +130,7 @@ impl Frame {
                 },
                 operand_stack: OperandStack::new(code.max_stack as usize),
                 code: code.code.clone(),
-            })
-        };
-
-        Ok(Frame {
-            class,
-            method,
-            deets,
-        })
-    }
-
-    pub fn deets_mut(&mut self) -> &mut FrameDeets {
-        &mut self.deets
+            }))
+        }
     }
 }
