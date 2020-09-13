@@ -1,4 +1,4 @@
-# TODOs (77)
+# TODOs (79)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -57,10 +57,11 @@
    * `// TODO reference to class instead of name`
    * `// TODO reference to cause`
    * `// TODO backtrace`
- * [src/interpreter/frame.rs](src/interpreter/frame.rs) (3)
+ * [src/interpreter/frame.rs](src/interpreter/frame.rs) (4)
    * `// TODO validate local var slot in case of wide vars`
    * `// TODO tests for operand stack and local var array`
    * `// TODO instead of options, enum {Instance(obj), Static(class)}`
+   * `// TODO pass args to native function`
  * [src/interpreter/insn/bytecode.rs](src/interpreter/insn/bytecode.rs) (2)
    * `// TODO temporary, dont log every single instruction`
    * `// TODO verified version of Bytecode that doesn't do all the safety checks for speed e.g. fn parse_unverified(bytes) -> Self`
@@ -70,7 +71,7 @@
    * `} // TODO int/float`
    * `// TODO class symbolic reference`
    * `// TODO instantiate string`
- * [src/interpreter/interp.rs](src/interpreter/interp.rs) (8)
+ * [src/interpreter/interp.rs](src/interpreter/interp.rs) (9)
    * `// TODO get current class`
    * `// TODO get current method`
    * `// TODO get current frame`
@@ -78,6 +79,7 @@
    * `// TODO native frames`
    * `// TODO verify, "compile" and cache instructions`
    * `// TODO abrupt exit with proper exception creation`
+   * `// TODO dont just bubble same error up through whole call stack`
    * `// TODO handle return`
  * [src/jvm.rs](src/jvm.rs) (4)
    * `// TODO "catch" any exception during init, and log it properly with stacktrace etc`

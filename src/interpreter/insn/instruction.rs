@@ -8,6 +8,7 @@ use crate::interpreter::error::InterpreterError;
 use crate::interpreter::frame::JavaFrame;
 use crate::interpreter::insn::bytecode::Reader;
 use crate::thread::JvmThreadState;
+
 use cafebabe::mutf8::mstr;
 use std::fmt::Debug;
 
@@ -343,7 +344,9 @@ impl Aload {
         frame: &mut JavaFrame,
         thread: &JvmThreadState,
     ) -> Result<ExecuteResult, InterpreterError> {
-        todo!("instruction Aload")
+        let value = frame.local_vars.load_reference(self.0 as usize)?;
+        frame.operand_stack.push(value);
+        Ok(ExecuteResult::Continue)
     }
 }
 
@@ -1895,7 +1898,9 @@ impl Ldc {
 
                 // call constructor
                 let interp = thread.interpreter();
-                interp.execute_method(string_class, string_constructor, Some(string_instance))?;
+                todo!("args")
+                // let args = once()
+                // interp.execute_method(string_class, string_constructor, Some(string_instance))?;
 
                 // TODO natively intern new string instance
             } // TODO int/float

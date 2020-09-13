@@ -54,8 +54,25 @@ impl LocalVariables {
     pub fn store(&mut self, idx: usize, value: DataValue) -> Result<(), InterpreterError> {
         todo!()
     }
+
     pub fn load(&mut self, idx: usize) -> Result<DataValue, InterpreterError> {
-        todo!()
+        self.0
+            .get(idx)
+            .ok_or_else(|| InterpreterError::InvalidLoad {
+                requested: idx,
+                max: self.0.len(),
+            })
+            .and_then(|val| match val {
+                StackValue::Uninitialised => Err(InterpreterError::UninitialisedLoad(idx)),
+                StackValue::Initialised(val) => Ok(val.clone()),
+            })
+    }
+
+    pub fn load_reference(&mut self, idx: usize) -> Result<DataValue, InterpreterError> {
+        self.load(idx).and_then(|val| match val {
+            DataValue::Reference(_, _) => Ok(val),
+            v => Err(InterpreterError::NotReference(idx, v)),
+        })
     }
 
     // TODO validate local var slot in case of wide vars
@@ -112,8 +129,10 @@ impl Frame {
         method: VmRef<Method>,
         class: VmRef<Class>,
         this: Option<VmRef<Object>>,
+        args: impl Iterator<Item = DataValue>,
     ) -> Result<Self, InterpreterError> {
         if method.flags().is_native() {
+            // TODO pass args to native function
             Ok(Frame::Native(NativeFrame { class, method }))
         } else {
             let code = method.code().ok_or_else(|| {
@@ -121,16 +140,22 @@ impl Frame {
                 InterpreterError::NoCode
             })?;
 
+            let mut local_vars = match this {
+                Some(this) => LocalVariables::new_instance(
+                    code.max_locals as usize,
+                    DataValue::reference(this),
+                ),
+                None => LocalVariables::new_static(code.max_locals as usize),
+            };
+
+            for (i, arg) in args.enumerate() {
+                local_vars.store(i + 1, arg)?;
+            }
+
             Ok(Frame::Java(JavaFrame {
                 class,
                 method: method.clone(),
-                local_vars: match this {
-                    Some(this) => LocalVariables::new_instance(
-                        code.max_locals as usize,
-                        DataValue::reference(this),
-                    ),
-                    None => LocalVariables::new_static(code.max_locals as usize),
-                },
+                local_vars,
                 operand_stack: OperandStack::new(code.max_stack as usize),
                 code: code.code.clone(),
             }))

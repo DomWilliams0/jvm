@@ -19,6 +19,7 @@ use crate::thread;
 use cafebabe::attribute::Code;
 use std::cell::UnsafeCell;
 use std::fmt::{Debug, Formatter};
+use std::iter::empty;
 use std::sync::Arc;
 use std::thread::ThreadId;
 
@@ -436,7 +437,7 @@ impl Class {
     }
 
     pub fn find_instance_constructor(&self, descriptor: &mstr) -> Option<VmRef<Method>> {
-        debug_assert!(descriptor.to_utf8().ends_with("V"));
+        debug_assert!(descriptor.to_utf8().ends_with('V'));
 
         self.find_method(
             mstr::from_utf8(b"<init>").as_ref(),
@@ -587,9 +588,12 @@ impl Class {
 
                             let thread = thread::get();
                             let interpreter = thread.interpreter();
-                            if let Err(e) =
-                                interpreter.execute_method(self.clone(), m, None /* static */)
-                            {
+                            if let Err(e) = interpreter.execute_method(
+                                self.clone(),
+                                m,
+                                None, /* static */
+                                empty(),
+                            ) {
                                 warn!("static constructor failed: {}", e);
                                 return Err(Throwables::ClassFormatError); // TODO different exception
                             }

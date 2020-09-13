@@ -143,6 +143,21 @@ impl DataValue {
         );
         DataValue::Reference(reference_data, reference)
     }
+
+    pub fn r#type(&self) -> DataType {
+        match self {
+            DataValue::Boolean(_) => DataType::Primitive(PrimitiveDataType::Boolean),
+            DataValue::Byte(_) => DataType::Primitive(PrimitiveDataType::Byte),
+            DataValue::Short(_) => DataType::Primitive(PrimitiveDataType::Short),
+            DataValue::Int(_) => DataType::Primitive(PrimitiveDataType::Int),
+            DataValue::Long(_) => DataType::Primitive(PrimitiveDataType::Long),
+            DataValue::Char(_) => DataType::Primitive(PrimitiveDataType::Char),
+            DataValue::Float(_) => DataType::Primitive(PrimitiveDataType::Float),
+            DataValue::Double(_) => DataType::Primitive(PrimitiveDataType::Double),
+            DataValue::ReturnAddress(_) => DataType::ReturnAddress,
+            DataValue::Reference(ty, _) => DataType::Reference(ty.clone()),
+        }
+    }
 }
 
 impl PrimitiveDataType {
