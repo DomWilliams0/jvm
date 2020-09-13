@@ -407,7 +407,7 @@ impl Class {
         vm_class
     }
 
-    fn find_method(
+    fn find_method_no_dups(
         &self,
         name: &mstr,
         desc: &mstr,
@@ -428,11 +428,62 @@ impl Class {
     }
 
     pub fn find_class_constructor(&self) -> MethodLookupResult {
-        self.find_method(
+        self.find_method_no_dups(
             mstr::from_utf8(b"<clinit>").as_ref(),
             mstr::from_mutf8(b"()V").as_ref(),
             MethodAccessFlags::STATIC,
         )
+    }
+
+    pub fn find_instance_constructor(&self, descriptor: &mstr) -> Option<VmRef<Method>> {
+        debug_assert!(descriptor.to_utf8().ends_with("V"));
+
+        self.find_method(
+            mstr::from_utf8(b"<init>").as_ref(),
+            descriptor,
+            MethodAccessFlags::empty(),
+        )
+        .and_then(|method| {
+            if method.flags.is_static() {
+                None
+            } else {
+                Some(method)
+            }
+        })
+    }
+
+    fn find_method(
+        &self,
+        name: &mstr,
+        desc: &mstr,
+        flags: MethodAccessFlags,
+    ) -> Option<VmRef<Method>> {
+        self.methods
+            .iter()
+            .find(|m| {
+                m.flags.contains(flags) && m.name.as_mstr() == name && m.desc.as_mstr() == desc
+            })
+            .cloned()
+    }
+
+    /// Looks in super classes too
+    // TODO version to look in (super)interfaces too
+    pub fn find_method_recursive(
+        cls: &VmRef<Class>,
+        name: &mstr,
+        desc: &mstr,
+        flags: MethodAccessFlags,
+    ) -> Option<VmRef<Method>> {
+        let mut current = Some(cls);
+        while let Some(cls) = current {
+            if let Some(method) = cls.find_method(name, desc, flags) {
+                return Some(method);
+            }
+
+            current = cls.super_class.as_ref();
+        }
+
+        None
     }
 
     pub fn name(&self) -> &mstr {
@@ -535,7 +586,7 @@ impl Class {
                             debug!("running static constructor for {:?}", self.name);
 
                             let thread = thread::get();
-                            let mut interpreter = thread.interpreter_mut();
+                            let interpreter = thread.interpreter();
                             if let Err(e) =
                                 interpreter.execute_method(self.clone(), m, None /* static */)
                             {

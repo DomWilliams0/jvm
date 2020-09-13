@@ -1,4 +1,4 @@
-# TODOs (76)
+# TODOs (77)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -21,7 +21,7 @@
    * `// TODO actually intern strings`
    * `// TODO methods on VmRef newtype`
    * `// TODO oom error`
- * [src/class.rs](src/class.rs) (14)
+ * [src/class.rs](src/class.rs) (15)
    * `/// TODO weak reference for cyclic?`
    * `// TODO get classloader reference from tls instead of parameter`
    * `// TODO verify constant pool offsets so we can raise a single classformaterror then trust it`
@@ -30,6 +30,7 @@
    * `// TODO Every array type implements the interfaces Cloneable and java.io.Serializable.`
    * `// update ptr - TODO use Arc::get_unchecked_mut when it is stable`
    * `// TODO set obj->vmdata field to vm_class`
+   * `// TODO version to look in (super)interfaces too`
    * `// TODO initialise final static fields from ConstantValue attrs`
    * `return Err(Throwables::ClassFormatError); // TODO different exception`
    * `// TODO specific exception type e.g. ExceptionInInitializerError`
@@ -63,17 +64,17 @@
  * [src/interpreter/insn/bytecode.rs](src/interpreter/insn/bytecode.rs) (2)
    * `// TODO temporary, dont log every single instruction`
    * `// TODO verified version of Bytecode that doesn't do all the safety checks for speed e.g. fn parse_unverified(bytes) -> Self`
- * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (6)
-   * `// TODO intern string`
-   * `// TODO call string constructor`
-   * `// TODO char array`
+ * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (5)
+   * `// TODO lookup natively interned string instance`
+   * `// TODO natively intern new string instance`
    * `} // TODO int/float`
    * `// TODO class symbolic reference`
    * `// TODO instantiate string`
- * [src/interpreter/interp.rs](src/interpreter/interp.rs) (7)
+ * [src/interpreter/interp.rs](src/interpreter/interp.rs) (8)
    * `// TODO get current class`
    * `// TODO get current method`
    * `// TODO get current frame`
+   * `// TODO push frame onto stack`
    * `// TODO native frames`
    * `// TODO verify, "compile" and cache instructions`
    * `// TODO abrupt exit with proper exception creation`

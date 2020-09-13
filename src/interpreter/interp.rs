@@ -6,13 +6,17 @@ use crate::interpreter::error::InterpreterError;
 use crate::interpreter::frame::{Frame, FrameStack};
 use crate::interpreter::insn::{Bytecode, ExecuteResult};
 use crate::thread;
+use parking_lot::lock_api::Mutex;
+use std::cell::RefCell;
 
 pub enum ProgramCounter {
     Java(usize),
     Native,
 }
 
-pub struct Interpreter {
+pub struct Interpreter(RefCell<InterpreterState>);
+
+struct InterpreterState {
     pc: ProgramCounter,
     frames: FrameStack,
 }
@@ -23,12 +27,12 @@ impl Interpreter {
     // TODO get current frame
 
     pub fn execute_method(
-        &mut self,
+        &self,
         class: VmRef<Class>,
         method: VmRef<Method>,
         this: Option<VmRef<Object>>,
     ) -> Result<(), InterpreterError> {
-        // push new frame
+        // TODO push frame onto stack
         let mut frame = Frame::new_from_method(method, class, this)?;
         let thread = thread::get();
 
@@ -69,9 +73,11 @@ impl Interpreter {
 
 impl Default for Interpreter {
     fn default() -> Self {
-        Interpreter {
+        let state = InterpreterState {
             pc: ProgramCounter::Native,
             frames: FrameStack::new(),
-        }
+        };
+
+        Interpreter(RefCell::new(state))
     }
 }

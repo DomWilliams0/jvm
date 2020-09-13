@@ -1,4 +1,4 @@
-use std::cell::{RefCell, RefMut};
+use std::cell::{Ref, RefCell, RefMut};
 use std::mem::MaybeUninit;
 use std::sync::Arc;
 
@@ -140,8 +140,8 @@ impl JvmThreadState {
         self.thread_handle
     }
 
-    pub fn interpreter_mut(&self) -> RefMut<Interpreter> {
-        self.interpreter.borrow_mut()
+    pub fn interpreter(&self) -> Ref<Interpreter> {
+        self.interpreter.borrow()
     }
 
     pub fn global(&self) -> &JvmGlobalState {
