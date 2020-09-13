@@ -263,7 +263,58 @@ impl Class {
                 Throwables::ClassFormatError
             })?;
 
-        // alloc self with uninitialised object ptr
+        Ok(Self::new(
+            name,
+            source_file,
+            loader,
+            super_class,
+            interfaces,
+            fields,
+            methods,
+            constant_pool,
+            static_field_values,
+        ))
+    }
+
+    pub fn new_array_class(
+        name: &mstr,
+        loader: WhichLoader,
+        classloader: &ClassLoader,
+    ) -> VmResult<VmRef<Self>> {
+        let super_class = classloader.get_bootstrap_class("java/lang/Object");
+
+        // TODO Every array type implements the interfaces Cloneable and java.io.Serializable.
+        let interfaces = Vec::new();
+
+        let cls = Self::new(
+            name.to_owned(),
+            None,
+            loader,
+            Some(super_class),
+            interfaces,
+            Vec::new(),
+            Vec::new(),
+            RuntimeConstantPool::empty(),
+            FieldMapStorage::with_capacity(0),
+        );
+
+        Ok(cls)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn new(
+        name: InternedString,
+        source_file: Option<NativeString>,
+        loader: WhichLoader,
+        super_class: Option<VmRef<Class>>,
+        interfaces: Vec<VmRef<Class>>,
+        fields: Vec<Field>,
+        methods: Vec<VmRef<Method>>,
+        constant_pool: RuntimeConstantPool,
+        static_field_values: FieldMapStorage,
+    ) -> VmRef<Class> {
+        debug_assert!(super_class.is_none() == (name.as_bytes() == b"java/lang/Object"));
+
         let vm_class = VmRef::new(Self {
             name,
             source_file,
@@ -281,8 +332,7 @@ impl Class {
         // alloc java/lang/Class
         let obj = VmRef::new(Object::new(vm_class.clone()));
 
-        // update ptr - im sure at some point we will need to mutate the class so this *const to
-        // *mut hacky is temporary until that's needed
+        // update ptr - TODO use Arc::get_unchecked_mut when it is stable
         unsafe {
             let ptr = vm_class.class_object.as_ptr();
             let ptr = ptr as *mut VmRef<Object>;
@@ -291,7 +341,7 @@ impl Class {
 
         // TODO set obj->vmdata field to vm_class
 
-        Ok(vm_class)
+        vm_class
     }
 
     fn find_method(

@@ -7,6 +7,7 @@ use crate::class::{Class, Object};
 use crate::classpath::ClassPath;
 use crate::error::{Throwables, VmResult};
 
+use crate::types::{ArrayType, DataType};
 use cafebabe::mutf8::mstr;
 use cafebabe::ClassError;
 use parking_lot::RwLock;
@@ -103,10 +104,34 @@ impl ClassLoader {
     }
 
     /// Loads and creates Class object with ClassState::Uninitialised
-    pub fn load_class(&self, class_name: &mstr, loader: WhichLoader) -> VmResult<VmRef<Class>> {
+    pub fn load_class(&self, class_name: &mstr, mut loader: WhichLoader) -> VmResult<VmRef<Class>> {
         // TODO run user classloader first
         // TODO array classes are treated differently
         debug!("loading class {:?}", class_name);
+
+        let array_type = ArrayType::from_descriptor(class_name);
+
+        // use bootstrap loader for primitives
+        if let Some(ArrayType::Primitive(_)) = array_type {
+            loader = WhichLoader::Bootstrap;
+        }
+
+        if let WhichLoader::User(_classloader) = &loader {
+            match array_type {
+                None => {
+                    // run user classloader instead of bootstrap
+                    todo!("run user classloader")
+                }
+                Some(ArrayType::Reference(elem)) => {
+                    // load element class first
+                    let elem_cls = self.load_class(elem, loader.clone())?;
+
+                    // use same loader for this array class
+                    loader = elem_cls.loader().clone();
+                }
+                Some(ArrayType::Primitive(_)) => unreachable!(),
+            }
+        }
 
         // check if loading is needed
         match self.load_state(class_name, &loader) {
@@ -125,6 +150,7 @@ impl ClassLoader {
         }
 
         // loading is required, update shared state
+        // TODO record that this loader is an initiating loader
         self.update_state(
             class_name,
             &loader,
@@ -132,8 +158,19 @@ impl ClassLoader {
         );
 
         // load and link
-        let class_bytes = self.find_boot_class(class_name.to_utf8().as_ref())?;
-        let linked_class = match self.do_load(class_name, &class_bytes, loader.clone()) {
+        let link_result = match array_type {
+            None => {
+                // non-array class
+                let class_bytes = self.find_boot_class(class_name.to_utf8().as_ref())?;
+                self.do_load(class_name, &class_bytes, loader.clone())
+            }
+            Some(array) => {
+                // array class
+                self.do_load_array_class(class_name, loader.clone(), array)
+            }
+        };
+
+        let linked_class = match link_result {
             Err(e) => {
                 self.update_state(class_name, &loader, LoadState::Failed);
                 warn!("failed to load class {:?}: {:?}", class_name, e);
@@ -145,12 +182,37 @@ impl ClassLoader {
                     &loader,
                     LoadState::Loaded(current_thread(), class.clone()),
                 );
-                debug!("loaded class {:?} successfully", class_name);
+                debug!(
+                    "loaded class {:?} successfully with loader {:?}",
+                    class_name, loader
+                );
                 class
             }
         };
 
         Ok(linked_class)
+    }
+
+    fn do_load_array_class(
+        &self,
+        name: &mstr,
+        loader: WhichLoader,
+        array: ArrayType,
+    ) -> VmResult<VmRef<Class>> {
+        // array class
+        let elem_cls = match array {
+            ArrayType::Primitive(prim) => todo!("lookup primitive class"),
+            ArrayType::Reference(elem) => self.load_class(elem, loader),
+        }?;
+
+        // array classloader = element classloader
+        let elem_loader = elem_cls.loader();
+
+        // TODO array class access = element class access or fully accessible
+
+        let array_cls = Class::new_array_class(name, elem_loader.clone(), self)?;
+
+        Ok(array_cls)
     }
 
     fn find_boot_class(&self, class_name: &str) -> VmResult<Vec<u8>> {
@@ -171,6 +233,7 @@ impl ClassLoader {
     pub fn init_bootstrap_classes(&self) -> VmResult<()> {
         let classes = [
             "java/lang/ClassLoader",
+            "[I",
             "java/lang/String",
             "java/lang/Object",
             "java/util/HashMap",
@@ -185,6 +248,15 @@ impl ClassLoader {
         }
 
         Ok(())
+    }
+
+    pub fn get_bootstrap_class(&self, name: &str) -> VmRef<Class> {
+        // TODO add array lookup with enum constants for common symbols like Object, or perfect hashing
+        let name = mstr::from_utf8(name.as_bytes());
+        match self.load_state(name.as_ref(), &WhichLoader::Bootstrap) {
+            LoadState::Loaded(_, cls) => cls,
+            s => panic!("bootstrap class {:?} not loaded (in state {:?})", name, s),
+        }
     }
 }
 

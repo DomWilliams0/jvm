@@ -16,6 +16,10 @@ impl RuntimeConstantPool {
         RuntimeConstantPool(vec)
     }
 
+    pub fn empty() -> Self {
+        RuntimeConstantPool(Vec::new())
+    }
+
     pub fn from_cafebabe(pool: &cafebabe::ConstantPool) -> ClassResult<Self> {
         let mut my_pool = Self::with_size(pool.size());
 
