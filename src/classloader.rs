@@ -1,9 +1,8 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use log::*;
 
-use crate::alloc::{InternedString, VmRef};
+use crate::alloc::{vmref_ptr, InternedString, VmRef};
 use crate::class::{Class, Object};
 use crate::classpath::ClassPath;
 use crate::error::{Throwables, VmResult};
@@ -15,7 +14,7 @@ use std::thread::ThreadId;
 use strum_macros::EnumDiscriminants;
 
 pub struct ClassLoader {
-    classes: RwLock<HashMap<InternedString, LoadState>>,
+    classes: RwLock<Vec<(InternedString, WhichLoader, LoadState)>>,
     bootclasspath: Arc<ClassPath>,
 }
 
@@ -41,15 +40,18 @@ impl ClassLoader {
         }
     }
 
-    fn load_state(&self, class_name: &mstr) -> LoadState {
+    fn load_state(&self, class_name: &mstr, loader: &WhichLoader) -> LoadState {
         let guard = self.classes.read();
-        match guard.get(class_name) {
+        match guard
+            .iter()
+            .find(|(c, l, _)| l == loader && c.as_mstr() == class_name)
+        {
             None => LoadState::Unloaded,
-            Some(state) => state.clone(),
+            Some((_, _, state)) => state.clone(),
         }
     }
 
-    fn update_state(&self, class_name: &mstr, state: LoadState) {
+    fn update_state(&self, class_name: &mstr, loader: &WhichLoader, state: LoadState) {
         trace!(
             "updating loading state of {:?} to {:?}",
             class_name,
@@ -57,12 +59,15 @@ impl ClassLoader {
         );
 
         let mut guard = self.classes.write();
-        match guard.get_mut(class_name) {
-            None => {
-                guard.insert(class_name.to_owned(), state);
-            }
-            Some(s) => {
+        match guard
+            .iter_mut()
+            .find(|(c, l, _)| l == loader && c.as_mstr() == class_name)
+        {
+            Some((_, _, s)) => {
                 *s = state;
+            }
+            None => {
+                guard.push((class_name.to_owned(), loader.clone(), state));
             }
         }
     }
@@ -101,10 +106,11 @@ impl ClassLoader {
     pub fn load_class(&self, class_name: &mstr, loader: WhichLoader) -> VmResult<VmRef<Class>> {
         // TODO run user classloader first
         // TODO array classes are treated differently
+        debug!("loading class {:?}", class_name);
 
         // check if loading is needed
-        match self.load_state(class_name) {
-            LoadState::Loading(t, l) => {
+        match self.load_state(class_name, &loader) {
+            LoadState::Loading(t, _) => {
                 if t == current_thread() {
                     // this thread is already loading this class, keep going
                 } else {
@@ -121,20 +127,22 @@ impl ClassLoader {
         // loading is required, update shared state
         self.update_state(
             class_name,
+            &loader,
             LoadState::Loading(current_thread(), loader.clone()),
         );
 
         // load and link
         let class_bytes = self.find_boot_class(class_name.to_utf8().as_ref())?;
-        let linked_class = match self.do_load(class_name, &class_bytes, loader) {
+        let linked_class = match self.do_load(class_name, &class_bytes, loader.clone()) {
             Err(e) => {
-                self.update_state(class_name, LoadState::Failed);
+                self.update_state(class_name, &loader, LoadState::Failed);
                 warn!("failed to load class {:?}: {:?}", class_name, e);
                 return Err(e);
             }
             Ok(class) => {
                 self.update_state(
                     class_name,
+                    &loader,
                     LoadState::Loaded(current_thread(), class.clone()),
                 );
                 debug!("loaded class {:?} successfully", class_name);
@@ -183,3 +191,16 @@ impl ClassLoader {
 pub fn current_thread() -> ThreadId {
     std::thread::current().id()
 }
+
+impl PartialEq for WhichLoader {
+    fn eq(&self, other: &Self) -> bool {
+        // TODO newtype VmRef should handle equality
+        match (self, other) {
+            (WhichLoader::Bootstrap, WhichLoader::Bootstrap) => true,
+            (WhichLoader::User(a), WhichLoader::User(b)) => vmref_ptr(a) == vmref_ptr(b),
+            _ => false,
+        }
+    }
+}
+
+impl Eq for WhichLoader {}

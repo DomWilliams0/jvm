@@ -1,4 +1,4 @@
-# TODOs (70)
+# TODOs (71)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -33,7 +33,7 @@
    * `// TODO just allocate an object instead of this unsafeness`
    * `// TODO inherit superclass fields too`
    * `// TODO not quite correct toString`
- * [src/classloader.rs](src/classloader.rs) (7)
+ * [src/classloader.rs](src/classloader.rs) (8)
    * `// TODO types for str to differentiate java/lang/Object, java.lang.Object and descrptors e.g. Ljava/lang/Object;`
    * `// TODO register class "package" with loader (https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-5.html#jvms-5.3)`
    * `// TODO actually instantiate exceptions`
@@ -41,6 +41,7 @@
    * `// TODO array classes are treated differently`
    * `// TODO wait for other thread to finish loading`
    * `let bytes = std::fs::read(path).expect("io error"); // TODO java.lang.IOError`
+   * `// TODO newtype VmRef should handle equality`
  * [src/classpath.rs](src/classpath.rs) (1)
    * `// TODO enum for path type, zip/jar or directory`
  * [src/constant_pool.rs](src/constant_pool.rs) (1)
