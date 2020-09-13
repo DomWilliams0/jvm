@@ -7,16 +7,20 @@ use crate::class::{Class, Object};
 use crate::classpath::ClassPath;
 use crate::error::{Throwables, VmResult};
 
-use crate::types::{ArrayType, DataType};
+use crate::types::{ArrayType, PrimitiveDataType};
 use cafebabe::mutf8::mstr;
 use cafebabe::ClassError;
 use parking_lot::RwLock;
+
+use std::cell::RefCell;
 use std::thread::ThreadId;
 use strum_macros::EnumDiscriminants;
 
 pub struct ClassLoader {
     classes: RwLock<Vec<(InternedString, WhichLoader, LoadState)>>,
     bootclasspath: Arc<ClassPath>,
+    /// Indexed by PrimitiveDataType, initialised during bootstrap
+    primitives: RefCell<Option<Box<[VmRef<Class>]>>>,
 }
 
 #[derive(Clone, Debug, EnumDiscriminants)]
@@ -38,6 +42,7 @@ impl ClassLoader {
         ClassLoader {
             bootclasspath,
             classes: Default::default(),
+            primitives: RefCell::default(),
         }
     }
 
@@ -201,16 +206,14 @@ impl ClassLoader {
     ) -> VmResult<VmRef<Class>> {
         // array class
         let elem_cls = match array {
-            ArrayType::Primitive(prim) => todo!("lookup primitive class"),
-            ArrayType::Reference(elem) => self.load_class(elem, loader),
-        }?;
+            ArrayType::Primitive(prim) => self.get_primitive(prim),
+            ArrayType::Reference(elem) => self.load_class(elem, loader)?,
+        };
 
         // array classloader = element classloader
         let elem_loader = elem_cls.loader();
 
-        // TODO array class access = element class access or fully accessible
-
-        let array_cls = Class::new_array_class(name, elem_loader.clone(), self)?;
+        let array_cls = Class::new_array_class(name, elem_loader.clone(), elem_cls, self)?;
 
         Ok(array_cls)
     }
@@ -231,20 +234,45 @@ impl ClassLoader {
     }
 
     pub fn init_bootstrap_classes(&self) -> VmResult<()> {
+        // TODO define hardcoded preload classes in a better way
+
+        fn load_class(loader: &ClassLoader, name: impl AsRef<[u8]>) -> VmResult<()> {
+            loader
+                .load_class(
+                    mstr::from_utf8(name.as_ref()).as_ref(),
+                    WhichLoader::Bootstrap,
+                )
+                .and_then(|class| class.ensure_init())
+        }
+
+        // our lord and saviour Object first
+        load_class(self, b"java/lang/Object")?;
+
+        // then primitives
+        {
+            let mut primitives = Vec::with_capacity(PrimitiveDataType::TYPES.len());
+
+            for (prim, name) in &PrimitiveDataType::TYPES {
+                let name = mstr::from_utf8(name.as_bytes());
+                let cls = Class::new_primitive_class(name.as_ref(), *prim, self)?;
+                cls.ensure_init()?;
+
+                primitives.push(cls);
+            }
+
+            self.primitives.replace(Some(primitives.into_boxed_slice()));
+        }
+
+        // then the rest
         let classes = [
             "java/lang/ClassLoader",
             "[I",
             "java/lang/String",
-            "java/lang/Object",
             "java/util/HashMap",
         ];
 
         for class in classes.iter() {
-            self.load_class(
-                mstr::from_utf8(class.as_bytes()).as_ref(),
-                WhichLoader::Bootstrap,
-            )
-            .and_then(|class| class.ensure_init())?;
+            load_class(self, class)?;
         }
 
         Ok(())
@@ -257,6 +285,13 @@ impl ClassLoader {
             LoadState::Loaded(_, cls) => cls,
             s => panic!("bootstrap class {:?} not loaded (in state {:?})", name, s),
         }
+    }
+
+    pub fn get_primitive(&self, prim: PrimitiveDataType) -> VmRef<Class> {
+        let prims = self.primitives.borrow();
+        let prims = prims.as_ref().expect("primitives not initialised");
+        let idx = prim as usize;
+        unsafe { prims.get_unchecked(idx).clone() }
     }
 }
 

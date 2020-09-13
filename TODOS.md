@@ -1,4 +1,4 @@
-# TODOs (76)
+# TODOs (77)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -21,8 +21,9 @@
    * `// TODO actually intern strings`
    * `// TODO methods on VmRef newtype`
    * `// TODO oom error`
- * [src/class.rs](src/class.rs) (13)
+ * [src/class.rs](src/class.rs) (14)
    * `/// TODO weak reference for cyclic?`
+   * `// TODO get classloader reference from tls instead of parameter`
    * `// TODO verify constant pool offsets so we can raise a single classformaterror then trust it`
    * `// TODO preparation? https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-5.html#jvms-5.4.2`
    * `// TODO do verification first to throw ClassFormatErrors, then this should not throw any classformaterrors`
@@ -43,8 +44,8 @@
    * `// TODO array classes are treated differently`
    * `// TODO wait for other thread to finish loading`
    * `// TODO record that this loader is an initiating loader`
-   * `// TODO array class access = element class access or fully accessible`
    * `let bytes = std::fs::read(path).expect("io error"); // TODO java.lang.IOError`
+   * `// TODO define hardcoded preload classes in a better way`
    * `// TODO add array lookup with enum constants for common symbols like Object, or perfect hashing`
    * `// TODO newtype VmRef should handle equality`
  * [src/classpath.rs](src/classpath.rs) (1)

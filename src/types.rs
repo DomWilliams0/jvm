@@ -15,7 +15,8 @@ pub enum DataType {
     Reference(ReferenceDataType),
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
+#[repr(u8)]
 pub enum PrimitiveDataType {
     Boolean,
     Byte,
@@ -145,6 +146,17 @@ impl DataValue {
 }
 
 impl PrimitiveDataType {
+    pub const TYPES: [(PrimitiveDataType, &'static str); 8] = [
+        (PrimitiveDataType::Boolean, "boolean"),
+        (PrimitiveDataType::Byte, "byte"),
+        (PrimitiveDataType::Short, "short"),
+        (PrimitiveDataType::Int, "int"),
+        (PrimitiveDataType::Long, "long"),
+        (PrimitiveDataType::Char, "char"),
+        (PrimitiveDataType::Float, "float"),
+        (PrimitiveDataType::Double, "double"),
+    ];
+
     pub fn from_descriptor(str: &[u8]) -> Option<Self> {
         if str.len() != 1 {
             None

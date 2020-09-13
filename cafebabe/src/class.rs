@@ -152,4 +152,6 @@ impl<'c> ClassFile<'c> {
     pub fn constant_pool(&self) -> &ConstantPool {
         &self.constant_pool
     }
+
+    pub fn access_flags(&self) -> ClassAccessFlags {self.access_flags}
 }

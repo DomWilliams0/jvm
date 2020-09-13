@@ -1,13 +1,15 @@
 use std::mem::MaybeUninit;
 
-use cafebabe::{attribute, AccessFlags, ClassError, FieldAccessFlags, MethodAccessFlags};
+use cafebabe::{
+    attribute, AccessFlags, ClassAccessFlags, ClassError, FieldAccessFlags, MethodAccessFlags,
+};
 use lazy_static::lazy_static;
 use log::*;
 
 use crate::alloc::{vmref_ptr, InternedString, NativeString, VmRef};
 use crate::classloader::{current_thread, ClassLoader, WhichLoader};
 use crate::error::{Throwables, VmResult};
-use crate::types::{DataType, DataValue};
+use crate::types::{DataType, DataValue, PrimitiveDataType};
 use cafebabe::mutf8::mstr;
 
 use crate::constant_pool::RuntimeConstantPool;
@@ -21,11 +23,21 @@ use std::sync::Arc;
 use std::thread::ThreadId;
 
 #[derive(Debug)]
+pub enum ClassType {
+    Array(VmRef<Class>),
+    Primitive(PrimitiveDataType),
+    Normal,
+}
+
+#[derive(Debug)]
 pub struct Class {
     name: InternedString,
+    class_type: ClassType,
     source_file: Option<NativeString>,
     state: LockedClassState,
     loader: WhichLoader,
+
+    access_flags: ClassAccessFlags,
 
     /// java/lang/Class instance
     /// TODO weak reference for cyclic?
@@ -90,6 +102,8 @@ pub enum MethodLookupResult {
     FoundMultiple,
     NotFound,
 }
+
+// TODO get classloader reference from tls instead of parameter
 
 impl Class {
     pub fn link(
@@ -263,14 +277,18 @@ impl Class {
                 Throwables::ClassFormatError
             })?;
 
+        let access = loaded.access_flags();
+
         Ok(Self::new(
             name,
+            ClassType::Normal,
             source_file,
             loader,
             super_class,
             interfaces,
             fields,
             methods,
+            access,
             constant_pool,
             static_field_values,
         ))
@@ -279,6 +297,7 @@ impl Class {
     pub fn new_array_class(
         name: &mstr,
         loader: WhichLoader,
+        elem_cls: VmRef<Class>,
         classloader: &ClassLoader,
     ) -> VmResult<VmRef<Self>> {
         let super_class = classloader.get_bootstrap_class("java/lang/Object");
@@ -286,14 +305,54 @@ impl Class {
         // TODO Every array type implements the interfaces Cloneable and java.io.Serializable.
         let interfaces = Vec::new();
 
+        let access_flags = {
+            let flags = if let ClassType::Normal = elem_cls.class_type {
+                let mut flags = elem_cls.access_flags;
+                flags.remove(ClassAccessFlags::INTERFACE);
+                flags
+            } else {
+                ClassAccessFlags::PUBLIC
+            };
+
+            flags | ClassAccessFlags::ABSTRACT | ClassAccessFlags::FINAL
+        };
+
         let cls = Self::new(
             name.to_owned(),
+            ClassType::Array(elem_cls),
             None,
             loader,
             Some(super_class),
             interfaces,
             Vec::new(),
             Vec::new(),
+            access_flags,
+            RuntimeConstantPool::empty(),
+            FieldMapStorage::with_capacity(0),
+        );
+
+        Ok(cls)
+    }
+
+    pub fn new_primitive_class(
+        name: &mstr,
+        primitive: PrimitiveDataType,
+        classloader: &ClassLoader,
+    ) -> VmResult<VmRef<Self>> {
+        let super_class = classloader.get_bootstrap_class("java/lang/Object");
+        let access_flags =
+            ClassAccessFlags::PUBLIC | ClassAccessFlags::ABSTRACT | ClassAccessFlags::FINAL;
+
+        let cls = Self::new(
+            name.to_owned(),
+            ClassType::Primitive(primitive),
+            None,
+            WhichLoader::Bootstrap,
+            Some(super_class),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            access_flags,
             RuntimeConstantPool::empty(),
             FieldMapStorage::with_capacity(0),
         );
@@ -304,12 +363,14 @@ impl Class {
     #[allow(clippy::too_many_arguments)]
     fn new(
         name: InternedString,
+        class_type: ClassType,
         source_file: Option<NativeString>,
         loader: WhichLoader,
         super_class: Option<VmRef<Class>>,
         interfaces: Vec<VmRef<Class>>,
         fields: Vec<Field>,
         methods: Vec<VmRef<Method>>,
+        access_flags: ClassAccessFlags,
         constant_pool: RuntimeConstantPool,
         static_field_values: FieldMapStorage,
     ) -> VmRef<Class> {
@@ -317,6 +378,8 @@ impl Class {
 
         let vm_class = VmRef::new(Self {
             name,
+            class_type,
+            access_flags,
             source_file,
             state: LockedClassState::default(),
             loader,
