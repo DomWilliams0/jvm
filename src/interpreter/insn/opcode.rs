@@ -14,17 +14,57 @@ pub enum Opcode {
     /// Format: iconst_<i>
     IconstM1 = 0x2,
 
+    /// Push int constant
+    /// Format: iconst_<i>
+    Iconst0 = 0x3,
+
+    /// Push int constant
+    /// Format: iconst_<i>
+    Iconst1 = 0x4,
+
+    /// Push int constant
+    /// Format: iconst_<i>
+    Iconst2 = 0x5,
+
+    /// Push int constant
+    /// Format: iconst_<i>
+    Iconst3 = 0x6,
+
+    /// Push int constant
+    /// Format: iconst_<i>
+    Iconst4 = 0x7,
+
+    /// Push int constant
+    /// Format: iconst_<i>
+    Iconst5 = 0x8,
+
     /// Push long constant
     /// Format: lconst_<l>
     Lconst0 = 0x9,
+
+    /// Push long constant
+    /// Format: lconst_<l>
+    Lconst1 = 0xa,
 
     /// Push float
     /// Format: fconst_<f>
     Fconst0 = 0xb,
 
+    /// Push float
+    /// Format: fconst_<f>
+    Fconst1 = 0xc,
+
+    /// Push float
+    /// Format: fconst_<f>
+    Fconst2 = 0xd,
+
     /// Push double
     /// Format: dconst_<d>
     Dconst0 = 0xe,
+
+    /// Push double
+    /// Format: dconst_<d>
+    Dconst1 = 0xf,
 
     /// Push byte
     /// Format: bipush byte
@@ -70,21 +110,81 @@ pub enum Opcode {
     /// Format: iload_<n>
     Iload0 = 0x1a,
 
+    /// Load int from local variable
+    /// Format: iload_<n>
+    Iload1 = 0x1b,
+
+    /// Load int from local variable
+    /// Format: iload_<n>
+    Iload2 = 0x1c,
+
+    /// Load int from local variable
+    /// Format: iload_<n>
+    Iload3 = 0x1d,
+
     /// Load long from local variable
     /// Format: lload_<n>
     Lload0 = 0x1e,
+
+    /// Load long from local variable
+    /// Format: lload_<n>
+    Lload1 = 0x1f,
+
+    /// Load long from local variable
+    /// Format: lload_<n>
+    Lload2 = 0x20,
+
+    /// Load long from local variable
+    /// Format: lload_<n>
+    Lload3 = 0x21,
 
     /// Load float from local variable
     /// Format: fload_<n>
     Fload0 = 0x22,
 
+    /// Load float from local variable
+    /// Format: fload_<n>
+    Fload1 = 0x23,
+
+    /// Load float from local variable
+    /// Format: fload_<n>
+    Fload2 = 0x24,
+
+    /// Load float from local variable
+    /// Format: fload_<n>
+    Fload3 = 0x25,
+
     /// Load double from local variable
     /// Format: dload_<n>
     Dload0 = 0x26,
 
+    /// Load double from local variable
+    /// Format: dload_<n>
+    Dload1 = 0x27,
+
+    /// Load double from local variable
+    /// Format: dload_<n>
+    Dload2 = 0x28,
+
+    /// Load double from local variable
+    /// Format: dload_<n>
+    Dload3 = 0x29,
+
     /// Load reference from local variable
     /// Format: aload_<n>
     Aload0 = 0x2a,
+
+    /// Load reference from local variable
+    /// Format: aload_<n>
+    Aload1 = 0x2b,
+
+    /// Load reference from local variable
+    /// Format: aload_<n>
+    Aload2 = 0x2c,
+
+    /// Load reference from local variable
+    /// Format: aload_<n>
+    Aload3 = 0x2d,
 
     /// Load int from array
     /// Format: iaload
@@ -142,21 +242,81 @@ pub enum Opcode {
     /// Format: istore_<n>
     Istore0 = 0x3b,
 
+    /// Store int into local variable
+    /// Format: istore_<n>
+    Istore1 = 0x3c,
+
+    /// Store int into local variable
+    /// Format: istore_<n>
+    Istore2 = 0x3d,
+
+    /// Store int into local variable
+    /// Format: istore_<n>
+    Istore3 = 0x3e,
+
     /// Store long into local variable
     /// Format: lstore_<n>
     Lstore0 = 0x3f,
+
+    /// Store long into local variable
+    /// Format: lstore_<n>
+    Lstore1 = 0x40,
+
+    /// Store long into local variable
+    /// Format: lstore_<n>
+    Lstore2 = 0x41,
+
+    /// Store long into local variable
+    /// Format: lstore_<n>
+    Lstore3 = 0x42,
 
     /// Store float into local variable
     /// Format: fstore_<n>
     Fstore0 = 0x43,
 
+    /// Store float into local variable
+    /// Format: fstore_<n>
+    Fstore1 = 0x44,
+
+    /// Store float into local variable
+    /// Format: fstore_<n>
+    Fstore2 = 0x45,
+
+    /// Store float into local variable
+    /// Format: fstore_<n>
+    Fstore3 = 0x46,
+
     /// Store double into local variable
     /// Format: dstore_<n>
     Dstore0 = 0x47,
 
+    /// Store double into local variable
+    /// Format: dstore_<n>
+    Dstore1 = 0x48,
+
+    /// Store double into local variable
+    /// Format: dstore_<n>
+    Dstore2 = 0x49,
+
+    /// Store double into local variable
+    /// Format: dstore_<n>
+    Dstore3 = 0x4a,
+
     /// Store reference into local variable
     /// Format: astore_<n>
     Astore0 = 0x4b,
+
+    /// Store reference into local variable
+    /// Format: astore_<n>
+    Astore1 = 0x4c,
+
+    /// Store reference into local variable
+    /// Format: astore_<n>
+    Astore2 = 0x4d,
+
+    /// Store reference into local variable
+    /// Format: astore_<n>
+    Astore3 = 0x4e,
 
     /// Store into int array
     /// Format: iastore
@@ -440,7 +600,15 @@ pub enum Opcode {
 
     /// Compare float
     /// Format: fcmp<op>
+    Fcmpl = 0x95,
+
+    /// Compare float
+    /// Format: fcmp<op>
     Fcmpg = 0x96,
+
+    /// Compare double
+    /// Format: dcmp<op>
+    Dcmpl = 0x97,
 
     /// Compare double
     /// Format: dcmp<op>
@@ -450,13 +618,57 @@ pub enum Opcode {
     /// Format: if<cond> branchbyte1 branchbyte2
     Ifeq = 0x99,
 
+    /// Branch if int comparison with zero succeeds
+    /// Format: if<cond> branchbyte1 branchbyte2
+    Ifne = 0x9a,
+
+    /// Branch if int comparison with zero succeeds
+    /// Format: if<cond> branchbyte1 branchbyte2
+    Iflt = 0x9b,
+
+    /// Branch if int comparison with zero succeeds
+    /// Format: if<cond> branchbyte1 branchbyte2
+    Ifge = 0x9c,
+
+    /// Branch if int comparison with zero succeeds
+    /// Format: if<cond> branchbyte1 branchbyte2
+    Ifgt = 0x9d,
+
+    /// Branch if int comparison with zero succeeds
+    /// Format: if<cond> branchbyte1 branchbyte2
+    Ifle = 0x9e,
+
     /// Branch if int comparison succeeds
     /// Format: if_icmp<cond> branchbyte1 branchbyte2
     IfIcmpeq = 0x9f,
 
+    /// Branch if int comparison succeeds
+    /// Format: if_icmp<cond> branchbyte1 branchbyte2
+    IfIcmpne = 0xa0,
+
+    /// Branch if int comparison succeeds
+    /// Format: if_icmp<cond> branchbyte1 branchbyte2
+    IfIcmplt = 0xa1,
+
+    /// Branch if int comparison succeeds
+    /// Format: if_icmp<cond> branchbyte1 branchbyte2
+    IfIcmpge = 0xa2,
+
+    /// Branch if int comparison succeeds
+    /// Format: if_icmp<cond> branchbyte1 branchbyte2
+    IfIcmpgt = 0xa3,
+
+    /// Branch if int comparison succeeds
+    /// Format: if_icmp<cond> branchbyte1 branchbyte2
+    IfIcmple = 0xa4,
+
     /// Branch if reference comparison succeeds
     /// Format: if_acmp<cond> branchbyte1 branchbyte2
     IfAcmpeq = 0xa5,
+
+    /// Branch if reference comparison succeeds
+    /// Format: if_acmp<cond> branchbyte1 branchbyte2
+    IfAcmpne = 0xa6,
 
     /// Branch always
     /// Format: goto branchbyte1 branchbyte2

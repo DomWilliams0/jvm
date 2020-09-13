@@ -1,4 +1,4 @@
-# TODOs (77)
+# TODOs (76)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -63,8 +63,7 @@
  * [src/interpreter/insn/bytecode.rs](src/interpreter/insn/bytecode.rs) (2)
    * `// TODO temporary, dont log every single instruction`
    * `// TODO verified version of Bytecode that doesn't do all the safety checks for speed e.g. fn parse_unverified(bytes) -> Self`
- * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (7)
-   * `// TODO n variations`
+ * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (6)
    * `// TODO intern string`
    * `// TODO call string constructor`
    * `// TODO char array`
