@@ -1,10 +1,19 @@
+use crate::alloc::{InternedString, NativeString};
 use cafebabe::mutf8::MString;
-use cafebabe::{ClassResult, Item};
+use cafebabe::{ClassResult, Item, MethodRefItem};
 use std::fmt::{Debug, Formatter};
 
 #[derive(Debug)]
 pub enum Entry {
     String(MString),
+    MethodRef(MethodRef),
+}
+
+#[derive(Debug)]
+pub struct MethodRef {
+    pub class: InternedString,
+    pub name: NativeString,
+    pub desc: NativeString,
 }
 
 pub struct RuntimeConstantPool(Vec<Option<Entry>>);
@@ -28,6 +37,17 @@ impl RuntimeConstantPool {
                 Item::String { string } => {
                     let string = pool.string_entry(*string)?;
                     my_pool.put_entry(idx, Entry::String(string.to_owned()));
+                }
+                Item::MethodRef { .. } => {
+                    let methodref = pool.entry::<MethodRefItem>(idx)?;
+                    my_pool.put_entry(
+                        idx,
+                        Entry::MethodRef(MethodRef {
+                            class: methodref.class.to_owned(),
+                            name: methodref.name.to_owned(),
+                            desc: methodref.desc.to_owned(),
+                        }),
+                    );
                 }
                 _ => continue,
             }
@@ -59,12 +79,29 @@ impl RuntimeConstantPool {
         self.entry(idx)
             .and_then(|e| if e.is_loadable() { Some(e) } else { None })
     }
+
+    pub fn method_entry(&self, idx: u16) -> Option<&MethodRef> {
+        self.entry(idx).and_then(|e| match e {
+            Entry::MethodRef(m) => Some(m),
+            _ => None,
+        })
+    }
 }
 
 impl Entry {
+    /// Symbolic references to classes and interfaces
+    ///
+    /// Symbolic references to method handles
+    ///
+    /// Symbolic references to method types
+    ///
+    /// Symbolic references to dynamically-computed constants
+    ///
+    /// Static constants
     pub fn is_loadable(&self) -> bool {
         match self {
             Entry::String(_) => true,
+            _ => false,
         }
     }
 

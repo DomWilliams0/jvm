@@ -1,5 +1,5 @@
 use crate::buffer::Buffer;
-use crate::constant_pool::entry::Entry;
+
 use crate::{ClassError, ClassResult};
 use log::*;
 use num_enum::TryFromPrimitive;
@@ -26,14 +26,36 @@ pub enum Tag {
     Package = 20,
 }
 
+// TODO these are Entries not Items
+
 #[derive(Debug)]
 pub struct Utf8Item<'c> {
     pub string: &'c mutf8::mstr,
 }
 
 #[derive(Debug)]
-pub struct ClassRefItem {
-    pub name: Index,
+pub struct ClassRefItem<'c> {
+    pub name: &'c mutf8::mstr,
+}
+
+#[derive(Debug)]
+pub struct NameAndTypeItem<'c> {
+    pub name: &'c mutf8::mstr,
+    pub desc: &'c mutf8::mstr,
+}
+
+#[derive(Debug)]
+pub struct MethodRefItem<'c> {
+    pub class: &'c mutf8::mstr,
+    pub name: &'c mutf8::mstr,
+    pub desc: &'c mutf8::mstr,
+}
+
+#[derive(Debug)]
+pub struct InterfaceMethodRefItem<'c> {
+    pub class: &'c mutf8::mstr,
+    pub name: &'c mutf8::mstr,
+    pub desc: &'c mutf8::mstr,
 }
 
 #[derive(Debug)]
@@ -50,7 +72,9 @@ pub enum Item<'c> {
         class: Index,
         name_and_type: Index,
     },
-    Class(ClassRefItem),
+    Class {
+        name: Index,
+    },
     String {
         string: Index,
     },
@@ -70,7 +94,7 @@ pub enum Item<'c> {
         name: Index,
         descriptor: Index,
     },
-    Utf8(Utf8Item<'c>),
+    Utf8(&'c mutf8::mstr),
     MethodHandle {
         reference_kind: u8,
         reference: Index,
@@ -134,7 +158,7 @@ impl<'c> Item<'c> {
 
             Tag::Class => {
                 let name = buf.read()?;
-                Item::Class(ClassRefItem { name })
+                Item::Class { name }
             }
 
             Tag::String => {
@@ -176,9 +200,7 @@ impl<'c> Item<'c> {
             Tag::Utf8 => {
                 let length = buf.read::<u16>()?;
                 let bytes = buf.read_slice(length as usize)?;
-                Item::Utf8(Utf8Item {
-                    string: mutf8::mstr::from_mutf8(bytes),
-                })
+                Item::Utf8(mutf8::mstr::from_mutf8(bytes))
             }
 
             Tag::MethodHandle => {
@@ -237,14 +259,14 @@ impl<'c> Item<'c> {
             Item::MethodRef { .. } => Tag::MethodRef,
             Item::FieldRef { .. } => Tag::FieldRef,
             Item::InterfaceMethodRef { .. } => Tag::InterfaceMethodRef,
-            Item::Class(ClassRefItem { .. }) => Tag::Class,
+            Item::Class { .. } => Tag::Class,
             Item::String { .. } => Tag::String,
             Item::Integer { .. } => Tag::Integer,
             Item::Float { .. } => Tag::Float,
             Item::Long { .. } => Tag::Long,
             Item::Double { .. } => Tag::Double,
             Item::NameAndType { .. } => Tag::NameAndType,
-            Item::Utf8(Utf8Item { .. }) => Tag::Utf8,
+            Item::Utf8(_) => Tag::Utf8,
             Item::MethodHandle { .. } => Tag::MethodHandle,
             Item::MethodType { .. } => Tag::MethodType,
             Item::Dynamic { .. } => Tag::Dynamic,
@@ -252,20 +274,5 @@ impl<'c> Item<'c> {
             Item::Module { .. } => Tag::Module,
             Item::Package { .. } => Tag::Package,
         }
-    }
-
-    pub fn to_entry<E: 'static + Entry>(&self) -> Option<&'c E> {
-        if E::TAG != self.tag() {
-            return None;
-        }
-
-        let ptr: *const E = match self {
-            Item::Utf8(item) => item as *const _ as *const _,
-            Item::Class(item) => item as *const _ as *const _,
-            _ => unimplemented!("{:?}", self.tag()),
-        };
-
-        // asserted tag is the same
-        Some(unsafe { &*ptr })
     }
 }

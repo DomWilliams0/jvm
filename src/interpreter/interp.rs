@@ -1,9 +1,9 @@
 use crate::alloc::{vmref_alloc_exception, VmRef};
-use crate::class::{Class, Method, Object};
+use crate::class::{Class, Method};
 use log::*;
 
 use crate::interpreter::error::InterpreterError;
-use crate::interpreter::frame::{Frame, FrameStack};
+use crate::interpreter::frame::{Frame, FrameStack, JavaFrame};
 use crate::interpreter::insn::{Bytecode, ExecuteResult};
 use crate::thread;
 use crate::types::DataValue;
@@ -21,20 +21,56 @@ struct InterpreterState {
     frames: FrameStack,
 }
 
+pub enum MethodArguments<'a> {
+    None,
+    Frame(&'a mut JavaFrame, usize),
+}
+
+//  TODO refactor to not use recursion, use iteration with the pc
+
 impl Interpreter {
     // TODO get current class
     // TODO get current method
     // TODO get current frame
 
+    pub fn execute_method_from_frame(
+        &self,
+        class: VmRef<Class>,
+        method: VmRef<Method>,
+        args: MethodArguments,
+    ) -> Result<(), InterpreterError> {
+        let frame = match args {
+            MethodArguments::None => Frame::new_no_args(method, class),
+            MethodArguments::Frame(caller_frame, nargs) => {
+                let stack_len = caller_frame.operand_stack.count();
+                let args = caller_frame.operand_stack.pop_n(nargs).ok_or_else(|| {
+                    InterpreterError::NotEnoughArgs {
+                        expected: nargs,
+                        actual: stack_len,
+                    }
+                })?;
+
+                Frame::new_with_args(method, class, args)
+            }
+        }?;
+
+        self.do_execute(frame)
+    }
+
     pub fn execute_method(
         &self,
         class: VmRef<Class>,
         method: VmRef<Method>,
-        this: Option<VmRef<Object>>,
         args: impl Iterator<Item = DataValue>,
     ) -> Result<(), InterpreterError> {
+        let frame = Frame::new_with_args(method, class, args)?;
+        self.do_execute(frame)
+    }
+
+    fn do_execute(&self, mut frame: Frame) -> Result<(), InterpreterError> {
+        // TODO take monitor for synchronised method
         // TODO push frame onto stack
-        let mut frame = Frame::new_from_method(method, class, this, args)?;
+
         let thread = thread::get();
 
         match &mut frame {

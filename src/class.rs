@@ -6,10 +6,12 @@ use cafebabe::{
 use lazy_static::lazy_static;
 use log::*;
 
-use crate::alloc::{vmref_ptr, InternedString, NativeString, VmRef};
+use crate::alloc::{vmref_alloc_object, vmref_ptr, InternedString, NativeString, VmRef};
 use crate::classloader::{current_thread, ClassLoader, WhichLoader};
 use crate::error::{Throwables, VmResult};
-use crate::types::{DataType, DataValue, PrimitiveDataType};
+use crate::types::{
+    DataType, DataValue, MethodSignature, PrimitiveDataType, ReferenceDataType, ReturnType,
+};
 use cafebabe::mutf8::mstr;
 
 use crate::constant_pool::RuntimeConstantPool;
@@ -17,6 +19,8 @@ use crate::monitor::{Monitor, MonitorGuard};
 use crate::storage::{FieldMapStorage, Storage};
 use crate::thread;
 use cafebabe::attribute::Code;
+use itertools::Itertools;
+use parking_lot::{Mutex, MutexGuard};
 use std::cell::UnsafeCell;
 use std::fmt::{Debug, Formatter};
 use std::iter::empty;
@@ -25,6 +29,7 @@ use std::thread::ThreadId;
 
 #[derive(Debug)]
 pub enum ClassType {
+    // TODO store dimensions
     Array(VmRef<Class>),
     Primitive(PrimitiveDataType),
     Normal,
@@ -70,10 +75,17 @@ pub enum ClassState {
 
 struct LockedClassState(UnsafeCell<ClassState>);
 
+enum ObjectStorage {
+    Fields(FieldMapStorage),
+    // TODO arrays should live on the GC java heap
+    // TODO arrays should be specialised and not hold massive DataValues
+    Array(Mutex<Box<[DataValue]>>),
+}
+
 pub struct Object {
     class: VmRef<Class>,
     monitor: Monitor,
-    fields: FieldMapStorage,
+    storage: ObjectStorage,
 }
 
 lazy_static! {
@@ -92,6 +104,10 @@ pub struct Method {
     name: NativeString,
     desc: NativeString,
     flags: MethodAccessFlags,
+
+    // TODO arrayvec
+    args: Vec<DataType>,
+    return_type: ReturnType,
 
     /// Only present if not native or abstract
     code: Option<attribute::Code>,
@@ -223,10 +239,19 @@ impl Class {
                     }
                 };
 
+                let mut signature = MethodSignature::from_descriptor(method.descriptor);
+                let args = signature.iter_args().collect();
+                if signature.errored() {
+                    warn!("invalid method descriptor {:?}", method.descriptor);
+                    return Err(Throwables::ClassFormatError);
+                }
+
                 vec.push(VmRef::new(Method {
                     name: method.name.to_owned(),
                     desc: method.descriptor.to_owned(),
                     flags: method.access_flags,
+                    args,
+                    return_type: signature.return_type(),
                     code,
                     attributes,
                 }))
@@ -443,14 +468,8 @@ impl Class {
             mstr::from_utf8(b"<init>").as_ref(),
             descriptor,
             MethodAccessFlags::empty(),
+            MethodAccessFlags::STATIC | MethodAccessFlags::ABSTRACT,
         )
-        .and_then(|method| {
-            if method.flags.is_static() {
-                None
-            } else {
-                Some(method)
-            }
-        })
     }
 
     fn find_method(
@@ -458,11 +477,15 @@ impl Class {
         name: &mstr,
         desc: &mstr,
         flags: MethodAccessFlags,
+        antiflags: MethodAccessFlags,
     ) -> Option<VmRef<Method>> {
         self.methods
             .iter()
             .find(|m| {
-                m.flags.contains(flags) && m.name.as_mstr() == name && m.desc.as_mstr() == desc
+                m.flags.contains(flags)
+                    && (m.flags - antiflags) == m.flags
+                    && m.name.as_mstr() == name
+                    && m.desc.as_mstr() == desc
             })
             .cloned()
     }
@@ -474,10 +497,11 @@ impl Class {
         name: &mstr,
         desc: &mstr,
         flags: MethodAccessFlags,
+        antiflags: MethodAccessFlags,
     ) -> Option<VmRef<Method>> {
         let mut current = Some(cls);
         while let Some(cls) = current {
-            if let Some(method) = cls.find_method(name, desc, flags) {
+            if let Some(method) = cls.find_method(name, desc, flags, antiflags) {
                 return Some(method);
             }
 
@@ -591,8 +615,7 @@ impl Class {
                             if let Err(e) = interpreter.execute_method(
                                 self.clone(),
                                 m,
-                                None, /* static */
-                                empty(),
+                                empty(), /* static with no args */
                             ) {
                                 warn!("static constructor failed: {}", e);
                                 return Err(Throwables::ClassFormatError); // TODO different exception
@@ -667,10 +690,19 @@ impl Object {
         // TODO just allocate an object instead of this unsafeness
         let null_class = MaybeUninit::zeroed();
         let null_class = unsafe { null_class.assume_init() };
+        let storage = ObjectStorage::Fields(FieldMapStorage::with_capacity(0));
         Object {
             class: null_class,
             monitor: Monitor::new(),
-            fields: FieldMapStorage::with_capacity(0),
+            storage,
+        }
+    }
+
+    fn with_storage(class: VmRef<Class>, storage: ObjectStorage) -> Self {
+        Object {
+            class,
+            monitor: Monitor::new(),
+            storage,
         }
     }
 
@@ -684,11 +716,75 @@ impl Object {
 
             map
         };
-        Object {
-            class,
-            monitor: Monitor::new(),
-            fields,
+        Self::with_storage(class, ObjectStorage::Fields(fields))
+    }
+
+    pub(crate) fn new_array(array_cls: VmRef<Class>, len: usize) -> Self {
+        let elem_cls = match &array_cls.class_type {
+            ClassType::Array(elem) => elem,
+            _ => unreachable!(),
+        };
+
+        let elem_type = match elem_cls.class_type {
+            ClassType::Primitive(prim) => DataType::Primitive(prim),
+            ClassType::Normal => {
+                DataType::Reference(ReferenceDataType::Class(elem_cls.name.to_owned()))
+            }
+            ClassType::Array(_) => todo!("nested arrays?"),
+        };
+
+        let data = vec![elem_type.default_value(); len];
+        Self::with_storage(
+            array_cls,
+            ObjectStorage::Array(Mutex::new(data.into_boxed_slice())),
+        )
+    }
+
+    pub(crate) fn new_string(contents: &mstr) -> VmResult<Object> {
+        // encode for java/lang/String
+        let utf16 = contents.to_utf8().encode_utf16().collect_vec();
+
+        let tls = thread::get();
+        let classloader = tls.global().class_loader();
+
+        // alloc string instance
+        let string_class = classloader.get_bootstrap_class("java/lang/String");
+        let string_instance = Object::new(string_class);
+        let fields = string_instance.fields().unwrap();
+
+        // alloc char array
+        let char_array_cls = classloader.get_primitive_array(PrimitiveDataType::Char);
+        let char_array = vmref_alloc_object(|| Ok(Object::new_array(char_array_cls, utf16.len())))?;
+        let length = utf16.len();
+
+        // populate char array
+        {
+            let mut array_contents = char_array.array().unwrap();
+            let slice = &mut array_contents[0..utf16.len()];
+            for (i, char) in utf16.into_iter().enumerate() {
+                slice[i] = DataValue::Char(char);
+            }
         }
+
+        // TODO limit array length to i32::MAX somewhere
+
+        fields.ensure_set(
+            mstr::from_utf8(b"value").as_ref(),
+            DataValue::Reference(
+                ReferenceDataType::Array {
+                    dims: 1,
+                    elem_type: Box::new(DataType::Primitive(PrimitiveDataType::Char)),
+                },
+                char_array,
+            ),
+        );
+
+        fields.ensure_set(
+            mstr::from_utf8(b"count").as_ref(),
+            DataValue::Int(length as i32),
+        );
+
+        Ok(string_instance)
     }
 
     pub fn is_null(&self) -> bool {
@@ -707,15 +803,33 @@ impl Object {
         self.monitor.enter()
     }
 
+    fn fields(&self) -> Option<&FieldMapStorage> {
+        match &self.storage {
+            ObjectStorage::Fields(f) => Some(f),
+            _ => None,
+        }
+    }
+
+    fn array(&self) -> Option<MutexGuard<Box<[DataValue]>>> {
+        match &self.storage {
+            ObjectStorage::Array(mutex) => Some(mutex.lock()),
+            _ => None,
+        }
+    }
+
     pub fn get_field_by_name<F: From<DataValue>>(&self, name: &mstr) -> Option<F> {
-        self.fields.get(name).map(F::from)
+        self.fields().and_then(|f| f.get(name).map(F::from))
     }
 
     /// Panics if no field with given name
     pub fn set_field_by_name<F: Into<DataValue>>(&self, name: &mstr, value: F) {
         let value = value.into();
         debug!("setting field {:?} value to {:?}", name, value);
-        assert!(self.fields.set(name, value), "no such field {:?}", name);
+        if let Some(f) = self.fields() {
+            f.ensure_set(name, value)
+        } else {
+            warn!("object has no field storage");
+        }
     }
 }
 
@@ -738,6 +852,10 @@ impl Method {
 
     pub fn name(&self) -> &mstr {
         &self.name
+    }
+
+    pub fn args(&self) -> &[DataType] {
+        &self.args
     }
 
     pub fn flags(&self) -> MethodAccessFlags {

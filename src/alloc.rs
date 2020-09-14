@@ -1,4 +1,4 @@
-use crate::class::{Class, Object};
+use crate::class::Object;
 use crate::error::{Throwable, Throwables, VmResult};
 
 use cafebabe::mutf8::MString;
@@ -22,9 +22,9 @@ pub fn vmref_ptr<O>(vmref: &VmRef<O>) -> u64 {
     Arc::as_ptr(vmref) as u64
 }
 
-pub fn vmref_alloc_object(cls: VmRef<Class>) -> VmResult<VmRef<Object>> {
+pub fn vmref_alloc_object(f: impl FnOnce() -> VmResult<Object>) -> VmResult<VmRef<Object>> {
     // TODO oom error
-    Ok(VmRef::new(Object::new(cls)))
+    Ok(VmRef::new(f()?))
 }
 
 pub fn vmref_alloc_exception(throwable: Throwables) -> VmResult<VmRef<Throwable>> {

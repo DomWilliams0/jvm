@@ -1,5 +1,5 @@
 use crate::alloc::VmRef;
-use crate::class::{Class, Method, Object};
+use crate::class::{Class, Method};
 use crate::interpreter::error::InterpreterError;
 use crate::types::DataValue;
 
@@ -52,15 +52,22 @@ impl LocalVariables {
     }
 
     pub fn store(&mut self, idx: usize, value: DataValue) -> Result<(), InterpreterError> {
-        todo!()
+        let count = self.0.len();
+        self.0
+            .get_mut(idx)
+            .ok_or_else(|| InterpreterError::InvalidLocalVar {
+                requested: idx,
+                count,
+            })
+            .map(|val| *val = StackValue::Initialised(value))
     }
 
     pub fn load(&mut self, idx: usize) -> Result<DataValue, InterpreterError> {
         self.0
             .get(idx)
-            .ok_or_else(|| InterpreterError::InvalidLoad {
+            .ok_or_else(|| InterpreterError::InvalidLocalVar {
                 requested: idx,
-                max: self.0.len(),
+                count: self.0.len(),
             })
             .and_then(|val| match val {
                 StackValue::Uninitialised => Err(InterpreterError::UninitialisedLoad(idx)),
@@ -84,6 +91,7 @@ impl OperandStack {
     }
 
     pub fn push(&mut self, value: DataValue) {
+        // TODO longs and doubles take 2 slots!
         self.0.push(value);
     }
 
@@ -91,8 +99,22 @@ impl OperandStack {
         self.0.pop()
     }
 
+    pub fn pop_n(&mut self, n: usize) -> Option<impl Iterator<Item = DataValue> + '_> {
+        if self.count() < n {
+            None
+        } else {
+            let idx = self.0.len() - n;
+            Some(self.0.drain(idx..).rev())
+        }
+    }
+
     pub fn depth(&self) -> usize {
         self.0.iter().map(|v| if v.is_wide() { 2 } else { 1 }).sum()
+    }
+
+    /// Available to be popped
+    pub fn count(&self) -> usize {
+        self.0.len()
     }
 }
 impl FrameStack {
@@ -125,10 +147,9 @@ impl StackValue {
 
 impl Frame {
     // TODO instead of options, enum {Instance(obj), Static(class)}
-    pub fn new_from_method(
+    pub fn new_with_args(
         method: VmRef<Method>,
         class: VmRef<Class>,
-        this: Option<VmRef<Object>>,
         args: impl Iterator<Item = DataValue>,
     ) -> Result<Self, InterpreterError> {
         if method.flags().is_native() {
@@ -140,16 +161,10 @@ impl Frame {
                 InterpreterError::NoCode
             })?;
 
-            let mut local_vars = match this {
-                Some(this) => LocalVariables::new_instance(
-                    code.max_locals as usize,
-                    DataValue::reference(this),
-                ),
-                None => LocalVariables::new_static(code.max_locals as usize),
-            };
+            let mut local_vars = LocalVariables::new_static(code.max_locals as usize);
 
             for (i, arg) in args.enumerate() {
-                local_vars.store(i + 1, arg)?;
+                local_vars.store(i, arg)?;
             }
 
             Ok(Frame::Java(JavaFrame {
@@ -160,6 +175,12 @@ impl Frame {
                 code: code.code.clone(),
             }))
         }
+    }
+    pub fn new_no_args(
+        method: VmRef<Method>,
+        class: VmRef<Class>,
+    ) -> Result<Self, InterpreterError> {
+        Self::new_with_args(method, class, std::iter::empty())
     }
 }
 
@@ -177,5 +198,42 @@ impl JavaFrame {
                 c.ensure_init()?;
                 Ok(c)
             })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::interpreter::frame::OperandStack;
+    use crate::types::DataValue;
+    use itertools::Itertools;
+
+    #[test]
+    fn operand_pop() {
+        let mut stack = OperandStack::new(6);
+
+        stack.push(DataValue::Int(1));
+        stack.push(DataValue::Int(2));
+        stack.push(DataValue::Long(3));
+        stack.push(DataValue::Int(4));
+
+        assert_eq!(stack.count(), 4);
+        assert_eq!(stack.depth(), 5);
+
+        assert!(stack.pop_n(10).is_none());
+
+        let popped = stack.pop_n(3).unwrap().collect_vec();
+        assert_eq!(stack.count(), 1);
+        assert_eq!(popped.len(), 3);
+
+        let intvalue = |val: &DataValue| match val {
+            DataValue::Int(i) => *i as i64,
+            DataValue::Long(i) => *i,
+            _ => unreachable!(),
+        };
+        let ints = popped.iter().map(intvalue).collect_vec();
+        assert_eq!(ints, vec![4, 3, 2]);
+
+        assert_eq!(intvalue(&stack.pop().unwrap()), 1);
+        assert!(stack.pop().is_none());
     }
 }

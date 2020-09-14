@@ -42,6 +42,9 @@ pub enum ClassError {
         actual: Tag,
     },
 
+    #[error("Expected {expected:?} item but found {actual:?}")]
+    WrongTag { expected: Tag, actual: Tag },
+
     /// Attribute name
     #[error("Attribute not found {0:?}")]
     Attribute(&'static str),

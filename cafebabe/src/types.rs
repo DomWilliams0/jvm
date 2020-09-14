@@ -260,8 +260,6 @@ impl MethodAccessFlags {
 #[cfg(test)]
 mod tests {
 
-
-
     #[allow(non_snake_case)]
     #[test]
     fn parse_CharData_UPPER_SPECIAL() {

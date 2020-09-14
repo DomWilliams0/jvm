@@ -3,7 +3,7 @@ use crate::class::NULL;
 use crate::alloc::{NativeString, VmRef};
 use crate::class::Object;
 use cafebabe::mutf8::mstr;
-use itertools::Itertools;
+
 use std::convert::{TryFrom, TryInto};
 
 // TODO more efficient packing of data types, dont want huge enum discriminant taking up all the space
@@ -29,10 +29,11 @@ pub enum PrimitiveDataType {
 }
 
 // TODO interned strings for class names?
+// TODO gross that we always need an allocation for reference type - Cow for str and store array dim inline?
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum ReferenceDataType {
     Class(NativeString),
-    Array { dims: u8, elements: Box<DataType> },
+    Array { dims: u8, elem_type: Box<DataType> },
 }
 
 #[derive(Debug, Clone)]
@@ -56,6 +57,30 @@ pub enum ArrayType<'a> {
     Reference(&'a mstr),
 }
 
+pub struct MethodSignature<'a> {
+    descriptor: &'a [u8],
+    errored: bool,
+    ret: ReturnType,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum ReturnType {
+    Void,
+    Returns(DataType),
+}
+
+enum SignatureState {
+    Start,
+    Args,
+    Ret,
+}
+
+pub struct MethodSignatureIter<'a, 'b> {
+    sig: &'b mut MethodSignature<'a>,
+    state: SignatureState,
+    cursor: usize,
+}
+
 impl DataType {
     pub fn default_value(self) -> DataValue {
         match self {
@@ -64,59 +89,53 @@ impl DataType {
             DataType::Reference(reftype) => DataValue::Reference(reftype, NULL.clone()),
         }
     }
-
     pub fn from_descriptor(desc: &mstr) -> Option<Self> {
-        let desc = desc.to_utf8(); // not likely to require an allocation
-        let s = desc.as_ref();
+        Self::from_descriptor_stream(desc.as_bytes()).and_then(|(data, cursor)| {
+            if cursor == desc.len() {
+                Some(data)
+            } else {
+                None
+            }
+        })
+    }
 
-        if let Some(prim) = PrimitiveDataType::from_descriptor(s.as_bytes()) {
-            return Some(Self::Primitive(prim));
-        }
+    fn from_descriptor_stream(desc: &[u8]) -> Option<(Self, usize)> {
+        // collect array dimensions
+        let array_dims = desc.iter().position(|b| *b != b'[')?;
 
-        if s.starts_with('L') {
-            let mut chars = s.chars().skip(1);
-            let cls = chars.take_while_ref(|c| *c != ';').collect::<String>();
+        let desc = &desc[array_dims..];
 
-            // cant be empty
-            if cls.is_empty() {
+        let first = *desc.get(0)?;
+        let (datatype, cursor) = if let Some(prim) = PrimitiveDataType::from_char(first) {
+            (Self::Primitive(prim), 1)
+        } else if first == b'L' {
+            let semicolon = desc.iter().position(|b| *b == b';')?;
+            let name = &desc[1..semicolon];
+            if name.is_empty() {
                 return None;
             }
 
-            // semicolon necessary at the end
-            {
-                let semicolon = chars.next();
-                let end = chars.next();
-                if (semicolon, end) != (Some(';'), None) {
-                    return None;
-                }
-            }
-
-            // TODO MString method from owned utf8 to avoid this copy
-            let class_name = NativeString::from_utf8(cls.as_bytes());
-            Some(Self::Reference(ReferenceDataType::Class(class_name)))
-        } else if s.starts_with('[') {
-            let mut chars = s.chars();
-            let dims = chars.take_while_ref(|c| *c == '[').count();
-
-            // limit to 255
-            let dims = u8::try_from(dims).ok()?;
-
-            // recurse
-            // TODO avoid extra allocation here too
-            let element_type = chars.collect::<String>().into_bytes();
-            let element_type = DataType::from_descriptor(mstr::from_mutf8(&element_type))?;
-            debug_assert!(!matches!(
-                element_type,
-                Self::Reference(ReferenceDataType::Array { .. })
-            ));
-
-            Some(Self::Reference(ReferenceDataType::Array {
-                dims,
-                elements: Box::new(element_type),
-            }))
+            (
+                Self::Reference(ReferenceDataType::Class(NativeString::from_mutf8(name))),
+                semicolon + 1,
+            )
         } else {
-            None
-        }
+            return None;
+        };
+
+        let datatype = if array_dims == 0 {
+            datatype
+        } else {
+            // limit to 255
+            let array_dims = u8::try_from(array_dims).ok()?;
+
+            Self::Reference(ReferenceDataType::Array {
+                dims: array_dims as u8,
+                elem_type: Box::new(datatype),
+            })
+        };
+
+        Some((datatype, cursor + array_dims))
     }
 
     pub fn is_primitive(&self) -> bool {
@@ -172,22 +191,26 @@ impl PrimitiveDataType {
         (PrimitiveDataType::Double, "double"),
     ];
 
+    pub fn from_char(b: u8) -> Option<Self> {
+        Some(match b {
+            b'B' => Self::Byte,
+            b'C' => Self::Char,
+            b'D' => Self::Double,
+            b'F' => Self::Float,
+            b'I' => Self::Int,
+            b'J' => Self::Long,
+            b'S' => Self::Short,
+            b'Z' => Self::Boolean,
+            _ => return None,
+        })
+    }
+
     pub fn from_descriptor(str: &[u8]) -> Option<Self> {
         if str.len() != 1 {
             None
         } else {
-            let c = unsafe { *str.get_unchecked(0) } as char;
-            Some(match c {
-                'B' => Self::Byte,
-                'C' => Self::Char,
-                'D' => Self::Double,
-                'F' => Self::Float,
-                'I' => Self::Int,
-                'J' => Self::Long,
-                'S' => Self::Short,
-                'Z' => Self::Boolean,
-                _ => return None,
-            })
+            let b = unsafe { *str.get_unchecked(0) };
+            Self::from_char(b)
         }
     }
 
@@ -201,6 +224,19 @@ impl PrimitiveDataType {
             PrimitiveDataType::Char => DataValue::Char(0),
             PrimitiveDataType::Float => DataValue::Float(0.0),
             PrimitiveDataType::Double => DataValue::Double(0.0),
+        }
+    }
+
+    pub fn char(&self) -> char {
+        match self {
+            PrimitiveDataType::Boolean => 'Z',
+            PrimitiveDataType::Byte => 'B',
+            PrimitiveDataType::Short => 'S',
+            PrimitiveDataType::Int => 'I',
+            PrimitiveDataType::Long => 'J',
+            PrimitiveDataType::Char => 'C',
+            PrimitiveDataType::Float => 'F',
+            PrimitiveDataType::Double => 'D',
         }
     }
 }
@@ -268,9 +304,110 @@ impl_data_value_type!(u16, Char);
 impl_data_value_type!(f32, Float);
 impl_data_value_type!(f64, Double);
 
+impl<'a> MethodSignature<'a> {
+    pub fn from_descriptor(descriptor: &'a mstr) -> Self {
+        MethodSignature {
+            descriptor: descriptor.as_bytes(),
+            errored: true,
+            ret: ReturnType::Void,
+        }
+    }
+
+    pub fn errored(&self) -> bool {
+        self.errored
+    }
+
+    pub fn return_type(&mut self) -> ReturnType {
+        std::mem::replace(&mut self.ret, ReturnType::Void)
+    }
+
+    pub fn iter_args(&mut self) -> MethodSignatureIter<'a, '_> {
+        MethodSignatureIter {
+            sig: self,
+            cursor: 0,
+            state: SignatureState::Start,
+        }
+    }
+}
+
+impl<'a, 'b> Iterator for MethodSignatureIter<'a, 'b> {
+    type Item = DataType;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            match self.state {
+                SignatureState::Start => {
+                    let b = self.pop_byte()?;
+                    if b == b'(' {
+                        self.state = SignatureState::Args;
+                        continue;
+                    } else {
+                        return None;
+                    }
+                }
+                SignatureState::Args => {
+                    let b = self.peek_byte()?;
+                    if b == b')' {
+                        self.state = SignatureState::Ret;
+                        self.advance();
+                        continue;
+                    }
+
+                    return DataType::from_descriptor_stream(&self.sig.descriptor[self.cursor..])
+                        .map(|(arg, new_cursor)| {
+                            self.cursor += new_cursor;
+                            arg
+                        });
+                }
+                SignatureState::Ret => {
+                    let ret = {
+                        let b = self.peek_byte()?;
+                        if b == b'V' {
+                            self.advance();
+                            ReturnType::Void
+                        } else {
+                            DataType::from_descriptor_stream(&self.sig.descriptor[self.cursor..])
+                                .map(|(ret, new_cursor)| {
+                                    self.cursor += new_cursor;
+                                    ReturnType::Returns(ret)
+                                })?
+                        }
+                    };
+
+                    self.sig.ret = ret;
+                    if self.cursor == self.sig.descriptor.len() {
+                        // consumed whole string, success
+                        self.sig.errored = false;
+                    }
+
+                    // clean finish
+                    return None;
+                }
+            }
+        }
+    }
+}
+impl<'a, 'b> MethodSignatureIter<'a, 'b> {
+    fn peek_byte(&mut self) -> Option<u8> {
+        self.sig.descriptor.get(self.cursor).copied()
+    }
+    fn pop_byte(&mut self) -> Option<u8> {
+        self.peek_byte().map(|b| {
+            self.advance();
+            b
+        })
+    }
+
+    fn advance(&mut self) {
+        self.cursor += 1;
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::types::{ArrayType, DataType, PrimitiveDataType, ReferenceDataType};
+    use crate::types::{
+        ArrayType, DataType, MethodSignature, PrimitiveDataType, ReferenceDataType, ReturnType,
+    };
     use cafebabe::mutf8::{mstr, MString};
 
     fn check(input: &str, expected: Option<DataType>) {
@@ -289,6 +426,21 @@ mod tests {
     fn check_array(input: &str, expected: Option<ArrayType>) {
         let mstr = mstr::from_utf8(input.as_bytes());
         assert_eq!(ArrayType::from_descriptor(mstr.as_ref()), expected)
+    }
+
+    fn check_method(input: &str, expected: Option<(Vec<DataType>, ReturnType)>) {
+        let mstr = mstr::from_utf8(input.as_bytes());
+        let mut sig = MethodSignature::from_descriptor(mstr.as_ref());
+        let types: Vec<_> = sig.iter_args().collect();
+
+        match expected {
+            None => assert!(sig.errored()),
+            Some((expected_args, expected_ret)) => {
+                assert!(!sig.errored());
+                assert_eq!(types, expected_args);
+                assert_eq!(sig.return_type(), expected_ret);
+            }
+        }
     }
 
     #[test]
@@ -318,14 +470,14 @@ mod tests {
             "[I",
             ReferenceDataType::Array {
                 dims: 1,
-                elements: Box::new(DataType::Primitive(PrimitiveDataType::Int)),
+                elem_type: Box::new(DataType::Primitive(PrimitiveDataType::Int)),
             },
         );
         check_ref(
             "[[[I",
             ReferenceDataType::Array {
                 dims: 3,
-                elements: Box::new(DataType::Primitive(PrimitiveDataType::Int)),
+                elem_type: Box::new(DataType::Primitive(PrimitiveDataType::Int)),
             },
         );
         check("[[[I;", None);
@@ -334,7 +486,7 @@ mod tests {
             "[[Ljava/lang/Object;",
             ReferenceDataType::Array {
                 dims: 2,
-                elements: Box::new(DataType::Reference(ReferenceDataType::Class(
+                elem_type: Box::new(DataType::Reference(ReferenceDataType::Class(
                     MString::from_utf8(b"java/lang/Object"),
                 ))),
             },
@@ -356,6 +508,43 @@ mod tests {
         check_array(
             "[Lcool;",
             Some(ArrayType::Reference(mstr::from_utf8(b"cool").as_ref())),
+        );
+    }
+
+    #[test]
+    fn method_descriptor() {
+        check_method("boo", None);
+        check_method("()V", Some((vec![], ReturnType::Void)));
+        check_method(
+            "()I",
+            Some((
+                vec![],
+                ReturnType::Returns(DataType::Primitive(PrimitiveDataType::Int)),
+            )),
+        );
+        check_method(
+            "()Lnice;",
+            Some((
+                vec![],
+                ReturnType::Returns(DataType::Reference(ReferenceDataType::Class(
+                    MString::from_utf8(b"nice"),
+                ))),
+            )),
+        );
+        check_method("()asdf", None);
+
+        check_method(
+            "(I[[D)V",
+            Some((
+                vec![
+                    DataType::Primitive(PrimitiveDataType::Int),
+                    DataType::Reference(ReferenceDataType::Array {
+                        dims: 2,
+                        elem_type: Box::new(DataType::Primitive(PrimitiveDataType::Double)),
+                    }),
+                ],
+                ReturnType::Void,
+            )),
         );
     }
 }

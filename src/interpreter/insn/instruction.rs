@@ -3,13 +3,16 @@
 use crate::alloc::vmref_alloc_object;
 use crate::constant_pool::Entry;
 
-use crate::error::Throwables;
 use crate::interpreter::error::InterpreterError;
 use crate::interpreter::frame::JavaFrame;
 use crate::interpreter::insn::bytecode::Reader;
 use crate::thread::JvmThreadState;
 
-use cafebabe::mutf8::mstr;
+use crate::class::{Class, Object};
+use crate::types::DataValue;
+
+use crate::interpreter::interp::MethodArguments;
+use cafebabe::MethodAccessFlags;
 use std::fmt::Debug;
 
 pub enum ExecuteResult {
@@ -1606,7 +1609,41 @@ impl Invokestatic {
         frame: &mut JavaFrame,
         thread: &JvmThreadState,
     ) -> Result<ExecuteResult, InterpreterError> {
-        todo!("instruction Invokestatic")
+        let entry = frame
+            .class
+            .constant_pool()
+            .method_entry(self.0)
+            .ok_or_else(|| InterpreterError::NotMethodRef(self.0))?;
+        // TODO ensure class is not interface, method not abstract, not constructor
+
+        // resolve class and method
+        let class = thread
+            .global()
+            .class_loader()
+            .load_class(&entry.class, frame.class.loader().clone())?;
+
+        let method = Class::find_method_recursive(
+            &class,
+            &entry.name,
+            &entry.desc,
+            MethodAccessFlags::STATIC,
+            MethodAccessFlags::ABSTRACT,
+        )
+        .ok_or_else(|| InterpreterError::MethodNotFound {
+            class: entry.class.clone(),
+            name: entry.name.clone(),
+            desc: entry.desc.clone(),
+        })?;
+
+        // TODO typecheck args at verification time
+        let arg_count = method.args().len();
+        thread.interpreter().execute_method_from_frame(
+            class,
+            method,
+            MethodArguments::Frame(frame, arg_count),
+        )?;
+
+        todo!("invoek static returned")
     }
 }
 
@@ -1888,27 +1925,21 @@ impl Ldc {
 
                 let string_class = frame.ensure_loaded("java/lang/String")?;
 
-                // resolve string constructor
-                let string_constructor = string_class
-                    .find_instance_constructor(mstr::from_utf8(b"([B)V").as_ref())
-                    .ok_or_else(|| Throwables::Other("MethodNotFound"))?;
-
-                // init new string instance
-                let string_instance = vmref_alloc_object(string_class.clone())?;
-
-                // call constructor
-                let interp = thread.interpreter();
-                todo!("args")
-                // let args = once()
-                // interp.execute_method(string_class, string_constructor, Some(string_instance))?;
+                // create string instance
+                let string_instance = vmref_alloc_object(|| Object::new_string(s.as_mstr()))?;
 
                 // TODO natively intern new string instance
+
+                // push onto stack
+                frame
+                    .operand_stack
+                    .push(DataValue::reference(string_instance));
             } // TODO int/float
-              // TODO class symbolic reference
+            // TODO class symbolic reference
+            e => unimplemented!("loadable entry {:?}", e),
         }
 
-        // TODO instantiate string
-        unimplemented!()
+        Ok(ExecuteResult::Continue)
     }
 }
 

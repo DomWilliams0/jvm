@@ -14,7 +14,9 @@ mod item;
 
 pub struct ConstantPool<'c>(Vec<Option<Item<'c>>>);
 
-pub use item::{ClassRefItem, Item, Utf8Item};
+pub use item::{
+    ClassRefItem, InterfaceMethodRefItem, Item, MethodRefItem, NameAndTypeItem, Utf8Item,
+};
 
 impl<'c> ConstantPool<'c> {
     pub(crate) fn empty() -> Self {
@@ -61,23 +63,19 @@ impl<'c> ConstantPool<'c> {
         self.0.len()
     }
 
-    fn item(&self, idx: Index) -> Option<&'c Item> {
+    fn item(&self, idx: Index) -> Option<&Item<'c>> {
         // adjust for 1-indexing
         let idx = (idx - 1) as usize;
         self.0.get(idx).and_then(|i| i.as_ref())
     }
 
-    pub fn entry<E: Entry + 'static>(&self, index: Index) -> ClassResult<&E> {
+    pub fn entry<E: Entry<'c>>(&self, index: Index) -> ClassResult<E> {
         let item = self.item(index).ok_or_else(|| ClassError::CpIndex(index))?;
-        item.to_entry().ok_or_else(|| ClassError::CpEntry {
-            index,
-            actual: item.tag(),
-            expected: E::TAG,
-        })
+        E::from_item(item, self)
     }
 
     pub fn string_entry(&self, index: Index) -> ClassResult<&'c mutf8::mstr> {
-        self.entry::<Utf8Item>(index).map(|item| item.string)
+        self.entry::<Utf8Item<'c>>(index).map(|item| item.string)
     }
 
     pub fn string_entry_utf8(&self, index: Index) -> ClassResult<String> {
@@ -96,6 +94,7 @@ impl Debug for ConstantPool<'_> {
 #[cfg(test)]
 mod tests {
     use crate::buffer::Buffer;
+    use crate::constant_pool::item::MethodRefItem;
     use crate::constant_pool::{ClassRefItem, ConstantPool, Item, Tag, Utf8Item};
 
     fn pool() -> ConstantPool<'static> {
@@ -160,14 +159,14 @@ mod tests {
         let item = pool.item(5).unwrap();
         assert_eq!(item.tag(), Tag::Class);
         match pool.item(5).unwrap() {
-            Item::Class(ClassRefItem { name }) => assert_eq!(*name, 44),
+            Item::Class { name } => assert_eq!(*name, 44),
             _ => unreachable!(),
         }
 
         assert!(pool.item(12).is_none()); // unusable because of Double before
 
         match pool.item(23).unwrap() {
-            Item::Utf8(Utf8Item { string }) => assert_eq!(string.to_utf8(), "Ljava/lang/String;"),
+            Item::Utf8(string) => assert_eq!(string.to_utf8(), "Ljava/lang/String;"),
             _ => unreachable!(),
         }
     }
@@ -175,13 +174,17 @@ mod tests {
     fn entries() {
         let pool = pool();
 
-        let utf8: &Utf8Item = pool.entry(23).expect("should be utf8");
+        let utf8: Utf8Item = pool.entry(23).expect("should be utf8");
         assert_eq!(utf8.string.to_utf8(), "Ljava/lang/String;");
 
         assert!(pool.entry::<Utf8Item>(5).is_err());
 
-        let (_, item) = pool.entries().find(|(i, _)| *i == 23).unwrap();
-        let utf8_again: &Utf8Item = item.to_entry().expect("should be string");
-        assert_eq!(utf8.string, utf8_again.string);
+        let cls: ClassRefItem = pool.entry(5).unwrap();
+        assert_eq!(cls.name.to_utf8(), "java/lang/StringBuilder");
+
+        let method: MethodRefItem = pool.entry(10).unwrap();
+        assert_eq!(method.class.to_utf8(), "java/io/PrintStream");
+        assert_eq!(method.name.to_utf8(), "println");
+        assert_eq!(method.desc.to_utf8(), "(Ljava/lang/String;)V");
     }
 }

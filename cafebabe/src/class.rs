@@ -104,10 +104,10 @@ impl<'c> ClassFile<'c> {
         })
     }
 
-    fn class_name(&self, index: Index) -> ClassResult<&mutf8::mstr> {
+    fn class_name(&'c self, index: Index) -> ClassResult<&'c mutf8::mstr> {
         self.constant_pool
-            .entry::<ClassRefItem>(index)
-            .and_then(|class| self.constant_pool.string_entry(class.name))
+            .entry::<ClassRefItem<'c>>(index)
+            .map(|class| class.name)
     }
 
     pub fn this_class(&self) -> ClassResult<&mutf8::mstr> {
@@ -153,5 +153,7 @@ impl<'c> ClassFile<'c> {
         &self.constant_pool
     }
 
-    pub fn access_flags(&self) -> ClassAccessFlags {self.access_flags}
+    pub fn access_flags(&self) -> ClassAccessFlags {
+        self.access_flags
+    }
 }

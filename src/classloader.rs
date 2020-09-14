@@ -293,6 +293,12 @@ impl ClassLoader {
         let idx = prim as usize;
         unsafe { prims.get_unchecked(idx).clone() }
     }
+
+    pub fn get_primitive_array(&self, prim: PrimitiveDataType) -> VmRef<Class> {
+        let array_cls_name = [b'[', prim.char() as u8];
+        self.load_class(mstr::from_mutf8(&array_cls_name), WhichLoader::Bootstrap)
+            .expect("primitive array class not loaded")
+    }
 }
 
 pub fn current_thread() -> ThreadId {
