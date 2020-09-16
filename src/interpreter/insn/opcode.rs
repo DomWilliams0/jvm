@@ -1,5 +1,5 @@
 use num_enum::TryFromPrimitive;
-#[derive(TryFromPrimitive, Debug, Clone)]
+#[derive(TryFromPrimitive, Debug, Clone, Copy)]
 #[repr(u8)]
 pub enum Opcode {
     /// Do nothing
@@ -809,4 +809,10 @@ pub enum Opcode {
     /// Jump subroutine (wide index)
     /// Format: jsr_w branchbyte1 branchbyte2 branchbyte3 branchbyte4
     JsrW = 0xc9,
+
+    Breakpoint = 0xca,
+
+    Impdep1 = 0xfe,
+    Impdep2 = 0xff,
+    // invalid instructions: 203..=253
 }

@@ -1,135 +1,103 @@
-use crate::alloc::{vmref_alloc_exception, VmRef};
-use crate::class::{Class, Method};
-use log::*;
+use crate::alloc::VmRef;
 
-use crate::interpreter::error::InterpreterError;
+use crate::error::Throwable;
 use crate::interpreter::frame::{Frame, FrameStack, JavaFrame};
-use crate::interpreter::insn::{Bytecode, ExecuteResult};
+use crate::interpreter::insn::{get_insn, InstructionBlob, Opcode, PostExecuteAction, Putstatic};
 use crate::thread;
-use crate::types::DataValue;
-use std::cell::RefCell;
+use std::cell::{RefCell, RefMut};
 
-pub enum ProgramCounter {
-    Java(usize),
-    Native,
+pub enum InterpreterResult {
+    Success,
+    Exception,
 }
 
-pub struct Interpreter(RefCell<InterpreterState>);
-
-struct InterpreterState {
-    pc: ProgramCounter,
+pub struct InterpreterState {
     frames: FrameStack,
 }
 
-pub enum MethodArguments<'a> {
-    None,
-    Frame(&'a mut JavaFrame, usize),
+pub struct Interpreter {
+    state: RefCell<InterpreterState>,
 }
 
-//  TODO refactor to not use recursion, use iteration with the pc
+impl InterpreterState {
+    pub fn push_frame(&mut self, frame: Frame) {
+        log::trace!(
+            "pushed new frame, stack depth is now {}: {:?}",
+            self.frames.depth() + 1,
+            frame
+        );
+        self.frames.push(frame, 0);
+    }
+
+    pub fn current_frame_mut(&mut self) -> &mut JavaFrame {
+        self.frames.top_java_mut().expect("no java frame").0
+    }
+}
 
 impl Interpreter {
-    // TODO get current class
-    // TODO get current method
-    // TODO get current frame
+    pub fn execute_until_return(&self) -> InterpreterResult {
+        let mut depth = 1;
 
-    pub fn execute_method_from_frame(
-        &self,
-        class: VmRef<Class>,
-        method: VmRef<Method>,
-        args: MethodArguments,
-    ) -> Result<(), InterpreterError> {
-        let frame = match args {
-            MethodArguments::None => Frame::new_no_args(method, class),
-            MethodArguments::Frame(caller_frame, nargs) => {
-                let stack_len = caller_frame.operand_stack.count();
-                let args = caller_frame.operand_stack.pop_n(nargs).ok_or_else(|| {
-                    InterpreterError::NotEnoughArgs {
-                        expected: nargs,
-                        actual: stack_len,
-                    }
-                })?;
-
-                Frame::new_with_args(method, class, args)
-            }
-        }?;
-
-        self.do_execute(frame)
-    }
-
-    pub fn execute_method(
-        &self,
-        class: VmRef<Class>,
-        method: VmRef<Method>,
-        args: impl Iterator<Item = DataValue>,
-    ) -> Result<(), InterpreterError> {
-        let frame = Frame::new_with_args(method, class, args)?;
-        self.do_execute(frame)
-    }
-
-    fn do_execute(&self, mut frame: Frame) -> Result<(), InterpreterError> {
-        // TODO take monitor for synchronised method
-        // TODO push frame onto stack
-
-        let thread = thread::get();
-
-        match &mut frame {
-            Frame::Native(_) => {
-                // TODO native frames
-                unimplemented!()
-            }
-            Frame::Java(frame) => {
-                // get bytecode
-                // TODO verify, "compile" and cache instructions
-                let bytecode = Bytecode::parse(&frame.code)?;
-
-                let mut err = Ok(());
-                for insn in bytecode.instructions() {
-                    match insn.execute(frame, &thread) {
-                        Err(InterpreterError::ExceptionRaised(exc)) => {
-                            // TODO abrupt exit with proper exception creation
-                            thread.set_exception(vmref_alloc_exception(exc)?);
-                            todo!("handle exception")
-                        }
-                        Err(e) => {
-                            error!("interpreter error: {}", e);
-                            err = Err(e);
-                            // TODO dont just bubble same error up through whole call stack
-                            break;
-                        }
-                        Ok(ExecuteResult::Continue) => {}
-                        Ok(ExecuteResult::Return) => {
-                            // TODO handle return
-                            todo!("return")
-                        }
-                    }
+        while depth != 0 {
+            match self.execute() {
+                PostExecuteAction::MethodCall => depth += 1,
+                PostExecuteAction::Return => depth -= 1,
+                PostExecuteAction::Exception(exc) => {
+                    thread::get().set_exception(VmRef::new(Throwable {
+                        class_name: exc.symbol(),
+                    }));
+                    return InterpreterResult::Exception;
                 }
-
-                match err {
-                    Ok(_) => debug!("exiting method {:?} successfully", frame.method.name()),
-                    Err(e) => {
-                        debug!(
-                            "exiting method {:?} with interpreter error: {}",
-                            frame.method.name(),
-                            e
-                        );
-                        return Err(e);
-                    }
-                }
+                PostExecuteAction::Continue => unreachable!(),
             }
         }
 
-        todo!()
+        InterpreterResult::Success
+    }
+
+    fn execute(&self) -> PostExecuteAction {
+        let mut insn_blob = InstructionBlob::default();
+        let thread = thread::get();
+
+        let mut state = self.state_mut();
+        if let Some(_native) = state.frames.top_native_mut() {
+            todo!("native frame")
+        }
+
+        loop {
+            // get current java frame
+            let (frame, pc) = state.frames.top_java_mut().expect("no frame");
+
+            // get current instruction
+            let code = frame.code.as_ref();
+            let (new_pc, opcode) = get_insn(code, *pc, &mut insn_blob).expect("bad opcode");
+            *pc = new_pc;
+
+            // lookup execute function
+            log::trace!("executing {:?}", opcode);
+            let exec_fn = thread.global().insn_lookup().resolve(opcode);
+            let result = exec_fn(&insn_blob, &mut *state);
+
+            match result {
+                PostExecuteAction::Continue => {
+                    // keep executing this frame
+                }
+                ret => return ret,
+            }
+        }
+    }
+
+    pub fn state_mut(&self) -> RefMut<InterpreterState> {
+        self.state.borrow_mut()
     }
 }
 
 impl Default for Interpreter {
     fn default() -> Self {
-        let state = InterpreterState {
-            pc: ProgramCounter::Native,
-            frames: FrameStack::new(),
-        };
-
-        Interpreter(RefCell::new(state))
+        Interpreter {
+            state: RefCell::new(InterpreterState {
+                frames: FrameStack::new(),
+            }),
+        }
     }
 }

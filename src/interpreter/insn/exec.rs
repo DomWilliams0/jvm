@@ -1,0 +1,236 @@
+use crate::interpreter::insn::bytecode::InstructionBlob;
+use crate::interpreter::insn::opcode::Opcode;
+use crate::interpreter::insn::*;
+use crate::interpreter::interp::InterpreterState;
+
+type ExecuteFn = fn(insn: &InstructionBlob, frame: &mut InterpreterState) -> PostExecuteAction;
+
+const INSN_COUNT: usize = 256;
+pub struct InstructionLookupTable([ExecuteFn; INSN_COUNT]);
+
+fn illegal_opcode(_: &InstructionBlob, _: &mut InterpreterState) -> PostExecuteAction {
+    panic!("illegal opcode")
+}
+
+impl InstructionLookupTable {
+    pub fn new() -> Self {
+        let mut table: [ExecuteFn; INSN_COUNT] = [illegal_opcode; INSN_COUNT];
+
+        macro_rules! insn {
+            ($insn:ident) => {
+                table[$insn::OPCODE as usize] = $insn::trampoline;
+            };
+        }
+
+        insn!(Aaload);
+        insn!(Aastore);
+        insn!(AconstNull);
+        insn!(Aload);
+        insn!(Aload0);
+        insn!(Aload1);
+        insn!(Aload2);
+        insn!(Aload3);
+        insn!(Anewarray);
+        insn!(Areturn);
+        insn!(Arraylength);
+        insn!(Astore);
+        insn!(Astore0);
+        insn!(Astore1);
+        insn!(Astore2);
+        insn!(Astore3);
+        insn!(Athrow);
+        insn!(Baload);
+        insn!(Bastore);
+        insn!(Bipush);
+        insn!(Caload);
+        insn!(Castore);
+        insn!(Checkcast);
+        insn!(D2F);
+        insn!(D2I);
+        insn!(D2L);
+        insn!(Dadd);
+        insn!(Daload);
+        insn!(Dastore);
+        insn!(Dcmpg);
+        insn!(Dcmpl);
+        insn!(Dconst0);
+        insn!(Dconst1);
+        insn!(Ddiv);
+        insn!(Dload);
+        insn!(Dload0);
+        insn!(Dload1);
+        insn!(Dload2);
+        insn!(Dload3);
+        insn!(Dmul);
+        insn!(Dneg);
+        insn!(Drem);
+        insn!(Dreturn);
+        insn!(Dstore);
+        insn!(Dstore0);
+        insn!(Dstore1);
+        insn!(Dstore2);
+        insn!(Dstore3);
+        insn!(Dsub);
+        insn!(Dup);
+        insn!(Dup2);
+        insn!(Dup2X1);
+        insn!(Dup2X2);
+        insn!(DupX1);
+        insn!(DupX2);
+        insn!(F2D);
+        insn!(F2I);
+        insn!(F2L);
+        insn!(Fadd);
+        insn!(Faload);
+        insn!(Fastore);
+        insn!(Fcmpg);
+        insn!(Fcmpl);
+        insn!(Fconst0);
+        insn!(Fconst1);
+        insn!(Fconst2);
+        insn!(Fdiv);
+        insn!(Fload);
+        insn!(Fload0);
+        insn!(Fload1);
+        insn!(Fload2);
+        insn!(Fload3);
+        insn!(Fmul);
+        insn!(Fneg);
+        insn!(Frem);
+        insn!(Freturn);
+        insn!(Fstore);
+        insn!(Fstore0);
+        insn!(Fstore1);
+        insn!(Fstore2);
+        insn!(Fstore3);
+        insn!(Fsub);
+        insn!(Getfield);
+        insn!(Getstatic);
+        insn!(Goto);
+        insn!(GotoW);
+        insn!(I2B);
+        insn!(I2C);
+        insn!(I2D);
+        insn!(I2F);
+        insn!(I2L);
+        insn!(I2S);
+        insn!(Iadd);
+        insn!(Iaload);
+        insn!(Iand);
+        insn!(Iastore);
+        insn!(Iconst0);
+        insn!(Iconst1);
+        insn!(Iconst2);
+        insn!(Iconst3);
+        insn!(Iconst4);
+        insn!(Iconst5);
+        insn!(IconstM1);
+        insn!(Idiv);
+        insn!(IfAcmpeq);
+        insn!(IfAcmpne);
+        insn!(IfIcmpeq);
+        insn!(IfIcmpge);
+        insn!(IfIcmpgt);
+        insn!(IfIcmple);
+        insn!(IfIcmplt);
+        insn!(IfIcmpne);
+        insn!(Ifeq);
+        insn!(Ifge);
+        insn!(Ifgt);
+        insn!(Ifle);
+        insn!(Iflt);
+        insn!(Ifne);
+        insn!(Ifnonnull);
+        insn!(Ifnull);
+        insn!(Iinc);
+        insn!(Iload);
+        insn!(Iload0);
+        insn!(Iload1);
+        insn!(Iload2);
+        insn!(Iload3);
+        insn!(Imul);
+        insn!(Ineg);
+        insn!(Instanceof);
+        insn!(Invokedynamic);
+        insn!(Invokeinterface);
+        insn!(Invokespecial);
+        insn!(Invokestatic);
+        insn!(Invokevirtual);
+        insn!(Ior);
+        insn!(Irem);
+        insn!(Ireturn);
+        insn!(Ishl);
+        insn!(Ishr);
+        insn!(Istore);
+        insn!(Istore0);
+        insn!(Istore1);
+        insn!(Istore2);
+        insn!(Istore3);
+        insn!(Isub);
+        insn!(Iushr);
+        insn!(Ixor);
+        insn!(Jsr);
+        insn!(JsrW);
+        insn!(L2D);
+        insn!(L2F);
+        insn!(L2I);
+        insn!(Ladd);
+        insn!(Laload);
+        insn!(Land);
+        insn!(Lastore);
+        insn!(Lcmp);
+        insn!(Lconst0);
+        insn!(Lconst1);
+        insn!(Ldc);
+        insn!(Ldc2W);
+        insn!(LdcW);
+        insn!(Ldiv);
+        insn!(Lload);
+        insn!(Lload0);
+        insn!(Lload1);
+        insn!(Lload2);
+        insn!(Lload3);
+        insn!(Lmul);
+        insn!(Lneg);
+        // insn!(Lookupswitch);
+        insn!(Lor);
+        insn!(Lrem);
+        insn!(Lreturn);
+        insn!(Lshl);
+        insn!(Lshr);
+        insn!(Lstore);
+        insn!(Lstore0);
+        insn!(Lstore1);
+        insn!(Lstore2);
+        insn!(Lstore3);
+        insn!(Lsub);
+        insn!(Lushr);
+        insn!(Lxor);
+        insn!(Monitorenter);
+        insn!(Monitorexit);
+        // insn!(Multianewarray);
+        insn!(New);
+        insn!(Newarray);
+        insn!(Nop);
+        insn!(Pop);
+        insn!(Pop2);
+        insn!(Putfield);
+        insn!(Putstatic);
+        insn!(Ret);
+        insn!(Return);
+        insn!(Saload);
+        insn!(Sastore);
+        insn!(Sipush);
+        insn!(Swap);
+        // insn!(Tableswitch);
+        // insn!(Wide);
+
+        Self(table)
+    }
+
+    pub fn resolve(&self, opcode: Opcode) -> ExecuteFn {
+        let idx = opcode as u8 as usize;
+        debug_assert!(idx < INSN_COUNT);
+        unsafe { *self.0.get_unchecked(idx) }
+    }
+}

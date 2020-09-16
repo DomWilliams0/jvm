@@ -9,6 +9,7 @@ use thiserror::*;
 use crate::classloader::ClassLoader;
 use crate::classpath::ClassPath;
 use crate::error::ResultExt;
+use crate::interpreter::InstructionLookupTable;
 use crate::properties::SystemProperties;
 use crate::thread::JvmThreadState;
 use crate::{thread, JvmResult};
@@ -21,6 +22,7 @@ pub struct Jvm {
 /// Each thread shares a reference through an Arc
 pub struct JvmGlobalState {
     classloader: ClassLoader,
+    insn_lookup: InstructionLookupTable,
 }
 
 #[derive(Default, Debug)]
@@ -50,7 +52,10 @@ impl Jvm {
         let classloader = ClassLoader::new(args.bootclasspath.clone());
 
         // create global JVM state
-        let global = Arc::new(JvmGlobalState { classloader });
+        let global = Arc::new(JvmGlobalState {
+            classloader,
+            insn_lookup: InstructionLookupTable::new(),
+        });
 
         let jvm = Jvm {
             main: args.main,
@@ -106,5 +111,9 @@ impl JvmArgs {
 impl JvmGlobalState {
     pub(crate) fn class_loader(&self) -> &ClassLoader {
         &self.classloader
+    }
+
+    pub(crate) fn insn_lookup(&self) -> &InstructionLookupTable {
+        &self.insn_lookup
     }
 }

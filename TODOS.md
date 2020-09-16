@@ -1,4 +1,4 @@
-# TODOs (88)
+# TODOs (81)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -22,7 +22,7 @@
    * `// TODO actually intern strings`
    * `// TODO methods on VmRef newtype`
    * `// TODO oom error`
- * [src/class.rs](src/class.rs) (20)
+ * [src/class.rs](src/class.rs) (21)
    * `// TODO store dimensions`
    * `/// TODO weak reference for cyclic?`
    * `// TODO arrays should live on the GC java heap`
@@ -37,7 +37,8 @@
    * `// TODO set obj->vmdata field to vm_class`
    * `// TODO version to look in (super)interfaces too`
    * `// TODO initialise final static fields from ConstantValue attrs`
-   * `return Err(Throwables::ClassFormatError); // TODO different exception`
+   * `// TODO wrap exception here and return the proper type`
+   * `// TODO proper exception type here`
    * `// TODO specific exception type e.g. ExceptionInInitializerError`
    * `// TODO just allocate an object instead of this unsafeness`
    * `// TODO inherit superclass fields too`
@@ -57,40 +58,30 @@
    * `// TODO newtype VmRef should handle equality`
  * [src/classpath.rs](src/classpath.rs) (1)
    * `// TODO enum for path type, zip/jar or directory`
- * [src/constant_pool.rs](src/constant_pool.rs) (1)
+ * [src/constant_pool.rs](src/constant_pool.rs) (2)
+   * `// TODO store interned string instance here`
    * `// TODO A numeric constant of type long or double OR A symbolic reference to a`
  * [src/error.rs](src/error.rs) (3)
    * `// TODO reference to class instead of name`
    * `// TODO reference to cause`
    * `// TODO backtrace`
- * [src/interpreter/frame.rs](src/interpreter/frame.rs) (5)
+ * [src/interpreter/frame.rs](src/interpreter/frame.rs) (6)
    * `// TODO validate local var slot in case of wide vars`
    * `// TODO longs and doubles take 2 slots!`
    * `// TODO tests for operand stack and local var array`
    * `// TODO instead of options, enum {Instance(obj), Static(class)}`
    * `// TODO pass args to native function`
- * [src/interpreter/insn/bytecode.rs](src/interpreter/insn/bytecode.rs) (2)
-   * `// TODO temporary, dont log every single instruction`
-   * `// TODO verified version of Bytecode that doesn't do all the safety checks for speed e.g. fn parse_unverified(bytes) -> Self`
- * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (6)
+   * `// TODO impl Display for mstr`
+ * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (9)
+   * `// TODO better handling of interpreter error`
+   * `// TODO some 2s are signed`
+   * `insn_2x!(Iinc, "iinc"); // TODO second is signed byte, or just store separate u8s`
    * `// TODO ensure class is not interface, method not abstract, not constructor`
    * `// TODO typecheck args at verification time`
    * `// TODO lookup natively interned string instance`
    * `// TODO natively intern new string instance`
    * `} // TODO int/float`
    * `// TODO class symbolic reference`
- * [src/interpreter/interp.rs](src/interpreter/interp.rs) (11)
-   * `//  TODO refactor to not use recursion, use iteration with the pc`
-   * `// TODO get current class`
-   * `// TODO get current method`
-   * `// TODO get current frame`
-   * `// TODO take monitor for synchronised method`
-   * `// TODO push frame onto stack`
-   * `// TODO native frames`
-   * `// TODO verify, "compile" and cache instructions`
-   * `// TODO abrupt exit with proper exception creation`
-   * `// TODO dont just bubble same error up through whole call stack`
-   * `// TODO handle return`
  * [src/jvm.rs](src/jvm.rs) (4)
    * `// TODO "catch" any exception during init, and log it properly with stacktrace etc`
    * `// TODO set all properties in gnu/classpath/VMSystemProperties.preinit`

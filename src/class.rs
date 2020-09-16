@@ -15,6 +15,7 @@ use crate::types::{
 use cafebabe::mutf8::mstr;
 
 use crate::constant_pool::RuntimeConstantPool;
+use crate::interpreter::{Frame, InterpreterError, InterpreterResult};
 use crate::monitor::{Monitor, MonitorGuard};
 use crate::storage::{FieldMapStorage, Storage};
 use crate::thread;
@@ -23,7 +24,7 @@ use itertools::Itertools;
 use parking_lot::{Mutex, MutexGuard};
 use std::cell::UnsafeCell;
 use std::fmt::{Debug, Formatter};
-use std::iter::empty;
+
 use std::sync::Arc;
 use std::thread::ThreadId;
 
@@ -612,13 +613,30 @@ impl Class {
 
                             let thread = thread::get();
                             let interpreter = thread.interpreter();
-                            if let Err(e) = interpreter.execute_method(
-                                self.clone(),
-                                m,
-                                empty(), /* static with no args */
-                            ) {
-                                warn!("static constructor failed: {}", e);
-                                return Err(Throwables::ClassFormatError); // TODO different exception
+                            let result = Frame::new_no_args(m, self.clone()).and_then(|frame| {
+                                interpreter.state_mut().push_frame(frame);
+
+                                match interpreter.execute_until_return() {
+                                    InterpreterResult::Success => Ok(()),
+                                    InterpreterResult::Exception => {
+                                        let exception =
+                                            thread.exception().expect("exception should be set");
+                                        // TODO wrap exception here and return the proper type
+                                        warn!(
+                                            "exception raised in static constructor: {:?}",
+                                            exception
+                                        );
+                                        Err(InterpreterError::ExceptionRaised(
+                                            Throwables::ClassFormatError,
+                                        ))
+                                    }
+                                }
+                            });
+
+                            if let Err(err) = result {
+                                warn!("static constructor failed: {}", err);
+                                // TODO proper exception type here
+                                return Err(Throwables::ClassFormatError);
                             }
                         }
                     }

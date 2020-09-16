@@ -8,6 +8,7 @@ use log::*;
 use crate::error::VmResult;
 use crate::thread;
 use cafebabe::mutf8::mstr;
+use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
 enum StackValue {
@@ -17,7 +18,7 @@ enum StackValue {
 
 pub struct LocalVariables(Vec<StackValue>);
 pub struct OperandStack(Vec<DataValue>);
-pub struct FrameStack(Vec<Frame>);
+pub struct FrameStack(Vec<(Frame, usize)>);
 
 pub struct JavaFrame {
     pub class: VmRef<Class>,
@@ -122,16 +123,37 @@ impl FrameStack {
         FrameStack(Vec::with_capacity(64))
     }
 
-    pub fn push(&mut self, frame: Frame) {
-        self.0.push(frame);
+    pub fn push(&mut self, frame: Frame, pc: usize) {
+        self.0.push((frame, pc));
     }
 
-    pub fn pop(&mut self) -> Option<Frame> {
+    pub fn pop(&mut self) -> Option<(Frame, usize)> {
         self.0.pop()
     }
 
     pub fn depth(&self) -> usize {
         self.0.len()
+    }
+
+    pub fn top_native_mut(&mut self) -> Option<&mut NativeFrame> {
+        self.0.last_mut().and_then(|(frame, _)| match frame {
+            Frame::Native(frame) => Some(frame),
+            Frame::Java(_) => None,
+        })
+    }
+
+    pub fn top_java_mut(&mut self) -> Option<(&mut JavaFrame, &mut usize)> {
+        self.0.last_mut().and_then(|(frame, pc)| match frame {
+            Frame::Java(frame) => Some((frame, pc)),
+            Frame::Native(_) => None,
+        })
+    }
+
+    pub fn top_java(&self) -> Option<&JavaFrame> {
+        self.0.last().and_then(|(frame, _)| match frame {
+            Frame::Java(frame) => Some(frame),
+            Frame::Native(_) => None,
+        })
     }
 }
 
@@ -181,6 +203,52 @@ impl Frame {
         class: VmRef<Class>,
     ) -> Result<Self, InterpreterError> {
         Self::new_with_args(method, class, std::iter::empty())
+    }
+
+    pub fn new_with_caller(
+        class: VmRef<Class>,
+        method: VmRef<Method>,
+        caller: &mut JavaFrame,
+        nargs: usize,
+    ) -> Result<Self, InterpreterError> {
+        let stack_len = caller.operand_stack.count();
+        let args =
+            caller
+                .operand_stack
+                .pop_n(nargs)
+                .ok_or_else(|| InterpreterError::NotEnoughArgs {
+                    expected: nargs,
+                    actual: stack_len,
+                })?;
+
+        Self::new_with_args(method, class, args)
+    }
+
+    fn class_and_method(&self) -> (&VmRef<Class>, &VmRef<Method>) {
+        match self {
+            Frame::Java(frame) => (&frame.class, &frame.method),
+            Frame::Native(frame) => (&frame.class, &frame.method),
+        }
+    }
+
+    fn is_java(&self) -> bool {
+        matches!(self, Frame::Java(_))
+    }
+}
+
+impl Debug for Frame {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let (cls, method) = self.class_and_method();
+        let suffix = if self.is_java() { "" } else { " (native)" };
+
+        // TODO impl Display for mstr
+        write!(
+            f,
+            "{}.{}{}",
+            cls.name().to_utf8(),
+            method.name().to_utf8(),
+            suffix
+        )
     }
 }
 

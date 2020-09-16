@@ -3,4 +3,7 @@ mod frame;
 mod insn;
 mod interp;
 
-pub use interp::Interpreter;
+pub use error::InterpreterError;
+pub use frame::Frame;
+pub use insn::InstructionLookupTable;
+pub use interp::{Interpreter, InterpreterResult, InterpreterState};

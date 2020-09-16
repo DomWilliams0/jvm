@@ -4,46 +4,50 @@ use crate::alloc::vmref_alloc_object;
 use crate::constant_pool::Entry;
 
 use crate::interpreter::error::InterpreterError;
-use crate::interpreter::frame::JavaFrame;
-use crate::interpreter::insn::bytecode::Reader;
-use crate::thread::JvmThreadState;
+
+use log::*;
 
 use crate::class::{Class, Object};
 use crate::types::DataValue;
 
-use crate::interpreter::interp::MethodArguments;
+use crate::error::Throwables;
+use crate::interpreter::insn::bytecode::InsnReader;
+use crate::interpreter::insn::opcode::Opcode;
+use crate::interpreter::insn::InstructionBlob;
+use crate::interpreter::{Frame, InterpreterState};
+use crate::thread;
 use cafebabe::MethodAccessFlags;
 use std::fmt::Debug;
 
-pub enum ExecuteResult {
+pub enum PostExecuteAction {
     Continue,
     Return,
+    Exception(Throwables),
+    MethodCall,
 }
 
-pub trait Instruction: Debug {
-    fn name(&self) -> &'static str;
-
-    fn execute(
-        &self,
-        frame: &mut JavaFrame,
-        thread: &JvmThreadState,
-    ) -> Result<ExecuteResult, InterpreterError>;
-}
+pub type ExecuteResult = Result<PostExecuteAction, InterpreterError>;
 
 macro_rules! insn_common {
     ($insn:ident, $str:expr) => {
-        impl Instruction for $insn {
-            fn name(&self) -> &'static str {
-                $str
-            }
+        impl $insn {
+            pub const OPCODE: u8 = Opcode::$insn as u8;
+            pub const INSN: &'static str = $str;
 
-            #[inline]
-            fn execute(
-                &self,
-                frame: &mut JavaFrame,
-                thread: &JvmThreadState,
-            ) -> Result<ExecuteResult, InterpreterError> {
-                self.do_execute(frame, thread)
+            pub fn trampoline(
+                insn: &InstructionBlob,
+                interp: &mut InterpreterState,
+            ) -> PostExecuteAction {
+                let myself: &Self = unsafe { insn.transmute() };
+
+                match myself.execute(interp) {
+                    Ok(action) => action,
+                    Err(err) => {
+                        error!("interpreter error: {}", err);
+                        // TODO better handling of interpreter error
+                        PostExecuteAction::Exception(Throwables::Other("java/lang/InternalError"))
+                    }
+                }
             }
         }
     };
@@ -57,8 +61,8 @@ macro_rules! insn_0 {
         insn_common!($insn, $str);
 
         impl $insn {
-            pub(crate) fn parse(_: &mut Reader) -> Result<Self, InterpreterError> {
-                Ok(Self)
+            pub(crate) fn parse(_: &mut InsnReader) -> Option<Self> {
+                Some(Self)
             }
         }
     };
@@ -72,8 +76,8 @@ macro_rules! insn_1 {
         insn_common!($insn, $str);
 
         impl $insn {
-            pub(crate) fn parse(reader: &mut Reader) -> Result<Self, InterpreterError> {
-                Ok(Self(reader.read_1()?))
+            pub(crate) fn parse(reader: &mut InsnReader) -> Option<Self> {
+                reader.read_u8().map(Self)
             }
         }
     };
@@ -87,10 +91,72 @@ macro_rules! insn_2 {
         insn_common!($insn, $str);
 
         impl $insn {
-            pub(crate) fn parse(reader: &mut Reader) -> Result<Self, InterpreterError> {
-                let bytes = reader.read_n(2)?;
-                let index = ((bytes[0] as u16) << 8) | bytes[1] as u16;
-                Ok(Self(index))
+            pub(crate) fn parse(reader: &mut InsnReader) -> Option<Self> {
+                reader.read_u16().map(Self)
+            }
+        }
+    };
+}
+
+macro_rules! insn_2s {
+    ($insn:ident, $str:expr) => {
+        #[derive(Debug)]
+        pub struct $insn(pub i16);
+
+        insn_common!($insn, $str);
+
+        impl $insn {
+            pub(crate) fn parse(reader: &mut InsnReader) -> Option<Self> {
+                reader.read_i16().map(Self)
+            }
+        }
+    };
+}
+
+/// 2 separate u8s
+macro_rules! insn_2x {
+    ($insn:ident, $str:expr) => {
+        #[derive(Debug)]
+        pub struct $insn(pub u8, pub u8);
+
+        insn_common!($insn, $str);
+
+        impl $insn {
+            pub(crate) fn parse(reader: &mut InsnReader) -> Option<Self> {
+                reader.read_u8s().map(|(a, b)| Self(a, b))
+            }
+        }
+    };
+}
+
+macro_rules! insn_4s {
+    ($insn:ident, $str:expr) => {
+        #[derive(Debug)]
+        pub struct $insn(pub i32);
+
+        insn_common!($insn, $str);
+
+        impl $insn {
+            pub(crate) fn parse(reader: &mut InsnReader) -> Option<Self> {
+                reader.read_i32().map(Self)
+            }
+        }
+    };
+}
+
+/// u16 and 2 separate u8s
+macro_rules! insn_4x {
+    ($insn:ident, $str:expr) => {
+        #[derive(Debug)]
+        pub struct $insn(pub u16, pub u8, pub u8);
+
+        insn_common!($insn, $str);
+
+        impl $insn {
+            pub(crate) fn parse(reader: &mut InsnReader) -> Option<Self> {
+                let idx = reader.read_u16()?;
+                let (a, b) = reader.read_u8s()?;
+                Some(Self(idx, a, b))
             }
         }
     };
@@ -98,258 +164,241 @@ macro_rules! insn_2 {
 
 macro_rules! insn_delegate {
     ($delegate:expr) => {
-        fn do_execute(
-            &self,
-            frame: &mut JavaFrame,
-            thread: &JvmThreadState,
-        ) -> Result<ExecuteResult, InterpreterError> {
-            $delegate.do_execute(frame, thread)
+        fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+            $delegate.execute(interp)
         }
     };
 }
 
-// insn_n!(Aaload, "aaload");
-// insn_n!(Aastore, "aastore");
-// insn_n!(AconstNull, "aconst_null");
+// TODO some 2s are signed
+
+insn_0!(Aaload, "aaload");
+insn_0!(Aastore, "aastore");
+insn_0!(AconstNull, "aconst_null");
 insn_1!(Aload, "aload");
 insn_0!(Aload0, "aload_0");
 insn_0!(Aload1, "aload_1");
 insn_0!(Aload2, "aload_2");
 insn_0!(Aload3, "aload_3");
-// insn_n!(Anewarray, "anewarray");
-// insn_n!(Areturn, "areturn");
+insn_2!(Anewarray, "anewarray");
+insn_0!(Areturn, "areturn");
 insn_0!(Arraylength, "arraylength");
-// insn_n!(Astore, "astore");
-// insn_n!(Astore0, "astore_<n>");
-// insn_n!(Astore1, "astore_<n>");
-// insn_n!(Astore2, "astore_<n>");
-// insn_n!(Astore3, "astore_<n>");
-// insn_n!(Athrow, "athrow");
-// insn_n!(Baload, "baload");
-// insn_n!(Bastore, "bastore");
+insn_1!(Astore, "astore");
+insn_0!(Astore0, "astore_<n>");
+insn_0!(Astore1, "astore_<n>");
+insn_0!(Astore2, "astore_<n>");
+insn_0!(Astore3, "astore_<n>");
+insn_0!(Athrow, "athrow");
+insn_0!(Baload, "baload");
+insn_0!(Bastore, "bastore");
 insn_1!(Bipush, "bipush");
-// insn_n!(Caload, "caload");
-// insn_n!(Castore, "castore");
-// insn_n!(Checkcast, "checkcast");
-// insn_n!(D2F, "d2f");
-// insn_n!(D2I, "d2i");
-// insn_n!(D2L, "d2l");
-// insn_n!(Dadd, "dadd");
-// insn_n!(Daload, "daload");
-// insn_n!(Dastore, "dastore");
-// insn_n!(Dcmpg, "dcmp<op>");
-// insn_n!(Dcmpl, "dcmp<op>");
-// insn_n!(Dconst0, "dconst_<d>");
-// insn_n!(Dconst1, "dconst_<d>");
-// insn_n!(Ddiv, "ddiv");
-// insn_n!(Dload, "dload");
-// insn_n!(Dload0, "dload_<n>");
-// insn_n!(Dload1, "dload_<n>");
-// insn_n!(Dload2, "dload_<n>");
-// insn_n!(Dload3, "dload_<n>");
-// insn_n!(Dmul, "dmul");
-// insn_n!(Dneg, "dneg");
-// insn_n!(Drem, "drem");
-// insn_n!(Dreturn, "dreturn");
-// insn_n!(Dstore, "dstore");
-// insn_n!(Dstore0, "dstore_<n>");
-// insn_n!(Dstore1, "dstore_<n>");
-// insn_n!(Dstore2, "dstore_<n>");
-// insn_n!(Dstore3, "dstore_<n>");
-// insn_n!(Dsub, "dsub");
+insn_0!(Caload, "caload");
+insn_0!(Castore, "castore");
+insn_2!(Checkcast, "checkcast");
+insn_0!(D2F, "d2f");
+insn_0!(D2I, "d2i");
+insn_0!(D2L, "d2l");
+insn_0!(Dadd, "dadd");
+insn_0!(Daload, "daload");
+insn_0!(Dastore, "dastore");
+insn_0!(Dcmpg, "dcmp<op>");
+insn_0!(Dcmpl, "dcmp<op>");
+insn_0!(Dconst0, "dconst_<d>");
+insn_0!(Dconst1, "dconst_<d>");
+insn_0!(Ddiv, "ddiv");
+insn_1!(Dload, "dload");
+insn_0!(Dload0, "dload_<n>");
+insn_0!(Dload1, "dload_<n>");
+insn_0!(Dload2, "dload_<n>");
+insn_0!(Dload3, "dload_<n>");
+insn_0!(Dmul, "dmul");
+insn_0!(Dneg, "dneg");
+insn_0!(Drem, "drem");
+insn_0!(Dreturn, "dreturn");
+insn_1!(Dstore, "dstore");
+insn_0!(Dstore0, "dstore_<n>");
+insn_0!(Dstore1, "dstore_<n>");
+insn_0!(Dstore2, "dstore_<n>");
+insn_0!(Dstore3, "dstore_<n>");
+insn_0!(Dsub, "dsub");
 insn_0!(Dup, "dup");
-// insn_n!(Dup2, "dup2");
-// insn_n!(Dup2X1, "dup2_x1");
-// insn_n!(Dup2X2, "dup2_x2");
-// insn_n!(DupX1, "dup_x1");
-// insn_n!(DupX2, "dup_x2");
-// insn_n!(F2D, "f2d");
-// insn_n!(F2I, "f2i");
-// insn_n!(F2L, "f2l");
-// insn_n!(Fadd, "fadd");
-// insn_n!(Faload, "faload");
-// insn_n!(Fastore, "fastore");
-// insn_n!(Fcmpg, "fcmp<op>");
-// insn_n!(Fcmpl, "fcmp<op>");
-// insn_n!(Fconst0, "fconst_<f>");
-// insn_n!(Fconst1, "fconst_<f>");
-// insn_n!(Fconst2, "fconst_<f>");
-// insn_n!(Fdiv, "fdiv");
-// insn_n!(Fload, "fload");
-// insn_n!(Fload0, "fload_<n>");
-// insn_n!(Fload1, "fload_<n>");
-// insn_n!(Fload2, "fload_<n>");
-// insn_n!(Fload3, "fload_<n>");
-// insn_n!(Fmul, "fmul");
-// insn_n!(Fneg, "fneg");
-// insn_n!(Frem, "frem");
-// insn_n!(Freturn, "freturn");
-// insn_n!(Fstore, "fstore");
-// insn_n!(Fstore0, "fstore_<n>");
-// insn_n!(Fstore1, "fstore_<n>");
-// insn_n!(Fstore2, "fstore_<n>");
-// insn_n!(Fstore3, "fstore_<n>");
-// insn_n!(Fsub, "fsub");
-// insn_n!(Getfield, "getfield");
-// insn_n!(Getstatic, "getstatic");
-// insn_n!(Goto, "goto");
-// insn_n!(GotoW, "goto_w");
-// insn_n!(I2B, "i2b");
-// insn_n!(I2C, "i2c");
-// insn_n!(I2D, "i2d");
-// insn_n!(I2F, "i2f");
-// insn_n!(I2L, "i2l");
-// insn_n!(I2S, "i2s");
-// insn_n!(Iadd, "iadd");
-// insn_n!(Iaload, "iaload");
-// insn_n!(Iand, "iand");
-// insn_n!(Iastore, "iastore");
+insn_0!(Dup2, "dup2");
+insn_0!(Dup2X1, "dup2_x1");
+insn_0!(Dup2X2, "dup2_x2");
+insn_0!(DupX1, "dup_x1");
+insn_0!(DupX2, "dup_x2");
+insn_0!(F2D, "f2d");
+insn_0!(F2I, "f2i");
+insn_0!(F2L, "f2l");
+insn_0!(Fadd, "fadd");
+insn_0!(Faload, "faload");
+insn_0!(Fastore, "fastore");
+insn_0!(Fcmpg, "fcmp<op>");
+insn_0!(Fcmpl, "fcmp<op>");
+insn_0!(Fconst0, "fconst_<f>");
+insn_0!(Fconst1, "fconst_<f>");
+insn_0!(Fconst2, "fconst_<f>");
+insn_0!(Fdiv, "fdiv");
+insn_1!(Fload, "fload");
+insn_0!(Fload0, "fload_<n>");
+insn_0!(Fload1, "fload_<n>");
+insn_0!(Fload2, "fload_<n>");
+insn_0!(Fload3, "fload_<n>");
+insn_0!(Fmul, "fmul");
+insn_0!(Fneg, "fneg");
+insn_0!(Frem, "frem");
+insn_0!(Freturn, "freturn");
+insn_1!(Fstore, "fstore");
+insn_0!(Fstore0, "fstore_<n>");
+insn_0!(Fstore1, "fstore_<n>");
+insn_0!(Fstore2, "fstore_<n>");
+insn_0!(Fstore3, "fstore_<n>");
+insn_0!(Fsub, "fsub");
+insn_2!(Getfield, "getfield");
+insn_2!(Getstatic, "getstatic");
+insn_2!(Goto, "goto");
+insn_4s!(GotoW, "goto_w");
+insn_0!(I2B, "i2b");
+insn_0!(I2C, "i2c");
+insn_0!(I2D, "i2d");
+insn_0!(I2F, "i2f");
+insn_0!(I2L, "i2l");
+insn_0!(I2S, "i2s");
+insn_0!(Iadd, "iadd");
+insn_0!(Iaload, "iaload");
+insn_0!(Iand, "iand");
+insn_0!(Iastore, "iastore");
 insn_0!(Iconst0, "iconst_0");
-// insn_n!(Iconst1, "iconst_<i>");
-// insn_n!(Iconst2, "iconst_<i>");
-// insn_n!(Iconst3, "iconst_<i>");
-// insn_n!(Iconst4, "iconst_<i>");
-// insn_n!(Iconst5, "iconst_<i>");
-// insn_n!(IconstM1, "iconst_<i>");
-// insn_n!(Idiv, "idiv");
-// insn_n!(IfAcmpeq, "if_acmp<cond>");
-// insn_n!(IfAcmpne, "if_acmp<cond>");
-// insn_n!(IfIcmpeq, "if_icmp<cond>");
-// insn_n!(IfIcmpge, "if_icmp<cond>");
-// insn_n!(IfIcmpgt, "if_icmp<cond>");
-// insn_n!(IfIcmple, "if_icmp<cond>");
-// insn_n!(IfIcmplt, "if_icmp<cond>");
-// insn_n!(IfIcmpne, "if_icmp<cond>");
-// insn_n!(Ifeq, "if<cond>");
-// insn_n!(Ifge, "if<cond>");
-// insn_n!(Ifgt, "if<cond>");
-// insn_n!(Ifle, "if<cond>");
-// insn_n!(Iflt, "if<cond>");
-// insn_n!(Ifne, "if<cond>");
-// insn_n!(Ifnonnull, "ifnonnull");
-// insn_n!(Ifnull, "ifnull");
-// insn_n!(Iinc, "iinc");
-// insn_n!(Iload, "iload");
-// insn_n!(Iload0, "iload_<n>");
-// insn_n!(Iload1, "iload_<n>");
-// insn_n!(Iload2, "iload_<n>");
-// insn_n!(Iload3, "iload_<n>");
-// insn_n!(Imul, "imul");
-// insn_n!(Ineg, "ineg");
-// insn_n!(Instanceof, "instanceof");
-// insn_n!(Invokedynamic, "invokedynamic");
-// insn_n!(Invokeinterface, "invokeinterface");
+insn_0!(Iconst1, "iconst_<i>");
+insn_0!(Iconst2, "iconst_<i>");
+insn_0!(Iconst3, "iconst_<i>");
+insn_0!(Iconst4, "iconst_<i>");
+insn_0!(Iconst5, "iconst_<i>");
+insn_0!(IconstM1, "iconst_<i>");
+insn_0!(Idiv, "idiv");
+insn_2s!(IfAcmpeq, "if_acmp<cond>");
+insn_2s!(IfAcmpne, "if_acmp<cond>");
+insn_2s!(IfIcmpeq, "if_icmp<cond>");
+insn_2s!(IfIcmpge, "if_icmp<cond>");
+insn_2s!(IfIcmpgt, "if_icmp<cond>");
+insn_2s!(IfIcmple, "if_icmp<cond>");
+insn_2s!(IfIcmplt, "if_icmp<cond>");
+insn_2s!(IfIcmpne, "if_icmp<cond>");
+insn_2s!(Ifeq, "if<cond>");
+insn_2s!(Ifge, "if<cond>");
+insn_2s!(Ifgt, "if<cond>");
+insn_2s!(Ifle, "if<cond>");
+insn_2s!(Iflt, "if<cond>");
+insn_2s!(Ifne, "if<cond>");
+insn_2s!(Ifnonnull, "ifnonnull");
+insn_2s!(Ifnull, "ifnull");
+insn_2x!(Iinc, "iinc"); // TODO second is signed byte, or just store separate u8s
+insn_1!(Iload, "iload");
+insn_0!(Iload0, "iload_<n>");
+insn_0!(Iload1, "iload_<n>");
+insn_0!(Iload2, "iload_<n>");
+insn_0!(Iload3, "iload_<n>");
+insn_0!(Imul, "imul");
+insn_0!(Ineg, "ineg");
+insn_2!(Instanceof, "instanceof");
+insn_4x!(Invokedynamic, "invokedynamic");
+insn_4x!(Invokeinterface, "invokeinterface");
 insn_2!(Invokespecial, "invokespecial");
 insn_2!(Invokestatic, "invokestatic");
-// insn_n!(Invokevirtual, "invokevirtual");
-// insn_n!(Ior, "ior");
-// insn_n!(Irem, "irem");
-// insn_n!(Ireturn, "ireturn");
-// insn_n!(Ishl, "ishl");
-// insn_n!(Ishr, "ishr");
-// insn_n!(Istore, "istore");
-// insn_n!(Istore0, "istore_<n>");
-// insn_n!(Istore1, "istore_<n>");
-// insn_n!(Istore2, "istore_<n>");
-// insn_n!(Istore3, "istore_<n>");
-// insn_n!(Isub, "isub");
-// insn_n!(Iushr, "iushr");
-// insn_n!(Ixor, "ixor");
-// insn_n!(Jsr, "jsr");
-// insn_n!(JsrW, "jsr_w");
-// insn_n!(L2D, "l2d");
-// insn_n!(L2F, "l2f");
-// insn_n!(L2I, "l2i");
-// insn_n!(Ladd, "ladd");
-// insn_n!(Laload, "laload");
-// insn_n!(Land, "land");
-// insn_n!(Lastore, "lastore");
-// insn_n!(Lcmp, "lcmp");
-// insn_n!(Lconst0, "lconst_<l>");
-// insn_n!(Lconst1, "lconst_<l>");
+insn_2!(Invokevirtual, "invokevirtual");
+insn_0!(Ior, "ior");
+insn_0!(Irem, "irem");
+insn_0!(Ireturn, "ireturn");
+insn_0!(Ishl, "ishl");
+insn_0!(Ishr, "ishr");
+insn_1!(Istore, "istore");
+insn_0!(Istore0, "istore_<n>");
+insn_0!(Istore1, "istore_<n>");
+insn_0!(Istore2, "istore_<n>");
+insn_0!(Istore3, "istore_<n>");
+insn_0!(Isub, "isub");
+insn_0!(Iushr, "iushr");
+insn_0!(Ixor, "ixor");
+insn_2s!(Jsr, "jsr");
+insn_4s!(JsrW, "jsr_w");
+insn_0!(L2D, "l2d");
+insn_0!(L2F, "l2f");
+insn_0!(L2I, "l2i");
+insn_0!(Ladd, "ladd");
+insn_0!(Laload, "laload");
+insn_0!(Land, "land");
+insn_0!(Lastore, "lastore");
+insn_0!(Lcmp, "lcmp");
+insn_0!(Lconst0, "lconst_<l>");
+insn_0!(Lconst1, "lconst_<l>");
 insn_1!(Ldc, "ldc");
-// insn_n!(Ldc2W, "ldc2_w");
-// insn_n!(LdcW, "ldc_w");
-// insn_n!(Ldiv, "ldiv");
-// insn_n!(Lload, "lload");
-// insn_n!(Lload0, "lload_<n>");
-// insn_n!(Lload1, "lload_<n>");
-// insn_n!(Lload2, "lload_<n>");
-// insn_n!(Lload3, "lload_<n>");
-// insn_n!(Lmul, "lmul");
-// insn_n!(Lneg, "lneg");
+insn_2!(Ldc2W, "ldc2_w");
+insn_2!(LdcW, "ldc_w");
+insn_0!(Ldiv, "ldiv");
+insn_1!(Lload, "lload");
+insn_0!(Lload0, "lload_<n>");
+insn_0!(Lload1, "lload_<n>");
+insn_0!(Lload2, "lload_<n>");
+insn_0!(Lload3, "lload_<n>");
+insn_0!(Lmul, "lmul");
+insn_0!(Lneg, "lneg");
 // insn_n!(Lookupswitch, "lookupswitch");
-// insn_n!(Lor, "lor");
-// insn_n!(Lrem, "lrem");
-// insn_n!(Lreturn, "lreturn");
-// insn_n!(Lshl, "lshl");
-// insn_n!(Lshr, "lshr");
-// insn_n!(Lstore, "lstore");
-// insn_n!(Lstore0, "lstore_<n>");
-// insn_n!(Lstore1, "lstore_<n>");
-// insn_n!(Lstore2, "lstore_<n>");
-// insn_n!(Lstore3, "lstore_<n>");
-// insn_n!(Lsub, "lsub");
-// insn_n!(Lushr, "lushr");
-// insn_n!(Lxor, "lxor");
-// insn_n!(Monitorenter, "monitorenter");
-// insn_n!(Monitorexit, "monitorexit");
+insn_0!(Lor, "lor");
+insn_0!(Lrem, "lrem");
+insn_0!(Lreturn, "lreturn");
+insn_0!(Lshl, "lshl");
+insn_0!(Lshr, "lshr");
+insn_1!(Lstore, "lstore");
+insn_0!(Lstore0, "lstore_<n>");
+insn_0!(Lstore1, "lstore_<n>");
+insn_0!(Lstore2, "lstore_<n>");
+insn_0!(Lstore3, "lstore_<n>");
+insn_0!(Lsub, "lsub");
+insn_0!(Lushr, "lushr");
+insn_0!(Lxor, "lxor");
+insn_0!(Monitorenter, "monitorenter");
+insn_0!(Monitorexit, "monitorexit");
 // insn_n!(Multianewarray, "multianewarray");
 insn_2!(New, "new");
-// insn_n!(Newarray, "newarray");
-// insn_n!(Nop, "nop");
-// insn_n!(Pop, "pop");
-// insn_n!(Pop2, "pop2");
-// insn_n!(Putfield, "putfield");
+insn_1!(Newarray, "newarray");
+insn_0!(Nop, "nop");
+insn_0!(Pop, "pop");
+insn_0!(Pop2, "pop2");
+insn_2!(Putfield, "putfield");
 insn_2!(Putstatic, "putstatic");
-// insn_n!(Ret, "ret");
+insn_1!(Ret, "ret");
 insn_0!(Return, "return");
-// insn_n!(Saload, "saload");
-// insn_n!(Sastore, "sastore");
-// insn_n!(Sipush, "sipush");
-// insn_n!(Swap, "swap");
+insn_0!(Saload, "saload");
+insn_0!(Sastore, "sastore");
+insn_2!(Sipush, "sipush");
+insn_0!(Swap, "swap");
 // insn_n!(Tableswitch, "tableswitch");
 // insn_n!(Wide, "wide");
 
-// impl Aaload {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Aaload")
-//     }
-// }
+impl Aaload {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Aaload")
+    }
+}
 
-// impl Aastore {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Aastore")
-//     }
-// }
+impl Aastore {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Aastore")
+    }
+}
 
-// impl AconstNull {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction AconstNull")
-//     }
-// }
+impl AconstNull {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction AconstNull")
+    }
+}
 
 impl Aload {
-    fn do_execute(
-        &self,
-        frame: &mut JavaFrame,
-        thread: &JvmThreadState,
-    ) -> Result<ExecuteResult, InterpreterError> {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        let frame = interp.current_frame_mut();
         let value = frame.local_vars.load_reference(self.0 as usize)?;
         frame.operand_stack.push(value);
-        Ok(ExecuteResult::Continue)
+        Ok(PostExecuteAction::Continue)
     }
 }
 
@@ -369,1259 +418,764 @@ impl Aload3 {
     insn_delegate!(Aload(3));
 }
 
-// impl Anewarray {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Anewarray")
-//     }
-// }
+impl Anewarray {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Anewarray")
+    }
+}
 
-// impl Areturn {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Areturn")
-//     }
-// }
+impl Areturn {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Areturn")
+    }
+}
 
 impl Arraylength {
-    fn do_execute(
-        &self,
-        frame: &mut JavaFrame,
-        thread: &JvmThreadState,
-    ) -> Result<ExecuteResult, InterpreterError> {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
         todo!("instruction Arraylength")
     }
 }
 
-// impl Astore {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Astore")
-//     }
-// }
+impl Astore {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Astore")
+    }
+}
 
-// impl Astore0 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Astore0")
-//     }
-// }
+impl Astore0 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Astore0")
+    }
+}
 
-// impl Astore1 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Astore1")
-//     }
-// }
+impl Astore1 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Astore1")
+    }
+}
 
-// impl Astore2 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Astore2")
-//     }
-// }
+impl Astore2 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Astore2")
+    }
+}
 
-// impl Astore3 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Astore3")
-//     }
-// }
+impl Astore3 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Astore3")
+    }
+}
 
-// impl Athrow {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Athrow")
-//     }
-// }
+impl Athrow {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Athrow")
+    }
+}
 
-// impl Baload {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Baload")
-//     }
-// }
+impl Baload {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Baload")
+    }
+}
 
-// impl Bastore {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Bastore")
-//     }
-// }
+impl Bastore {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Bastore")
+    }
+}
 
 impl Bipush {
-    fn do_execute(
-        &self,
-        frame: &mut JavaFrame,
-        thread: &JvmThreadState,
-    ) -> Result<ExecuteResult, InterpreterError> {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
         todo!("instruction Bipush")
     }
 }
 
-// impl Caload {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Caload")
-//     }
-// }
+impl Caload {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Caload")
+    }
+}
 
-// impl Castore {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Castore")
-//     }
-// }
+impl Castore {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Castore")
+    }
+}
 
-// impl Checkcast {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Checkcast")
-//     }
-// }
+impl Checkcast {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Checkcast")
+    }
+}
 
-// impl D2F {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction D2F")
-//     }
-// }
+impl D2F {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction D2F")
+    }
+}
 
-// impl D2I {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction D2I")
-//     }
-// }
+impl D2I {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction D2I")
+    }
+}
 
-// impl D2L {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction D2L")
-//     }
-// }
+impl D2L {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction D2L")
+    }
+}
 
-// impl Dadd {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Dadd")
-//     }
-// }
+impl Dadd {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Dadd")
+    }
+}
 
-// impl Daload {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Daload")
-//     }
-// }
+impl Daload {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Daload")
+    }
+}
 
-// impl Dastore {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Dastore")
-//     }
-// }
+impl Dastore {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Dastore")
+    }
+}
 
-// impl Dcmpg {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Dcmpg")
-//     }
-// }
+impl Dcmpg {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Dcmpg")
+    }
+}
 
-// impl Dcmpl {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Dcmpl")
-//     }
-// }
+impl Dcmpl {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Dcmpl")
+    }
+}
 
-// impl Dconst0 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Dconst0")
-//     }
-// }
+impl Dconst0 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Dconst0")
+    }
+}
 
-// impl Dconst1 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Dconst1")
-//     }
-// }
+impl Dconst1 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Dconst1")
+    }
+}
 
-// impl Ddiv {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Ddiv")
-//     }
-// }
+impl Ddiv {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Ddiv")
+    }
+}
 
-// impl Dload {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Dload")
-//     }
-// }
+impl Dload {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Dload")
+    }
+}
 
-// impl Dload0 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Dload0")
-//     }
-// }
+impl Dload0 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Dload0")
+    }
+}
 
-// impl Dload1 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Dload1")
-//     }
-// }
+impl Dload1 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Dload1")
+    }
+}
 
-// impl Dload2 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Dload2")
-//     }
-// }
+impl Dload2 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Dload2")
+    }
+}
 
-// impl Dload3 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Dload3")
-//     }
-// }
+impl Dload3 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Dload3")
+    }
+}
 
-// impl Dmul {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Dmul")
-//     }
-// }
+impl Dmul {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Dmul")
+    }
+}
 
-// impl Dneg {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Dneg")
-//     }
-// }
+impl Dneg {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Dneg")
+    }
+}
 
-// impl Drem {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Drem")
-//     }
-// }
+impl Drem {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Drem")
+    }
+}
 
-// impl Dreturn {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Dreturn")
-//     }
-// }
+impl Dreturn {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Dreturn")
+    }
+}
 
-// impl Dstore {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Dstore")
-//     }
-// }
+impl Dstore {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Dstore")
+    }
+}
 
-// impl Dstore0 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Dstore0")
-//     }
-// }
+impl Dstore0 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Dstore0")
+    }
+}
 
-// impl Dstore1 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Dstore1")
-//     }
-// }
+impl Dstore1 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Dstore1")
+    }
+}
 
-// impl Dstore2 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Dstore2")
-//     }
-// }
+impl Dstore2 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Dstore2")
+    }
+}
 
-// impl Dstore3 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Dstore3")
-//     }
-// }
+impl Dstore3 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Dstore3")
+    }
+}
 
-// impl Dsub {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Dsub")
-//     }
-// }
+impl Dsub {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Dsub")
+    }
+}
 
 impl Dup {
-    fn do_execute(
-        &self,
-        frame: &mut JavaFrame,
-        thread: &JvmThreadState,
-    ) -> Result<ExecuteResult, InterpreterError> {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
         todo!("instruction Dup")
     }
 }
 
-// impl Dup2 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Dup2")
-//     }
-// }
+impl Dup2 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Dup2")
+    }
+}
 
-// impl Dup2X1 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Dup2X1")
-//     }
-// }
+impl Dup2X1 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Dup2X1")
+    }
+}
 
-// impl Dup2X2 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Dup2X2")
-//     }
-// }
+impl Dup2X2 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Dup2X2")
+    }
+}
 
-// impl DupX1 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction DupX1")
-//     }
-// }
+impl DupX1 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction DupX1")
+    }
+}
 
-// impl DupX2 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction DupX2")
-//     }
-// }
+impl DupX2 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction DupX2")
+    }
+}
 
-// impl F2D {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction F2D")
-//     }
-// }
+impl F2D {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction F2D")
+    }
+}
 
-// impl F2I {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction F2I")
-//     }
-// }
+impl F2I {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction F2I")
+    }
+}
 
-// impl F2L {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction F2L")
-//     }
-// }
+impl F2L {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction F2L")
+    }
+}
 
-// impl Fadd {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Fadd")
-//     }
-// }
+impl Fadd {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Fadd")
+    }
+}
 
-// impl Faload {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Faload")
-//     }
-// }
+impl Faload {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Faload")
+    }
+}
 
-// impl Fastore {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Fastore")
-//     }
-// }
+impl Fastore {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Fastore")
+    }
+}
 
-// impl Fcmpg {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Fcmpg")
-//     }
-// }
+impl Fcmpg {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Fcmpg")
+    }
+}
 
-// impl Fcmpl {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Fcmpl")
-//     }
-// }
+impl Fcmpl {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Fcmpl")
+    }
+}
 
-// impl Fconst0 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Fconst0")
-//     }
-// }
+impl Fconst0 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Fconst0")
+    }
+}
 
-// impl Fconst1 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Fconst1")
-//     }
-// }
+impl Fconst1 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Fconst1")
+    }
+}
 
-// impl Fconst2 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Fconst2")
-//     }
-// }
+impl Fconst2 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Fconst2")
+    }
+}
 
-// impl Fdiv {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Fdiv")
-//     }
-// }
+impl Fdiv {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Fdiv")
+    }
+}
 
-// impl Fload {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Fload")
-//     }
-// }
+impl Fload {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Fload")
+    }
+}
 
-// impl Fload0 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Fload0")
-//     }
-// }
+impl Fload0 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Fload0")
+    }
+}
 
-// impl Fload1 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Fload1")
-//     }
-// }
+impl Fload1 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Fload1")
+    }
+}
 
-// impl Fload2 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Fload2")
-//     }
-// }
+impl Fload2 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Fload2")
+    }
+}
 
-// impl Fload3 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Fload3")
-//     }
-// }
+impl Fload3 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Fload3")
+    }
+}
 
-// impl Fmul {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Fmul")
-//     }
-// }
+impl Fmul {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Fmul")
+    }
+}
 
-// impl Fneg {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Fneg")
-//     }
-// }
+impl Fneg {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Fneg")
+    }
+}
 
-// impl Frem {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Frem")
-//     }
-// }
+impl Frem {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Frem")
+    }
+}
 
-// impl Freturn {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Freturn")
-//     }
-// }
+impl Freturn {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Freturn")
+    }
+}
 
-// impl Fstore {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Fstore")
-//     }
-// }
+impl Fstore {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Fstore")
+    }
+}
 
-// impl Fstore0 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Fstore0")
-//     }
-// }
+impl Fstore0 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Fstore0")
+    }
+}
 
-// impl Fstore1 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Fstore1")
-//     }
-// }
+impl Fstore1 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Fstore1")
+    }
+}
 
-// impl Fstore2 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Fstore2")
-//     }
-// }
+impl Fstore2 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Fstore2")
+    }
+}
 
-// impl Fstore3 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Fstore3")
-//     }
-// }
+impl Fstore3 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Fstore3")
+    }
+}
 
-// impl Fsub {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Fsub")
-//     }
-// }
+impl Fsub {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Fsub")
+    }
+}
 
-// impl Getfield {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Getfield")
-//     }
-// }
+impl Getfield {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Getfield")
+    }
+}
 
-// impl Getstatic {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Getstatic")
-//     }
-// }
+impl Getstatic {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Getstatic")
+    }
+}
 
-// impl Goto {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Goto")
-//     }
-// }
+impl Goto {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Goto")
+    }
+}
 
-// impl GotoW {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction GotoW")
-//     }
-// }
+impl GotoW {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction GotoW")
+    }
+}
 
-// impl I2B {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction I2B")
-//     }
-// }
+impl I2B {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction I2B")
+    }
+}
 
-// impl I2C {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction I2C")
-//     }
-// }
+impl I2C {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction I2C")
+    }
+}
 
-// impl I2D {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction I2D")
-//     }
-// }
+impl I2D {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction I2D")
+    }
+}
 
-// impl I2F {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction I2F")
-//     }
-// }
+impl I2F {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction I2F")
+    }
+}
 
-// impl I2L {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction I2L")
-//     }
-// }
+impl I2L {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction I2L")
+    }
+}
 
-// impl I2S {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction I2S")
-//     }
-// }
+impl I2S {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction I2S")
+    }
+}
 
-// impl Iadd {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Iadd")
-//     }
-// }
+impl Iadd {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Iadd")
+    }
+}
 
-// impl Iaload {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Iaload")
-//     }
-// }
+impl Iaload {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Iaload")
+    }
+}
 
-// impl Iand {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Iand")
-//     }
-// }
+impl Iand {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Iand")
+    }
+}
 
-// impl Iastore {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Iastore")
-//     }
-// }
+impl Iastore {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Iastore")
+    }
+}
 
 impl Iconst0 {
     insn_delegate!(Bipush(0));
 }
 
-// impl Iconst1 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Iconst1")
-//     }
-// }
+impl Iconst1 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Iconst1")
+    }
+}
 
-// impl Iconst2 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Iconst2")
-//     }
-// }
+impl Iconst2 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Iconst2")
+    }
+}
 
-// impl Iconst3 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Iconst3")
-//     }
-// }
+impl Iconst3 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Iconst3")
+    }
+}
 
-// impl Iconst4 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Iconst4")
-//     }
-// }
+impl Iconst4 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Iconst4")
+    }
+}
 
-// impl Iconst5 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Iconst5")
-//     }
-// }
+impl Iconst5 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Iconst5")
+    }
+}
 
-// impl IconstM1 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction IconstM1")
-//     }
-// }
+impl IconstM1 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction IconstM1")
+    }
+}
 
-// impl Idiv {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Idiv")
-//     }
-// }
+impl Idiv {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Idiv")
+    }
+}
 
-// impl IfAcmpeq {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction IfAcmpeq")
-//     }
-// }
+impl IfAcmpeq {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction IfAcmpeq")
+    }
+}
 
-// impl IfAcmpne {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction IfAcmpne")
-//     }
-// }
+impl IfAcmpne {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction IfAcmpne")
+    }
+}
 
-// impl IfIcmpeq {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction IfIcmpeq")
-//     }
-// }
+impl IfIcmpeq {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction IfIcmpeq")
+    }
+}
 
-// impl IfIcmpge {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction IfIcmpge")
-//     }
-// }
+impl IfIcmpge {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction IfIcmpge")
+    }
+}
 
-// impl IfIcmpgt {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction IfIcmpgt")
-//     }
-// }
+impl IfIcmpgt {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction IfIcmpgt")
+    }
+}
 
-// impl IfIcmple {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction IfIcmple")
-//     }
-// }
+impl IfIcmple {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction IfIcmple")
+    }
+}
 
-// impl IfIcmplt {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction IfIcmplt")
-//     }
-// }
+impl IfIcmplt {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction IfIcmplt")
+    }
+}
 
-// impl IfIcmpne {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction IfIcmpne")
-//     }
-// }
+impl IfIcmpne {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction IfIcmpne")
+    }
+}
 
-// impl Ifeq {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Ifeq")
-//     }
-// }
+impl Ifeq {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Ifeq")
+    }
+}
 
-// impl Ifge {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Ifge")
-//     }
-// }
+impl Ifge {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Ifge")
+    }
+}
 
-// impl Ifgt {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Ifgt")
-//     }
-// }
+impl Ifgt {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Ifgt")
+    }
+}
 
-// impl Ifle {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Ifle")
-//     }
-// }
+impl Ifle {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Ifle")
+    }
+}
 
-// impl Iflt {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Iflt")
-//     }
-// }
+impl Iflt {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Iflt")
+    }
+}
 
-// impl Ifne {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Ifne")
-//     }
-// }
+impl Ifne {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Ifne")
+    }
+}
 
-// impl Ifnonnull {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Ifnonnull")
-//     }
-// }
+impl Ifnonnull {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Ifnonnull")
+    }
+}
 
-// impl Ifnull {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Ifnull")
-//     }
-// }
+impl Ifnull {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Ifnull")
+    }
+}
 
-// impl Iinc {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Iinc")
-//     }
-// }
+impl Iinc {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Iinc")
+    }
+}
 
-// impl Iload {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Iload")
-//     }
-// }
+impl Iload {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Iload")
+    }
+}
 
-// impl Iload0 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Iload0")
-//     }
-// }
+impl Iload0 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Iload0")
+    }
+}
 
-// impl Iload1 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Iload1")
-//     }
-// }
+impl Iload1 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Iload1")
+    }
+}
 
-// impl Iload2 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Iload2")
-//     }
-// }
+impl Iload2 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Iload2")
+    }
+}
 
-// impl Iload3 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Iload3")
-//     }
-// }
+impl Iload3 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Iload3")
+    }
+}
 
-// impl Imul {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Imul")
-//     }
-// }
+impl Imul {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Imul")
+    }
+}
 
-// impl Ineg {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Ineg")
-//     }
-// }
+impl Ineg {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Ineg")
+    }
+}
 
-// impl Instanceof {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Instanceof")
-//     }
-// }
+impl Instanceof {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Instanceof")
+    }
+}
 
-// impl Invokedynamic {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Invokedynamic")
-//     }
-// }
+impl Invokedynamic {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Invokedynamic")
+    }
+}
 
-// impl Invokeinterface {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Invokeinterface")
-//     }
-// }
+impl Invokeinterface {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Invokeinterface")
+    }
+}
 
 impl Invokespecial {
-    fn do_execute(
-        &self,
-        frame: &mut JavaFrame,
-        thread: &JvmThreadState,
-    ) -> Result<ExecuteResult, InterpreterError> {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
         todo!("instruction Invokespecial")
     }
 }
 
 impl Invokestatic {
-    fn do_execute(
-        &self,
-        frame: &mut JavaFrame,
-        thread: &JvmThreadState,
-    ) -> Result<ExecuteResult, InterpreterError> {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        let frame = interp.current_frame_mut();
         let entry = frame
             .class
             .constant_pool()
             .method_entry(self.0)
             .ok_or_else(|| InterpreterError::NotMethodRef(self.0))?;
         // TODO ensure class is not interface, method not abstract, not constructor
-
+        //
         // resolve class and method
-        let class = thread
+        let class = thread::get()
             .global()
             .class_loader()
             .load_class(&entry.class, frame.class.loader().clone())?;
-
+        //
         let method = Class::find_method_recursive(
             &class,
             &entry.name,
@@ -1637,282 +1191,173 @@ impl Invokestatic {
 
         // TODO typecheck args at verification time
         let arg_count = method.args().len();
-        thread.interpreter().execute_method_from_frame(
-            class,
-            method,
-            MethodArguments::Frame(frame, arg_count),
-        )?;
+        let callee_frame = Frame::new_with_caller(class, method, frame, arg_count)?;
+        interp.push_frame(callee_frame);
 
-        todo!("invoek static returned")
+        Ok(PostExecuteAction::MethodCall)
     }
 }
 
-// impl Invokevirtual {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Invokevirtual")
-//     }
-// }
+impl Invokevirtual {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Invokevirtual")
+    }
+}
 
-// impl Ior {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Ior")
-//     }
-// }
+impl Ior {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Ior")
+    }
+}
 
-// impl Irem {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Irem")
-//     }
-// }
+impl Irem {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Irem")
+    }
+}
 
-// impl Ireturn {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Ireturn")
-//     }
-// }
+impl Ireturn {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Ireturn")
+    }
+}
 
-// impl Ishl {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Ishl")
-//     }
-// }
+impl Ishl {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Ishl")
+    }
+}
 
-// impl Ishr {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Ishr")
-//     }
-// }
+impl Ishr {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Ishr")
+    }
+}
 
-// impl Istore {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Istore")
-//     }
-// }
+impl Istore {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Istore")
+    }
+}
 
-// impl Istore0 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Istore0")
-//     }
-// }
+impl Istore0 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Istore0")
+    }
+}
 
-// impl Istore1 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Istore1")
-//     }
-// }
+impl Istore1 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Istore1")
+    }
+}
 
-// impl Istore2 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Istore2")
-//     }
-// }
+impl Istore2 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Istore2")
+    }
+}
 
-// impl Istore3 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Istore3")
-//     }
-// }
+impl Istore3 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Istore3")
+    }
+}
 
-// impl Isub {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Isub")
-//     }
-// }
+impl Isub {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Isub")
+    }
+}
 
-// impl Iushr {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Iushr")
-//     }
-// }
+impl Iushr {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Iushr")
+    }
+}
 
-// impl Ixor {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Ixor")
-//     }
-// }
+impl Ixor {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Ixor")
+    }
+}
 
-// impl Jsr {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Jsr")
-//     }
-// }
+impl Jsr {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Jsr")
+    }
+}
 
-// impl JsrW {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction JsrW")
-//     }
-// }
+impl JsrW {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction JsrW")
+    }
+}
 
-// impl L2D {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction L2D")
-//     }
-// }
+impl L2D {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction L2D")
+    }
+}
 
-// impl L2F {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction L2F")
-//     }
-// }
+impl L2F {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction L2F")
+    }
+}
 
-// impl L2I {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction L2I")
-//     }
-// }
+impl L2I {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction L2I")
+    }
+}
 
-// impl Ladd {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Ladd")
-//     }
-// }
+impl Ladd {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Ladd")
+    }
+}
 
-// impl Laload {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Laload")
-//     }
-// }
+impl Laload {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Laload")
+    }
+}
 
-// impl Land {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Land")
-//     }
-// }
+impl Land {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Land")
+    }
+}
 
-// impl Lastore {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Lastore")
-//     }
-// }
+impl Lastore {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Lastore")
+    }
+}
 
-// impl Lcmp {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Lcmp")
-//     }
-// }
+impl Lcmp {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Lcmp")
+    }
+}
 
-// impl Lconst0 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Lconst0")
-//     }
-// }
+impl Lconst0 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Lconst0")
+    }
+}
 
-// impl Lconst1 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Lconst1")
-//     }
-// }
+impl Lconst1 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Lconst1")
+    }
+}
 
 impl Ldc {
-    fn do_execute(
-        &self,
-        frame: &mut JavaFrame,
-        thread: &JvmThreadState,
-    ) -> Result<ExecuteResult, InterpreterError> {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        let frame = interp.current_frame_mut();
+
         let pool = frame.class.constant_pool();
         let entry = pool
             .loadable_entry(self.0 as u16)
@@ -1939,426 +1384,270 @@ impl Ldc {
             e => unimplemented!("loadable entry {:?}", e),
         }
 
-        Ok(ExecuteResult::Continue)
+        Ok(PostExecuteAction::Continue)
     }
 }
 
-// impl Ldc2W {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Ldc2W")
-//     }
-// }
+impl Ldc2W {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Ldc2W")
+    }
+}
 
-// impl LdcW {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction LdcW")
-//     }
-// }
+impl LdcW {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction LdcW")
+    }
+}
 
-// impl Ldiv {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Ldiv")
-//     }
-// }
+impl Ldiv {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Ldiv")
+    }
+}
 
-// impl Lload {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Lload")
-//     }
-// }
+impl Lload {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Lload")
+    }
+}
 
-// impl Lload0 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Lload0")
-//     }
-// }
+impl Lload0 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Lload0")
+    }
+}
 
-// impl Lload1 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Lload1")
-//     }
-// }
+impl Lload1 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Lload1")
+    }
+}
 
-// impl Lload2 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Lload2")
-//     }
-// }
+impl Lload2 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Lload2")
+    }
+}
 
-// impl Lload3 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Lload3")
-//     }
-// }
+impl Lload3 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Lload3")
+    }
+}
 
-// impl Lmul {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Lmul")
-//     }
-// }
+impl Lmul {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Lmul")
+    }
+}
 
-// impl Lneg {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Lneg")
-//     }
-// }
+impl Lneg {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Lneg")
+    }
+}
 
 // impl Lookupswitch {
-//     fn do_execute(
+//     fn execute(
 //         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
+//         interp: &mut InterpreterState
+//     ) -> ExecuteResult {
 //         todo!("instruction Lookupswitch")
 //     }
 // }
 
-// impl Lor {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Lor")
-//     }
-// }
+impl Lor {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Lor")
+    }
+}
 
-// impl Lrem {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Lrem")
-//     }
-// }
+impl Lrem {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Lrem")
+    }
+}
 
-// impl Lreturn {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Lreturn")
-//     }
-// }
+impl Lreturn {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Lreturn")
+    }
+}
 
-// impl Lshl {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Lshl")
-//     }
-// }
+impl Lshl {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Lshl")
+    }
+}
 
-// impl Lshr {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Lshr")
-//     }
-// }
+impl Lshr {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Lshr")
+    }
+}
 
-// impl Lstore {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Lstore")
-//     }
-// }
+impl Lstore {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Lstore")
+    }
+}
 
-// impl Lstore0 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Lstore0")
-//     }
-// }
+impl Lstore0 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Lstore0")
+    }
+}
 
-// impl Lstore1 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Lstore1")
-//     }
-// }
+impl Lstore1 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Lstore1")
+    }
+}
 
-// impl Lstore2 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Lstore2")
-//     }
-// }
+impl Lstore2 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Lstore2")
+    }
+}
 
-// impl Lstore3 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Lstore3")
-//     }
-// }
+impl Lstore3 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Lstore3")
+    }
+}
 
-// impl Lsub {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Lsub")
-//     }
-// }
+impl Lsub {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Lsub")
+    }
+}
 
-// impl Lushr {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Lushr")
-//     }
-// }
+impl Lushr {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Lushr")
+    }
+}
 
-// impl Lxor {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Lxor")
-//     }
-// }
+impl Lxor {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Lxor")
+    }
+}
 
-// impl Monitorenter {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Monitorenter")
-//     }
-// }
+impl Monitorenter {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Monitorenter")
+    }
+}
 
-// impl Monitorexit {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Monitorexit")
-//     }
-// }
+impl Monitorexit {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Monitorexit")
+    }
+}
 
 // impl Multianewarray {
-//     fn do_execute(
+//     fn execute(
 //         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
+//         interp: &mut InterpreterState
+//     ) -> ExecuteResult {
 //         todo!("instruction Multianewarray")
 //     }
 // }
 
 impl New {
-    fn do_execute(
-        &self,
-        frame: &mut JavaFrame,
-        thread: &JvmThreadState,
-    ) -> Result<ExecuteResult, InterpreterError> {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
         todo!("instruction New")
     }
 }
 
-// impl Newarray {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Newarray")
-//     }
-// }
+impl Newarray {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Newarray")
+    }
+}
 
-// impl Nop {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Nop")
-//     }
-// }
+impl Nop {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Nop")
+    }
+}
 
-// impl Pop {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Pop")
-//     }
-// }
+impl Pop {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Pop")
+    }
+}
 
-// impl Pop2 {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Pop2")
-//     }
-// }
+impl Pop2 {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Pop2")
+    }
+}
 
-// impl Putfield {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Putfield")
-//     }
-// }
+impl Putfield {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Putfield")
+    }
+}
 
 impl Putstatic {
-    fn do_execute(
-        &self,
-        frame: &mut JavaFrame,
-        thread: &JvmThreadState,
-    ) -> Result<ExecuteResult, InterpreterError> {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
         todo!("instruction Putstatic")
     }
 }
 
-// impl Ret {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Ret")
-//     }
-// }
+impl Ret {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Ret")
+    }
+}
 
 impl Return {
-    fn do_execute(
-        &self,
-        frame: &mut JavaFrame,
-        thread: &JvmThreadState,
-    ) -> Result<ExecuteResult, InterpreterError> {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
         todo!("instruction Return")
     }
 }
 
-// impl Saload {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Saload")
-//     }
-// }
+impl Saload {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Saload")
+    }
+}
 
-// impl Sastore {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Sastore")
-//     }
-// }
+impl Sastore {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Sastore")
+    }
+}
 
-// impl Sipush {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Sipush")
-//     }
-// }
+impl Sipush {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Sipush")
+    }
+}
 
-// impl Swap {
-//     fn do_execute(
-//         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
-//         todo!("instruction Swap")
-//     }
-// }
+impl Swap {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        todo!("instruction Swap")
+    }
+}
 
 // impl Tableswitch {
-//     fn do_execute(
+//     fn execute(
 //         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
+//         interp: &mut InterpreterState
+//     ) -> ExecuteResult {
 //         todo!("instruction Tableswitch")
 //     }
 // }
 
 // impl Wide {
-//     fn do_execute(
+//     fn execute(
 //         &self,
-//         frame: &mut JavaFrame,
-//         thread: &JvmThreadState,
-//     ) -> Result<ExecuteResult, InterpreterError> {
+//         interp: &mut InterpreterState
+//     ) -> ExecuteResult {
 //         todo!("instruction Wide")
 //     }
 // }

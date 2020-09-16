@@ -136,6 +136,10 @@ impl JvmThreadState {
         debug!("set exception: {:?}", current.as_ref().unwrap());
     }
 
+    pub fn exception(&self) -> Option<VmRef<Throwable>> {
+        self.exception.borrow().clone()
+    }
+
     pub fn thread(&self) -> ThreadId {
         self.thread_handle
     }

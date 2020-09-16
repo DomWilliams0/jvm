@@ -10,7 +10,7 @@ pub trait Entry<'c>: Sized {
 impl<'c> Entry<'c> for Utf8Item<'c> {
     const TAG: Tag = Tag::Utf8;
 
-    fn from_item(item: &Item<'c>, pool: &ConstantPool<'c>) -> ClassResult<Self> {
+    fn from_item(item: &Item<'c>, _: &ConstantPool<'c>) -> ClassResult<Self> {
         match item {
             Item::Utf8(s) => Ok(Utf8Item { string: *s }),
             _ => Err(ClassError::WrongTag {

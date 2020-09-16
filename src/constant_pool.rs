@@ -5,6 +5,7 @@ use std::fmt::{Debug, Formatter};
 
 #[derive(Debug)]
 pub enum Entry {
+    // TODO store interned string instance here
     String(MString),
     MethodRef(MethodRef),
 }
