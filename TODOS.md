@@ -1,4 +1,4 @@
-# TODOs (81)
+# TODOs (90)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -12,17 +12,18 @@
    * `// TODO float might need extra parsing`
    * `// TODO double might need extra parsing`
    * `// TODO is_loadable()`
- * [cafebabe/src/types.rs](cafebabe/src/types.rs) (4)
+ * [cafebabe/src/types.rs](cafebabe/src/types.rs) (5)
    * `// TODO resolve constant pool entries`
    * `// TODO reduce duplication`
    * `// TODO validate combinations`
    * `// TODO validate combinations`
+   * `// TODO dont truncate to make this cheaper`
  * [src/alloc.rs](src/alloc.rs) (4)
    * `// TODO gc arena`
    * `// TODO actually intern strings`
    * `// TODO methods on VmRef newtype`
    * `// TODO oom error`
- * [src/class.rs](src/class.rs) (21)
+ * [src/class.rs](src/class.rs) (24)
    * `// TODO store dimensions`
    * `/// TODO weak reference for cyclic?`
    * `// TODO arrays should live on the GC java heap`
@@ -31,17 +32,20 @@
    * `// TODO get classloader reference from tls instead of parameter`
    * `// TODO verify constant pool offsets so we can raise a single classformaterror then trust it`
    * `// TODO preparation? https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-5.html#jvms-5.4.2`
+   * `// TODO precalculate capacity`
+   * `// TODO no need to iterate interfaces when looking for instance fields, add separate iterator method`
+   * `// TODO are static fields treated and resolved the same as instance fields?`
    * `// TODO do verification first to throw ClassFormatErrors, then this should not throw any classformaterrors`
    * `// TODO Every array type implements the interfaces Cloneable and java.io.Serializable.`
    * `// update ptr - TODO use Arc::get_unchecked_mut when it is stable`
    * `// TODO set obj->vmdata field to vm_class`
    * `// TODO version to look in (super)interfaces too`
    * `// TODO initialise final static fields from ConstantValue attrs`
+   * `// TODO only do this if its a class and not an iface`
    * `// TODO wrap exception here and return the proper type`
    * `// TODO proper exception type here`
    * `// TODO specific exception type e.g. ExceptionInInitializerError`
    * `// TODO just allocate an object instead of this unsafeness`
-   * `// TODO inherit superclass fields too`
    * `// TODO limit array length to i32::MAX somewhere`
    * `// TODO not quite correct toString`
  * [src/classloader.rs](src/classloader.rs) (11)
@@ -90,9 +94,15 @@
  * [src/properties.rs](src/properties.rs) (2)
    * `// TODO remaining static ones`
    * `// TODO dynamic ones e.g. user.home`
+ * [src/storage.rs](src/storage.rs) (5)
+   * `// TODO field storage should be inline in VmRef<Object>`
+   * `// TODO compact field storage i.e. not using DataValue enum`
+   * `// TODO phantom generic type to tag this as Static or Instance fields`
+   * `#[derive(Debug)] // TODO fieldstorage better debug impl`
+   * `// TODO test this once structure is settled`
  * [src/thread.rs](src/thread.rs) (1)
    * `exception: RefCell<Option<VmRef<Throwable /* TODO vmobject */>>>,`
  * [src/types.rs](src/types.rs) (3)
    * `// TODO more efficient packing of data types, dont want huge enum discriminant taking up all the space`
    * `// TODO interned strings for class names?`
-   * `// TODO gross that we always need an allocation for reference type - Cow for str and store array dim inline?`
+   * `// TODO gross that we always need an allocation for reference type - Cow/vmref<class> for class and store array dim inline?`

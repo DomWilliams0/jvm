@@ -1,6 +1,6 @@
 use crate::error::Throwables;
 use crate::interpreter::insn::Opcode;
-use crate::types::DataValue;
+use crate::types::{DataType, DataValue};
 use cafebabe::mutf8::MString;
 use thiserror::*;
 
@@ -31,6 +31,9 @@ pub enum InterpreterError {
         desc: MString,
     },
 
+    #[error("The field {name:?}:{desc:?} could not be resolved")]
+    FieldNotFound { name: MString, desc: DataType },
+
     #[error("Not enough operands on stack to pop, expected {expected} but only have {actual}")]
     NotEnoughArgs { expected: usize, actual: usize },
 
@@ -44,7 +47,7 @@ pub enum InterpreterError {
     UninitialisedLoad(usize),
 
     /// Not really an error
-    #[error("Exception raised")]
+    #[error("Exception raised: {0:?}")]
     ExceptionRaised(Throwables),
 }
 

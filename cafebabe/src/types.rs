@@ -247,6 +247,7 @@ impl AccessFlags for FieldAccessFlags {
 
 impl AccessFlags for MethodAccessFlags {
     fn common(self) -> CommonAccessFlags {
+        // TODO dont truncate to make this cheaper
         CommonAccessFlags::from_bits_truncate(self.bits)
     }
 }

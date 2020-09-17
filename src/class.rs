@@ -17,7 +17,7 @@ use cafebabe::mutf8::mstr;
 use crate::constant_pool::RuntimeConstantPool;
 use crate::interpreter::{Frame, InterpreterError, InterpreterResult};
 use crate::monitor::{Monitor, MonitorGuard};
-use crate::storage::{FieldMapStorage, Storage};
+use crate::storage::{FieldId, FieldStorage, FieldStorageLayout, FieldStorageLayoutBuilder};
 use crate::thread;
 use cafebabe::attribute::Code;
 use itertools::Itertools;
@@ -59,7 +59,10 @@ pub struct Class {
 
     constant_pool: RuntimeConstantPool,
 
-    static_field_values: FieldMapStorage,
+    static_fields_layout: FieldStorageLayout,
+    static_fields_values: FieldStorage,
+
+    instance_fields_layout: FieldStorageLayout,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -77,7 +80,7 @@ pub enum ClassState {
 struct LockedClassState(UnsafeCell<ClassState>);
 
 enum ObjectStorage {
-    Fields(FieldMapStorage),
+    Fields(FieldStorage),
     // TODO arrays should live on the GC java heap
     // TODO arrays should be specialised and not hold massive DataValues
     Array(Mutex<Box<[DataValue]>>),
@@ -99,6 +102,11 @@ pub struct Field {
     desc: DataType,
     flags: FieldAccessFlags,
 }
+#[derive(Copy, Clone)]
+pub enum FieldSearchType {
+    Instance,
+    Static,
+}
 
 #[derive(Debug)]
 pub struct Method {
@@ -119,6 +127,11 @@ pub enum MethodLookupResult {
     Found(VmRef<Method>),
     FoundMultiple,
     NotFound,
+}
+
+enum SuperIteration {
+    KeepGoing,
+    Stop,
 }
 
 // TODO get classloader reference from tls instead of parameter
@@ -283,20 +296,47 @@ impl Class {
             vec
         };
 
+        // initialise field layout
+        let (static_fields_layout, instance_fields_layout) = {
+            // TODO precalculate capacity
+            let mut static_builder = FieldStorageLayoutBuilder::with_capacity(4, 16);
+            let mut instance_builder = FieldStorageLayoutBuilder::with_capacity(4, 16);
+
+            // add fields from supers in resolution order
+            // TODO no need to iterate interfaces when looking for instance fields, add separate iterator method
+            Self::field_resolution_order_with(
+                &fields,
+                &interfaces,
+                super_class.as_ref(),
+                |fields| {
+                    instance_builder.add_fields_from_class(fields.iter().filter_map(|f| {
+                        if !f.flags.is_static() {
+                            trace!("registering instance field {:?}", f);
+                            Some(f.desc.clone())
+                        } else {
+                            None
+                        }
+                    }));
+
+                    // TODO are static fields treated and resolved the same as instance fields?
+                    static_builder.add_fields_from_class(fields.iter().filter_map(|f| {
+                        if f.flags.is_static() {
+                            trace!("registering static field {:?}", f);
+                            Some(f.desc.clone())
+                        } else {
+                            None
+                        }
+                    }));
+                    SuperIteration::KeepGoing
+                },
+            );
+
+            (static_builder.build(), instance_builder.build())
+        };
+
         // preparation step - initialise static fields
         // TODO do verification first to throw ClassFormatErrors, then this should not throw any classformaterrors
-        let static_field_values = {
-            let mut static_fields = FieldMapStorage::with_capacity(
-                fields.iter().filter(|f| f.flags.is_static()).count(),
-            );
-            for field in &fields {
-                if field.flags.is_static() {
-                    static_fields.put(field.name.clone(), field.desc.clone().default_value());
-                }
-            }
-
-            static_fields
-        };
+        let static_fields_values = static_fields_layout.new_storage();
 
         let constant_pool =
             RuntimeConstantPool::from_cafebabe(loaded.constant_pool()).map_err(|e| {
@@ -317,7 +357,9 @@ impl Class {
             methods,
             access,
             constant_pool,
-            static_field_values,
+            instance_fields_layout,
+            static_fields_layout,
+            static_fields_values,
         ))
     }
 
@@ -355,7 +397,9 @@ impl Class {
             Vec::new(),
             access_flags,
             RuntimeConstantPool::empty(),
-            FieldMapStorage::with_capacity(0),
+            FieldStorageLayout::empty(),
+            FieldStorageLayout::empty(),
+            FieldStorage::empty(),
         );
 
         Ok(cls)
@@ -381,7 +425,9 @@ impl Class {
             Vec::new(),
             access_flags,
             RuntimeConstantPool::empty(),
-            FieldMapStorage::with_capacity(0),
+            FieldStorageLayout::empty(),
+            FieldStorageLayout::empty(),
+            FieldStorage::empty(),
         );
 
         Ok(cls)
@@ -399,7 +445,9 @@ impl Class {
         methods: Vec<VmRef<Method>>,
         access_flags: ClassAccessFlags,
         constant_pool: RuntimeConstantPool,
-        static_field_values: FieldMapStorage,
+        instance_fields_layout: FieldStorageLayout,
+        static_fields_layout: FieldStorageLayout,
+        static_fields_values: FieldStorage,
     ) -> VmRef<Class> {
         debug_assert!(super_class.is_none() == (name.as_bytes() == b"java/lang/Object"));
 
@@ -415,7 +463,9 @@ impl Class {
             interfaces,
             methods,
             constant_pool,
-            static_field_values,
+            instance_fields_layout,
+            static_fields_layout,
+            static_fields_values,
             fields,
         });
 
@@ -512,6 +562,55 @@ impl Class {
         None
     }
 
+    fn find_field_index_with(
+        fields: &[Field],
+        name: &mstr,
+        desc: &DataType,
+        search: FieldSearchType,
+    ) -> Option<usize> {
+        fields
+            .iter()
+            .filter(|f| search.matches(f.flags)) // index should skip non-instance/static fields
+            .position(|f| f.desc == *desc && f.name.as_mstr() == name)
+    }
+
+    fn find_field_index(
+        &self,
+        name: &mstr,
+        desc: &DataType,
+        search: FieldSearchType,
+    ) -> Option<usize> {
+        Self::find_field_index_with(&self.fields, name, desc, search)
+    }
+
+    pub fn find_field_recursive(
+        &self,
+        name: &mstr,
+        desc: &DataType,
+        ty: FieldSearchType,
+    ) -> Option<FieldId> {
+        let mut fieldid = None;
+        let mut cls_idx = 0;
+        self.field_resolution_order(|fields| {
+            if let Some(idx) = Self::find_field_index_with(fields, name, desc, ty) {
+                fieldid = Some(idx);
+                SuperIteration::Stop
+            } else {
+                cls_idx += 1;
+                SuperIteration::KeepGoing
+            }
+        });
+
+        fieldid.and_then(|f| {
+            let layout = match ty {
+                FieldSearchType::Instance => &self.instance_fields_layout,
+                FieldSearchType::Static => todo!("get static field"),
+            };
+
+            layout.get_id(cls_idx, f)
+        })
+    }
+
     pub fn name(&self) -> &mstr {
         &self.name
     }
@@ -587,16 +686,17 @@ impl Class {
                 // TODO initialise final static fields from ConstantValue attrs
 
                 // recursively initialise super class, interfaces and super interfaces
+                // TODO only do this if its a class and not an iface
                 let mut result = Ok(());
-                self.with_supers(&mut |cls| {
+                self.with_supers(|cls| {
                     trace!("initialising super: {:?}", cls.name);
 
                     if let Err(e) = cls.ensure_init() {
                         debug!("super class initialisation failed: {:?}", e);
                         result = Err(e);
-                        false // stop early
+                        SuperIteration::Stop
                     } else {
-                        true
+                        SuperIteration::KeepGoing
                     }
                 });
 
@@ -669,26 +769,97 @@ impl Class {
         }
     }
 
-    fn with_supers(&self, f: &mut impl FnMut(&VmRef<Class>) -> bool) {
-        let mut keep_going = true;
+    fn with_supers(&self, mut f: impl FnMut(&VmRef<Class>) -> SuperIteration) {
+        self.__with_supers_recurse(&mut f);
+    }
 
-        if let Some(super_class) = self.super_class.as_ref() {
-            keep_going = f(super_class);
+    fn __with_supers_recurse(
+        &self,
+        f: &mut impl FnMut(&VmRef<Class>) -> SuperIteration,
+    ) -> SuperIteration {
+        let mut keep_going = SuperIteration::KeepGoing;
+
+        // super first
+        if let Some(super_class) = self.super_class.clone() {
+            keep_going = Self::__with_supers_recurse(&super_class, f);
         }
 
+        // then recurse on direct superinterfaces
         let mut ifaces = self.interfaces.iter();
-        while keep_going {
+        while matches!(keep_going, SuperIteration::KeepGoing) {
             match ifaces.next() {
                 Some(iface) => {
                     keep_going = f(iface);
 
-                    if keep_going {
-                        iface.with_supers(f);
+                    if matches!(keep_going, SuperIteration::KeepGoing) {
+                        keep_going = Self::__with_supers_recurse(iface, f);
                     }
                 }
                 None => break,
             }
         }
+
+        keep_going
+    }
+
+    fn field_resolution_order(&self, mut f: impl FnMut(&[Field]) -> SuperIteration) {
+        Self::__field_resolution_order_recurse(
+            &self.fields,
+            &self.interfaces,
+            self.super_class.as_ref(),
+            &mut f,
+        );
+    }
+
+    fn field_resolution_order_with(
+        fields: &[Field],
+        interfaces: &[VmRef<Class>],
+        super_class: Option<&VmRef<Class>>,
+        mut f: impl FnMut(&[Field]) -> SuperIteration,
+    ) {
+        Self::__field_resolution_order_recurse(fields, interfaces, super_class, &mut f);
+    }
+
+    fn __field_resolution_order_recurse(
+        fields: &[Field],
+        interfaces: &[VmRef<Class>],
+        super_class: Option<&VmRef<Class>>,
+        f: &mut impl FnMut(&[Field]) -> SuperIteration,
+    ) -> SuperIteration {
+        let mut keep_going;
+
+        // own fields first
+        keep_going = f(fields);
+
+        // then recurse on direct super interfaces
+        let mut ifaces = interfaces.iter();
+        while matches!(keep_going, SuperIteration::KeepGoing) {
+            match ifaces.next() {
+                Some(iface) => {
+                    keep_going = Self::__field_resolution_order_recurse(
+                        &iface.fields,
+                        &iface.interfaces,
+                        iface.super_class.as_ref(),
+                        f,
+                    );
+                }
+                None => break,
+            }
+        }
+
+        // then recurse on super
+        if matches!(keep_going, SuperIteration::KeepGoing) {
+            if let Some(super_class) = super_class {
+                return Self::__field_resolution_order_recurse(
+                    &super_class.fields,
+                    &super_class.interfaces,
+                    super_class.super_class.as_ref(),
+                    f,
+                );
+            }
+        }
+
+        keep_going
     }
 }
 
@@ -708,7 +879,7 @@ impl Object {
         // TODO just allocate an object instead of this unsafeness
         let null_class = MaybeUninit::zeroed();
         let null_class = unsafe { null_class.assume_init() };
-        let storage = ObjectStorage::Fields(FieldMapStorage::with_capacity(0));
+        let storage = ObjectStorage::Fields(FieldStorage::empty());
         Object {
             class: null_class,
             monitor: Monitor::new(),
@@ -725,15 +896,7 @@ impl Object {
     }
 
     pub(crate) fn new(class: VmRef<Class>) -> Self {
-        // TODO inherit superclass fields too
-        let fields = {
-            let mut map = FieldMapStorage::with_capacity(class.fields.len());
-            for field in class.fields.iter() {
-                map.put(field.name.clone(), field.desc.clone().default_value());
-            }
-
-            map
-        };
+        let fields = class.instance_fields_layout.new_storage();
         Self::with_storage(class, ObjectStorage::Fields(fields))
     }
 
@@ -786,8 +949,23 @@ impl Object {
 
         // TODO limit array length to i32::MAX somewhere
 
-        fields.ensure_set(
-            mstr::from_utf8(b"value").as_ref(),
+        let set_field = |name, value: DataValue| -> VmResult<()> {
+            let name = mstr::from_utf8(name);
+            let datatype = value.data_type();
+            let field_id = string_instance
+                .find_field_in_this_only(name.as_ref(), &datatype, FieldSearchType::Instance)
+                .ok_or_else(|| Throwables::Other("java/lang/NoSuchFieldError"))?;
+
+            debug!(
+                "setting string field {:?} ({:?}) to {:?}",
+                name, field_id, value
+            );
+            fields.ensure_set(field_id, value);
+            Ok(())
+        };
+
+        set_field(
+            b"value",
             DataValue::Reference(
                 ReferenceDataType::Array {
                     dims: 1,
@@ -795,12 +973,9 @@ impl Object {
                 },
                 char_array,
             ),
-        );
+        )?;
 
-        fields.ensure_set(
-            mstr::from_utf8(b"count").as_ref(),
-            DataValue::Int(length as i32),
-        );
+        set_field(b"count", DataValue::Int(length as i32))?;
 
         Ok(string_instance)
     }
@@ -821,7 +996,7 @@ impl Object {
         self.monitor.enter()
     }
 
-    fn fields(&self) -> Option<&FieldMapStorage> {
+    fn fields(&self) -> Option<&FieldStorage> {
         match &self.storage {
             ObjectStorage::Fields(f) => Some(f),
             _ => None,
@@ -835,20 +1010,21 @@ impl Object {
         }
     }
 
-    pub fn get_field_by_name<F: From<DataValue>>(&self, name: &mstr) -> Option<F> {
-        self.fields().and_then(|f| f.get(name).map(F::from))
+    pub fn find_field_in_this_only(
+        &self,
+        name: &mstr,
+        desc: &DataType,
+        search: FieldSearchType,
+    ) -> Option<FieldId> {
+        let field_index = self.class.find_field_index(name, desc, search)?;
+        self.class.instance_fields_layout.get_self_id(field_index)
     }
 
-    /// Panics if no field with given name
-    pub fn set_field_by_name<F: Into<DataValue>>(&self, name: &mstr, value: F) {
-        let value = value.into();
-        debug!("setting field {:?} value to {:?}", name, value);
-        if let Some(f) = self.fields() {
-            f.ensure_set(name, value)
-        } else {
-            warn!("object has no field storage");
-        }
-    }
+    // pub fn field(&self, field_id: FieldId) -> &DataValue {
+    //     debug_assert!(!self.is_null());
+    //
+    //     todo!()
+    // }
 }
 
 impl Debug for Object {
@@ -893,5 +1069,12 @@ unsafe impl Sync for LockedClassState {}
 impl Debug for LockedClassState {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "LockedClassState")
+    }
+}
+
+impl FieldSearchType {
+    pub fn matches(&self, flags: FieldAccessFlags) -> bool {
+        let is_static = matches!(self, Self::Static);
+        is_static == flags.is_static()
     }
 }

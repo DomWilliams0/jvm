@@ -29,7 +29,7 @@ pub enum PrimitiveDataType {
 }
 
 // TODO interned strings for class names?
-// TODO gross that we always need an allocation for reference type - Cow for str and store array dim inline?
+// TODO gross that we always need an allocation for reference type - Cow/vmref<class> for class and store array dim inline?
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum ReferenceDataType {
     Class(NativeString),
@@ -163,7 +163,7 @@ impl DataValue {
         DataValue::Reference(reference_data, reference)
     }
 
-    pub fn r#type(&self) -> DataType {
+    pub fn data_type(&self) -> DataType {
         match self {
             DataValue::Boolean(_) => DataType::Primitive(PrimitiveDataType::Boolean),
             DataValue::Byte(_) => DataType::Primitive(PrimitiveDataType::Byte),
@@ -175,6 +175,13 @@ impl DataValue {
             DataValue::Double(_) => DataType::Primitive(PrimitiveDataType::Double),
             DataValue::ReturnAddress(_) => DataType::ReturnAddress,
             DataValue::Reference(ty, _) => DataType::Reference(ty.clone()),
+        }
+    }
+
+    pub fn as_int(&self) -> Option<i32> {
+        match self {
+            DataValue::Int(i) => Some(*i),
+            _ => None,
         }
     }
 }

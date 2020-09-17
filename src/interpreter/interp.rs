@@ -2,7 +2,7 @@ use crate::alloc::VmRef;
 
 use crate::error::Throwable;
 use crate::interpreter::frame::{Frame, FrameStack, JavaFrame};
-use crate::interpreter::insn::{get_insn, InstructionBlob, Opcode, PostExecuteAction, Putstatic};
+use crate::interpreter::insn::{get_insn, InstructionBlob, PostExecuteAction};
 use crate::thread;
 use std::cell::{RefCell, RefMut};
 
