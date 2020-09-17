@@ -6,8 +6,7 @@
  * [cafebabe/src/constant_pool/attribute.rs](cafebabe/src/constant_pool/attribute.rs) (2)
    * `// TODO exception handlers`
    * `// TODO attributes`
- * [cafebabe/src/constant_pool/item.rs](cafebabe/src/constant_pool/item.rs) (5)
-   * `// TODO these are Entries not Items`
+ * [cafebabe/src/constant_pool/item.rs](cafebabe/src/constant_pool/item.rs) (4)
    * `// TODO handle specific versions tags were introduced`
    * `// TODO float might need extra parsing`
    * `// TODO double might need extra parsing`
@@ -62,8 +61,9 @@
    * `// TODO newtype VmRef should handle equality`
  * [src/classpath.rs](src/classpath.rs) (1)
    * `// TODO enum for path type, zip/jar or directory`
- * [src/constant_pool.rs](src/constant_pool.rs) (2)
+ * [src/constant_pool.rs](src/constant_pool.rs) (3)
    * `// TODO store interned string instance here`
+   * `// TODO method and field refs should be resolved vtable indices instead of loads of strings`
    * `// TODO A numeric constant of type long or double OR A symbolic reference to a`
  * [src/error.rs](src/error.rs) (3)
    * `// TODO reference to class instead of name`

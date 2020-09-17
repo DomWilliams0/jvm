@@ -279,13 +279,14 @@ impl InsnReader<'_> {
     }
 
     pub fn read_u8s(&mut self) -> Option<(u8, u8)> {
-        let end = self.pc + 2;
-        if end > self.bytes.len() {
+        let pc = self.pc;
+        self.pc += 2;
+        if self.pc > self.bytes.len() {
             None
         } else {
             let (a, b) = unsafe {
-                let a = self.bytes.get_unchecked(self.pc);
-                let b = self.bytes.get_unchecked(self.pc + 1);
+                let a = self.bytes.get_unchecked(pc);
+                let b = self.bytes.get_unchecked(pc + 1);
                 (*a, *b)
             };
 
@@ -306,15 +307,16 @@ impl InsnReader<'_> {
     }
 
     pub fn read_i32(&mut self) -> Option<i32> {
-        let end = self.pc + 4;
-        if end > self.bytes.len() {
+        let pc = self.pc;
+        self.pc += 4;
+        if self.pc > self.bytes.len() {
             None
         } else {
             let (a, b, c, d) = unsafe {
-                let a = self.bytes.get_unchecked(self.pc);
-                let b = self.bytes.get_unchecked(self.pc + 1);
-                let c = self.bytes.get_unchecked(self.pc + 2);
-                let d = self.bytes.get_unchecked(self.pc + 3);
+                let a = self.bytes.get_unchecked(pc);
+                let b = self.bytes.get_unchecked(pc + 1);
+                let c = self.bytes.get_unchecked(pc + 2);
+                let d = self.bytes.get_unchecked(pc + 3);
                 (*a, *b, *c, *d)
             };
 
@@ -326,42 +328,39 @@ impl InsnReader<'_> {
 
 #[cfg(test)]
 mod tests {
+    use crate::interpreter::insn::bytecode::InsnReader;
+    use crate::interpreter::insn::{get_insn, Aload, Getfield, InstructionBlob, Opcode};
 
-    /*    #[test]
-        fn reader() {
-            let bytes = vec![1, 2, 3, 4, 5];
-            let mut reader = Reader {
-                stream: bytes.as_slice(),
-                cursor: 0,
-            };
+    #[test]
+    fn reader() {
+        let bytes = vec![1, 2, 3, 4, 5];
+        let mut reader = InsnReader {
+            bytes: bytes.as_slice(),
+            pc: 0,
+        };
 
-            assert_eq!(reader.read_1().unwrap(), 1);
-            assert_eq!(reader.read_1().unwrap(), 2);
-            assert_eq!(reader.read_1().unwrap(), 3);
-            assert_eq!(reader.read_n(2).unwrap(), [4, 5]);
-        }
+        assert_eq!(reader.read_u8().unwrap(), 1);
+        assert_eq!(reader.read_u16().unwrap(), 0x0203);
+        assert_eq!(reader.read_u8s().unwrap(), (4, 5));
+    }
 
-        #[test]
-        fn parse_simple_aloads() {
-            let bytes = vec![0x2a, 0x19, 0x08];
-            let code = Bytecode::parse(&bytes).expect("should succeed");
+    #[test]
+    fn parse_simple_insns() {
+        let mut blob = InstructionBlob::default();
+        let bytes = vec![0x2a, 0x19, 0x08, 0xb4, 0x56, 0x78];
 
-            let insns = code.instructions().collect_vec();
+        let pc = 0;
+        let (pc, opcode) = get_insn(&bytes, pc, &mut blob).unwrap();
+        assert_eq!(opcode, Opcode::Aload0);
 
-            assert_eq!(insns.len(), 2);
+        let (pc, opcode) = get_insn(&bytes, pc, &mut blob).unwrap();
+        assert_eq!(opcode, Opcode::Aload);
+        assert_eq!(unsafe { blob.transmute::<Aload>() }.0, 0x08);
 
-            assert_eq!(insns[0].name(), "aload_0");
-            assert_eq!(insns[1].name(), "aload");
-        }
+        let (pc, opcode) = get_insn(&bytes, pc, &mut blob).unwrap();
+        assert_eq!(opcode, Opcode::Getfield);
+        assert_eq!(unsafe { blob.transmute::<Getfield>() }.0, 0x5678);
 
-        #[test]
-        fn incomplete() {
-            let bytes = vec![0x19]; // aload without index
-            let err = Bytecode::parse(&bytes);
-            assert!(matches!(
-                err,
-                Err(InterpreterError::IncompleteInstruction(_))
-            ));
-        }
-    */
+        assert!(get_insn(&bytes, pc, &mut blob).is_none());
+    }
 }
