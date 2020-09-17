@@ -6,10 +6,7 @@ mod load;
 mod types;
 
 pub use class::ClassFile;
-pub use constant_pool::{
-    attribute, ClassRefItem, ConstantPool, Index, InterfaceMethodRefItem, Item, MethodRefItem,
-    NameAndTypeItem,
-};
+pub use constant_pool::*;
 pub use error::{ClassError, ClassResult};
 pub use load::load_from_buffer;
 pub use types::{

@@ -102,6 +102,7 @@ pub struct Field {
     desc: DataType,
     flags: FieldAccessFlags,
 }
+
 #[derive(Copy, Clone)]
 pub enum FieldSearchType {
     Instance,
@@ -1020,11 +1021,24 @@ impl Object {
         self.class.instance_fields_layout.get_self_id(field_index)
     }
 
-    // pub fn field(&self, field_id: FieldId) -> &DataValue {
-    //     debug_assert!(!self.is_null());
-    //
-    //     todo!()
-    // }
+    pub fn find_field(
+        &self,
+        name: &mstr,
+        desc: &DataType,
+        search: FieldSearchType,
+    ) -> Option<DataValue> {
+        let field_id = self.class.find_field_recursive(name, desc, search)?;
+        Some(self.field(field_id))
+    }
+
+    pub fn field(&self, field_id: FieldId) -> DataValue {
+        debug_assert!(!self.is_null(), "object is null");
+        let fields = self.fields().expect("object has no field storage");
+
+        fields
+            .get(field_id)
+            .unwrap_or_else(|| panic!("bad field {:?}", field_id))
+    }
 }
 
 impl Debug for Object {
@@ -1034,7 +1048,7 @@ impl Debug for Object {
         } else {
             // TODO not quite correct toString
             let ptr = vmref_ptr(&self.class);
-            write!(f, "{:?}@{:x}", self.class.name, ptr)
+            write!(f, "{}@{:#x}", self.class.name.to_utf8(), ptr)
         }
     }
 }

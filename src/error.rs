@@ -25,6 +25,7 @@ pub enum Throwables {
     ClassFormatError,
     UnsupportedClassVersionError,
     OutOfMemoryError,
+    NullPointerException,
     Other(&'static str),
 }
 
@@ -65,6 +66,7 @@ impl Throwables {
             Throwables::ClassFormatError => "java/lang/ClassFormatError",
             Throwables::UnsupportedClassVersionError => "java/lang/UnsupportedClassVersionError",
             Throwables::OutOfMemoryError => "java/lang/OutOfMemoryError",
+            Throwables::NullPointerException => "java/lang/NullPointerException",
             Throwables::Other(s) => s,
         }
     }

@@ -1,6 +1,7 @@
 use crate::alloc::{InternedString, NativeString};
+use crate::types::DataType;
 use cafebabe::mutf8::MString;
-use cafebabe::{ClassResult, Item, MethodRefItem};
+use cafebabe::{ClassError, ClassResult, FieldRefEntry, Item, MethodRefEntry};
 use std::fmt::{Debug, Formatter};
 
 #[derive(Debug)]
@@ -8,13 +9,23 @@ pub enum Entry {
     // TODO store interned string instance here
     String(MString),
     MethodRef(MethodRef),
+    FieldRef(FieldRef),
 }
+
+// TODO method and field refs should be resolved vtable indices instead of loads of strings
 
 #[derive(Debug)]
 pub struct MethodRef {
     pub class: InternedString,
     pub name: NativeString,
     pub desc: NativeString,
+}
+
+#[derive(Debug)]
+pub struct FieldRef {
+    pub class: InternedString,
+    pub name: NativeString,
+    pub desc: DataType,
 }
 
 pub struct RuntimeConstantPool(Vec<Option<Entry>>);
@@ -40,13 +51,26 @@ impl RuntimeConstantPool {
                     my_pool.put_entry(idx, Entry::String(string.to_owned()));
                 }
                 Item::MethodRef { .. } => {
-                    let methodref = pool.entry::<MethodRefItem>(idx)?;
+                    let methodref = pool.entry::<MethodRefEntry>(idx)?;
                     my_pool.put_entry(
                         idx,
                         Entry::MethodRef(MethodRef {
                             class: methodref.class.to_owned(),
                             name: methodref.name.to_owned(),
                             desc: methodref.desc.to_owned(),
+                        }),
+                    );
+                }
+                Item::FieldRef { .. } => {
+                    let fieldref = pool.entry::<FieldRefEntry>(idx)?;
+                    my_pool.put_entry(
+                        idx,
+                        Entry::FieldRef(FieldRef {
+                            class: fieldref.class.to_owned(),
+                            name: fieldref.name.to_owned(),
+                            desc: DataType::from_descriptor(fieldref.desc).ok_or_else(|| {
+                                ClassError::TypeDescriptor(fieldref.desc.to_owned())
+                            })?,
                         }),
                     );
                 }
@@ -84,6 +108,13 @@ impl RuntimeConstantPool {
     pub fn method_entry(&self, idx: u16) -> Option<&MethodRef> {
         self.entry(idx).and_then(|e| match e {
             Entry::MethodRef(m) => Some(m),
+            _ => None,
+        })
+    }
+
+    pub fn field_entry(&self, idx: u16) -> Option<&FieldRef> {
+        self.entry(idx).and_then(|e| match e {
+            Entry::FieldRef(f) => Some(f),
             _ => None,
         })
     }

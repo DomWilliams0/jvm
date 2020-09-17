@@ -2,9 +2,8 @@ use log::*;
 
 use crate::buffer::Buffer;
 use crate::constant_pool::attribute::Attribute;
-use crate::constant_pool::{self, ClassRefItem, ConstantPool};
 use crate::types::{ClassAccessFlags, ClassVersion, FieldInfo, MethodInfo, RawAttribute};
-use crate::{ClassError, ClassResult, Index};
+use crate::{ClassError, ClassResult, Index, ConstantPool, constant_pool, ClassRefEntry};
 use mutf8::mstr;
 
 #[derive(Debug)]
@@ -106,7 +105,7 @@ impl<'c> ClassFile<'c> {
 
     fn class_name(&'c self, index: Index) -> ClassResult<&'c mutf8::mstr> {
         self.constant_pool
-            .entry::<ClassRefItem<'c>>(index)
+            .entry::<ClassRefEntry<'c>>(index)
             .map(|class| class.name)
     }
 

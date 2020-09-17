@@ -24,6 +24,9 @@ pub enum InterpreterError {
     #[error("Constant pool entry {0} is not present or a method ref")]
     NotMethodRef(u16),
 
+    #[error("Constant pool entry {0} is not present or a field ref")]
+    NotFieldRef(u16),
+
     #[error("The method {class:?}.{name:?}:{desc:?} could not be resolved")]
     MethodNotFound {
         class: MString,
@@ -45,6 +48,12 @@ pub enum InterpreterError {
 
     #[error("Cannot load uninitialised local var {0}")]
     UninitialisedLoad(usize),
+
+    #[error("Cannot pop from empty operand stack")]
+    NoOperand,
+
+    #[error("Expected non-array reference type for field op but got {0:?} instead")]
+    InvalidOperandForFieldOp(DataType),
 
     /// Not really an error
     #[error("Exception raised: {0:?}")]

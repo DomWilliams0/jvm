@@ -87,7 +87,7 @@ impl FieldStorage {
     }
 
     pub fn get(&self, id: FieldId) -> Option<DataValue> {
-        todo!()
+        self.0.read().get(id.0 as usize).cloned()
     }
 
     pub fn try_set(&self, id: FieldId, value: DataValue) -> bool {

@@ -26,38 +26,6 @@ pub enum Tag {
     Package = 20,
 }
 
-// TODO these are Entries not Items
-
-#[derive(Debug)]
-pub struct Utf8Item<'c> {
-    pub string: &'c mutf8::mstr,
-}
-
-#[derive(Debug)]
-pub struct ClassRefItem<'c> {
-    pub name: &'c mutf8::mstr,
-}
-
-#[derive(Debug)]
-pub struct NameAndTypeItem<'c> {
-    pub name: &'c mutf8::mstr,
-    pub desc: &'c mutf8::mstr,
-}
-
-#[derive(Debug)]
-pub struct MethodRefItem<'c> {
-    pub class: &'c mutf8::mstr,
-    pub name: &'c mutf8::mstr,
-    pub desc: &'c mutf8::mstr,
-}
-
-#[derive(Debug)]
-pub struct InterfaceMethodRefItem<'c> {
-    pub class: &'c mutf8::mstr,
-    pub name: &'c mutf8::mstr,
-    pub desc: &'c mutf8::mstr,
-}
-
 #[derive(Debug)]
 pub enum Item<'c> {
     MethodRef {

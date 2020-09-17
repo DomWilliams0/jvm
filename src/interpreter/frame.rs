@@ -93,11 +93,26 @@ impl OperandStack {
 
     pub fn push(&mut self, value: DataValue) {
         // TODO longs and doubles take 2 slots!
+        debug!(
+            "pushing {:?} onto operand stack, count is now {:?}",
+            value,
+            self.count() + 1
+        );
         self.0.push(value);
     }
 
     pub fn pop(&mut self) -> Option<DataValue> {
-        self.0.pop()
+        let val = self.0.pop();
+        if let Some(val) = val.as_ref() {
+            debug!(
+                "popped {:?} from operand stack, count is now {:?}",
+                val,
+                self.count()
+            );
+        } else {
+            warn!("can't pop from empty operand stack");
+        }
+        val
     }
 
     pub fn pop_n(&mut self, n: usize) -> Option<impl Iterator<Item = DataValue> + '_> {

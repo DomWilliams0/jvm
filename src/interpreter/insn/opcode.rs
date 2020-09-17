@@ -1,5 +1,5 @@
 use num_enum::TryFromPrimitive;
-#[derive(TryFromPrimitive, Debug, Clone, Copy)]
+#[derive(TryFromPrimitive, Debug, Clone, Copy, Eq, PartialEq)]
 #[repr(u8)]
 pub enum Opcode {
     /// Do nothing

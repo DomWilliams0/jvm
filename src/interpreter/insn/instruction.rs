@@ -7,7 +7,7 @@ use crate::interpreter::error::InterpreterError;
 
 use log::*;
 
-use crate::class::{Class, Object};
+use crate::class::{Class, FieldSearchType, Object};
 use crate::types::DataValue;
 
 use crate::error::Throwables;
@@ -864,7 +864,45 @@ impl Fsub {
 
 impl Getfield {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Getfield")
+        let frame = interp.current_frame_mut();
+
+        // resolve field
+        let field = frame
+            .class
+            .constant_pool()
+            .field_entry(self.0)
+            .ok_or_else(|| InterpreterError::NotFieldRef(self.0))?;
+
+        trace!("getfield {:?}", field);
+
+        // pop operand
+        let obj = frame
+            .operand_stack
+            .pop()
+            .ok_or(InterpreterError::NoOperand)?;
+
+        // ensure non-null non-array reference
+        let obj = obj
+            .as_reference_nonarray()
+            .ok_or_else(|| InterpreterError::InvalidOperandForFieldOp(obj.data_type()))?;
+
+        if obj.is_null() {
+            return Ok(PostExecuteAction::Exception(
+                Throwables::NullPointerException,
+            ));
+        }
+
+        // get field value
+        let value = obj
+            .find_field(field.name.as_mstr(), &field.desc, FieldSearchType::Instance)
+            .ok_or_else(|| InterpreterError::FieldNotFound {
+                name: field.name.to_owned(),
+                desc: field.desc.clone(),
+            })?;
+
+        // push onto operand stack
+        frame.operand_stack.push(value);
+        Ok(PostExecuteAction::Continue)
     }
 }
 

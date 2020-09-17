@@ -2,21 +2,18 @@ use std::fmt::{Debug, Formatter};
 
 use log::*;
 
-pub use item::{Index, Tag};
-
 use crate::buffer::Buffer;
-use crate::constant_pool::entry::Entry;
+use crate::constant_pool::entry::{Entry, Utf8Entry};
 use crate::{ClassError, ClassResult};
 
 pub mod attribute;
 mod entry;
 mod item;
 
-pub struct ConstantPool<'c>(Vec<Option<Item<'c>>>);
+pub use item::*;
+pub use entry::*;
 
-pub use item::{
-    ClassRefItem, InterfaceMethodRefItem, Item, MethodRefItem, NameAndTypeItem, Utf8Item,
-};
+pub struct ConstantPool<'c>(Vec<Option<Item<'c>>>);
 
 impl<'c> ConstantPool<'c> {
     pub(crate) fn empty() -> Self {
@@ -75,7 +72,7 @@ impl<'c> ConstantPool<'c> {
     }
 
     pub fn string_entry(&self, index: Index) -> ClassResult<&'c mutf8::mstr> {
-        self.entry::<Utf8Item<'c>>(index).map(|item| item.string)
+        self.entry::<Utf8Entry<'c>>(index).map(|item| item.string)
     }
 
     pub fn string_entry_utf8(&self, index: Index) -> ClassResult<String> {
@@ -94,8 +91,10 @@ impl Debug for ConstantPool<'_> {
 #[cfg(test)]
 mod tests {
     use crate::buffer::Buffer;
-    use crate::constant_pool::item::MethodRefItem;
-    use crate::constant_pool::{ClassRefItem, ConstantPool, Item, Tag, Utf8Item};
+    use crate::constant_pool::entry::{MethodRefEntry, ClassRefEntry, Utf8Entry};
+    use crate::constant_pool::item::Item;
+    use crate::constant_pool::Tag;
+    use crate::ConstantPool;
 
     fn pool() -> ConstantPool<'static> {
         const POOL: [u8; 636] = [
@@ -174,15 +173,15 @@ mod tests {
     fn entries() {
         let pool = pool();
 
-        let utf8: Utf8Item = pool.entry(23).expect("should be utf8");
+        let utf8: Utf8Entry = pool.entry(23).expect("should be utf8");
         assert_eq!(utf8.string.to_utf8(), "Ljava/lang/String;");
 
-        assert!(pool.entry::<Utf8Item>(5).is_err());
+        assert!(pool.entry::<Utf8Entry>(5).is_err());
 
-        let cls: ClassRefItem = pool.entry(5).unwrap();
+        let cls: ClassRefEntry = pool.entry(5).unwrap();
         assert_eq!(cls.name.to_utf8(), "java/lang/StringBuilder");
 
-        let method: MethodRefItem = pool.entry(10).unwrap();
+        let method: MethodRefEntry = pool.entry(10).unwrap();
         assert_eq!(method.class.to_utf8(), "java/io/PrintStream");
         assert_eq!(method.name.to_utf8(), "println");
         assert_eq!(method.desc.to_utf8(), "(Ljava/lang/String;)V");

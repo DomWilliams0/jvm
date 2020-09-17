@@ -3,6 +3,7 @@ use crate::types::ClassVersion;
 
 use std::str::Utf8Error;
 use thiserror::*;
+use mutf8::MString;
 
 pub type ClassResult<T> = Result<T, ClassError>;
 
@@ -44,6 +45,9 @@ pub enum ClassError {
 
     #[error("Expected {expected:?} item but found {actual:?}")]
     WrongTag { expected: Tag, actual: Tag },
+
+    #[error("Invalid type descriptor {0:?}")]
+    TypeDescriptor(MString),
 
     /// Attribute name
     #[error("Attribute not found {0:?}")]

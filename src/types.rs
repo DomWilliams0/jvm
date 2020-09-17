@@ -184,6 +184,13 @@ impl DataValue {
             _ => None,
         }
     }
+
+    pub fn as_reference_nonarray(&self) -> Option<VmRef<Object>> {
+        match self {
+            DataValue::Reference(ReferenceDataType::Class(_), obj) => Some(obj.clone()),
+            _ => None,
+        }
+    }
 }
 
 impl PrimitiveDataType {
