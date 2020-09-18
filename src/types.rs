@@ -185,6 +185,13 @@ impl DataValue {
         }
     }
 
+    pub fn as_reference_array(&self) -> Option<VmRef<Object>> {
+        match self {
+            DataValue::Reference(ReferenceDataType::Array { .. }, obj) => Some(obj.clone()),
+            _ => None,
+        }
+    }
+
     pub fn as_reference_nonarray(&self) -> Option<VmRef<Object>> {
         match self {
             DataValue::Reference(ReferenceDataType::Class(_), obj) => Some(obj.clone()),

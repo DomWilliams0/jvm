@@ -1039,6 +1039,10 @@ impl Object {
             .get(field_id)
             .unwrap_or_else(|| panic!("bad field {:?}", field_id))
     }
+
+    pub fn array_length(&self) -> Option<i32> {
+        self.array().map(|arr| arr.len() as i32)
+    }
 }
 
 impl Debug for Object {

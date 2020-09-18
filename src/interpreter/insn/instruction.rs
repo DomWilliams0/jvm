@@ -436,7 +436,33 @@ impl Areturn {
 
 impl Arraylength {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Arraylength")
+        let frame = interp.current_frame_mut();
+
+        // pop operand
+        let obj = frame
+            .operand_stack
+            .pop()
+            .ok_or(InterpreterError::NoOperand)?;
+
+        // ensure non-null array reference
+        let obj = obj
+            .as_reference_array()
+            .ok_or_else(|| InterpreterError::InvalidOperandForFieldOp(obj.data_type()))?;
+
+        if obj.is_null() {
+            return Ok(PostExecuteAction::Exception(
+                Throwables::NullPointerException,
+            ));
+        }
+
+        // get length
+        let length = obj.array_length().unwrap(); // just checked its an array
+
+        trace!("array length is {}", length);
+
+        // push onto stack
+        frame.operand_stack.push(DataValue::Int(length));
+        Ok(PostExecuteAction::Continue)
     }
 }
 
@@ -1046,45 +1072,11 @@ impl IfAcmpne {
     }
 }
 
-impl IfIcmpeq {
-    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction IfIcmpeq")
-    }
-}
-
-impl IfIcmpge {
-    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction IfIcmpge")
-    }
-}
-
-impl IfIcmpgt {
-    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction IfIcmpgt")
-    }
-}
-
-impl IfIcmple {
-    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction IfIcmple")
-    }
-}
-
-impl IfIcmplt {
-    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction IfIcmplt")
-    }
-}
-
-impl IfIcmpne {
-    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction IfIcmpne")
-    }
-}
-
-fn int_cmp(
+/// wat: ">= 0"
+fn int_cmp_one(
     interp: &mut InterpreterState,
     offset: i16,
+    wat: &'static str,
     cmp: impl FnOnce(i32) -> bool,
 ) -> ExecuteResult {
     let frame = interp.current_frame_mut();
@@ -1102,6 +1094,7 @@ fn int_cmp(
 
     // do comparison
     let success = cmp(int);
+    trace!("cmp {} {} => {}", int, wat, success);
 
     let action = if success {
         PostExecuteAction::Jmp(offset as i32)
@@ -1112,39 +1105,127 @@ fn int_cmp(
     Ok(action)
 }
 
+/// cmp(value1, value2)
+/// op: ">="
+fn int_cmp_two(
+    interp: &mut InterpreterState,
+    offset: i16,
+    op: &'static str,
+    cmp: impl FnOnce(i32, i32) -> bool,
+) -> ExecuteResult {
+    let frame = interp.current_frame_mut();
+
+    // pop values
+    let (val1, val2) = {
+        let mut objs = frame
+            .operand_stack
+            .pop_n(2)
+            .ok_or(InterpreterError::NoOperand)?;
+
+        // popped in reverse order
+        let val2 = objs.next().unwrap();
+        let val1 = objs.next().unwrap();
+
+        (val1, val2)
+    };
+
+    // ensure ints
+    let val1 = val1
+        .as_int()
+        .ok_or_else(|| InterpreterError::InvalidOperandForIntOp(val1.data_type()))?;
+
+    let val2 = val2
+        .as_int()
+        .ok_or_else(|| InterpreterError::InvalidOperandForIntOp(val2.data_type()))?;
+
+    // do comparison
+    let success = cmp(val1, val2);
+    trace!(
+        "cmp {a} {op} {b} => {}",
+        success,
+        a = val1,
+        op = op,
+        b = val2
+    );
+
+    let action = if success {
+        PostExecuteAction::Jmp(offset as i32)
+    } else {
+        PostExecuteAction::Continue
+    };
+
+    Ok(action)
+}
+
+impl IfIcmpeq {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        int_cmp_two(interp, self.0, "==", |a, b| a == b)
+    }
+}
+
+impl IfIcmpge {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        int_cmp_two(interp, self.0, ">=", |a, b| a >= b)
+    }
+}
+
+impl IfIcmpgt {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        int_cmp_two(interp, self.0, ">", |a, b| a > b)
+    }
+}
+
+impl IfIcmple {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        int_cmp_two(interp, self.0, "<=", |a, b| a <= b)
+    }
+}
+
+impl IfIcmplt {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        int_cmp_two(interp, self.0, "<", |a, b| a < b)
+    }
+}
+
+impl IfIcmpne {
+    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        int_cmp_two(interp, self.0, "!=", |a, b| a != b)
+    }
+}
+
 impl Ifeq {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        int_cmp(interp, self.0, |i| i == 0)
+        int_cmp_one(interp, self.0, "== 0", |i| i == 0)
     }
 }
 
 impl Ifge {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        int_cmp(interp, self.0, |i| i >= 0)
+        int_cmp_one(interp, self.0, ">= 0", |i| i >= 0)
     }
 }
 
 impl Ifgt {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        int_cmp(interp, self.0, |i| i > 0)
+        int_cmp_one(interp, self.0, "> 0", |i| i > 0)
     }
 }
 
 impl Ifle {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        int_cmp(interp, self.0, |i| i <= 0)
+        int_cmp_one(interp, self.0, "<= 0", |i| i <= 0)
     }
 }
 
 impl Iflt {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        int_cmp(interp, self.0, |i| i < 0)
+        int_cmp_one(interp, self.0, "< 0", |i| i < 0)
     }
 }
 
 impl Ifne {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        int_cmp(interp, self.0, |i| i != 0)
+        int_cmp_one(interp, self.0, "!= 0", |i| i != 0)
     }
 }
 
