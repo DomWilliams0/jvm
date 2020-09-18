@@ -24,6 +24,10 @@ pub enum PostExecuteAction {
     Return,
     Exception(Throwables),
     MethodCall,
+    /// Relative offset to the opcode of this instruction
+    Jmp(i32),
+    /// Absolute jump to pc
+    JmpAbsolute(usize),
 }
 
 pub type ExecuteResult = Result<PostExecuteAction, InterpreterError>;
@@ -1078,39 +1082,69 @@ impl IfIcmpne {
     }
 }
 
+fn int_cmp(
+    interp: &mut InterpreterState,
+    offset: i16,
+    cmp: impl FnOnce(i32) -> bool,
+) -> ExecuteResult {
+    let frame = interp.current_frame_mut();
+
+    // pop value
+    let obj = frame
+        .operand_stack
+        .pop()
+        .ok_or(InterpreterError::NoOperand)?;
+
+    // ensure int
+    let int = obj
+        .as_int()
+        .ok_or_else(|| InterpreterError::InvalidOperandForIntOp(obj.data_type()))?;
+
+    // do comparison
+    let success = cmp(int);
+
+    let action = if success {
+        PostExecuteAction::Jmp(offset as i32)
+    } else {
+        PostExecuteAction::Continue
+    };
+
+    Ok(action)
+}
+
 impl Ifeq {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Ifeq")
+        int_cmp(interp, self.0, |i| i == 0)
     }
 }
 
 impl Ifge {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Ifge")
+        int_cmp(interp, self.0, |i| i >= 0)
     }
 }
 
 impl Ifgt {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Ifgt")
+        int_cmp(interp, self.0, |i| i > 0)
     }
 }
 
 impl Ifle {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Ifle")
+        int_cmp(interp, self.0, |i| i <= 0)
     }
 }
 
 impl Iflt {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Iflt")
+        int_cmp(interp, self.0, |i| i < 0)
     }
 }
 
 impl Ifne {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Ifne")
+        int_cmp(interp, self.0, |i| i != 0)
     }
 }
 

@@ -55,6 +55,9 @@ pub enum InterpreterError {
     #[error("Expected non-array reference type for field op but got {0:?} instead")]
     InvalidOperandForFieldOp(DataType),
 
+    #[error("Expected integer operand but got {0:?} instead")]
+    InvalidOperandForIntOp(DataType),
+
     /// Not really an error
     #[error("Exception raised: {0:?}")]
     ExceptionRaised(Throwables),

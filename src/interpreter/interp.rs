@@ -1,4 +1,5 @@
 use crate::alloc::VmRef;
+use log::*;
 
 use crate::error::Throwable;
 use crate::interpreter::frame::{Frame, FrameStack, JavaFrame};
@@ -21,7 +22,7 @@ pub struct Interpreter {
 
 impl InterpreterState {
     pub fn push_frame(&mut self, frame: Frame) {
-        log::trace!(
+        trace!(
             "pushed new frame, stack depth is now {}: {:?}",
             self.frames.depth() + 1,
             frame
@@ -48,7 +49,20 @@ impl Interpreter {
                     }));
                     return InterpreterResult::Exception;
                 }
-                PostExecuteAction::Continue => unreachable!(),
+                PostExecuteAction::JmpAbsolute(new_pc) => {
+                    let mut state = self.state_mut();
+                    let (_, pc) = state.frames.top_java_mut().unwrap(); // jmps only happen in java frames
+
+                    debug!("jmping to insn {:?}", new_pc);
+                    *pc = new_pc;
+                }
+
+                PostExecuteAction::Jmp(_) => {
+                    unreachable!("execute() should have filtered out relative jumps")
+                }
+                PostExecuteAction::Continue => {
+                    unreachable!("execute() should have filtered out continues")
+                }
             }
         }
 
@@ -70,17 +84,24 @@ impl Interpreter {
 
             // get current instruction
             let code = frame.code.as_ref();
+            let old_pc = *pc;
             let (new_pc, opcode) = get_insn(code, *pc, &mut insn_blob).expect("bad opcode");
             *pc = new_pc;
 
             // lookup execute function
-            log::trace!("executing {:?}", opcode);
+            trace!("executing {:?}", opcode);
             let exec_fn = thread.global().insn_lookup().resolve(opcode);
             let result = exec_fn(&insn_blob, &mut *state);
 
             match result {
                 PostExecuteAction::Continue => {
                     // keep executing this frame
+                }
+                PostExecuteAction::Jmp(offset) => {
+                    // jmp is relative to this opcode, make absolute
+                    let new_offset = offset + (old_pc as i32);
+                    trace!("adjusted jmp offset from {:?} to {:?}", offset, new_offset);
+                    return PostExecuteAction::JmpAbsolute(new_offset as usize);
                 }
                 ret => return ret,
             }
