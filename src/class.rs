@@ -1073,6 +1073,10 @@ impl Method {
     pub fn flags(&self) -> MethodAccessFlags {
         self.flags
     }
+
+    pub fn return_type(&self) -> &ReturnType {
+        &self.return_type
+    }
 }
 
 impl Default for LockedClassState {

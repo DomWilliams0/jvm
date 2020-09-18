@@ -5,6 +5,7 @@ use crate::error::Throwable;
 use crate::interpreter::frame::{Frame, FrameStack, JavaFrame};
 use crate::interpreter::insn::{get_insn, InstructionBlob, PostExecuteAction};
 use crate::thread;
+
 use std::cell::{RefCell, RefMut};
 
 pub enum InterpreterResult {
@@ -30,8 +31,29 @@ impl InterpreterState {
         self.frames.push(frame, 0);
     }
 
+    pub fn pop_frame(&mut self) -> bool {
+        match self.frames.pop() {
+            Some(_) => {
+                trace!(
+                    "popped frame, stack depth is now {}: {:?}",
+                    self.frames.depth(),
+                    self.frames.top(),
+                );
+                true
+            }
+            None => {
+                error!("no frames to pop");
+                false
+            }
+        }
+    }
+
     pub fn current_frame_mut(&mut self) -> &mut JavaFrame {
         self.frames.top_java_mut().expect("no java frame").0
+    }
+
+    pub fn current_frame_mut_checked(&mut self) -> Option<&mut JavaFrame> {
+        self.frames.top_java_mut().map(|(frame, _)| frame)
     }
 }
 

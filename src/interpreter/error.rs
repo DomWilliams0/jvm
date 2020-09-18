@@ -1,6 +1,6 @@
 use crate::error::Throwables;
 use crate::interpreter::insn::Opcode;
-use crate::types::{DataType, DataValue};
+use crate::types::{DataType, DataValue, ReturnType};
 use cafebabe::mutf8::MString;
 use thiserror::*;
 
@@ -57,6 +57,21 @@ pub enum InterpreterError {
 
     #[error("Expected integer operand but got {0:?} instead")]
     InvalidOperandForIntOp(DataType),
+
+    #[error("Expected reference or returnAddress operand but got {0:?} instead")]
+    InvalidOperandForAstore(DataType),
+
+    #[error("Expected reference  operand for object op but got {0:?} instead")]
+    InvalidOperandForObjectOp(DataType),
+
+    #[error("Expected return type of {expected:?} but got {actual:?}")]
+    InvalidReturnValue {
+        expected: ReturnType,
+        actual: ReturnType,
+    },
+
+    #[error("Cannot pop from empty frame stack")]
+    NoFrame,
 
     /// Not really an error
     #[error("Exception raised: {0:?}")]

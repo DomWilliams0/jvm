@@ -110,7 +110,7 @@ impl OperandStack {
                 self.count()
             );
         } else {
-            warn!("can't pop from empty operand stack");
+            error!("can't pop from empty operand stack");
         }
         val
     }
@@ -169,6 +169,9 @@ impl FrameStack {
             Frame::Java(frame) => Some(frame),
             Frame::Native(_) => None,
         })
+    }
+    pub fn top(&self) -> Option<&Frame> {
+        self.0.last().map(|(frame, _)| frame)
     }
 }
 

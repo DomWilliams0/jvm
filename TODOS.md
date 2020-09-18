@@ -81,7 +81,7 @@
  * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (9)
    * `// TODO better handling of interpreter error`
    * `// TODO some 2s are signed`
-   * `insn_2x!(Iinc, "iinc"); // TODO second is signed byte, or just store separate u8s`
+   * `// TODO catch this at verification time`
    * `// TODO ensure class is not interface, method not abstract, not constructor`
    * `// TODO typecheck args at verification time`
    * `// TODO lookup natively interned string instance`

@@ -63,7 +63,7 @@ pub struct MethodSignature<'a> {
     ret: ReturnType,
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum ReturnType {
     Void,
     Returns(DataType),
@@ -197,6 +197,21 @@ impl DataValue {
             DataValue::Reference(ReferenceDataType::Class(_), obj) => Some(obj.clone()),
             _ => None,
         }
+    }
+
+    pub fn as_reference(&self) -> Option<VmRef<Object>> {
+        match self {
+            DataValue::Reference(_, obj) => Some(obj.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn is_reference_or_retaddr(&self) -> bool {
+        matches!(self, DataValue::Reference(_, _) | DataValue::ReturnAddress(_))
+    }
+
+    pub fn is_reference(&self) -> bool {
+        matches!(self, DataValue::Reference(_, _))
     }
 }
 
@@ -408,6 +423,7 @@ impl<'a, 'b> Iterator for MethodSignatureIter<'a, 'b> {
         }
     }
 }
+
 impl<'a, 'b> MethodSignatureIter<'a, 'b> {
     fn peek_byte(&mut self) -> Option<u8> {
         self.sig.descriptor.get(self.cursor).copied()

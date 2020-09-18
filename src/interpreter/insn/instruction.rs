@@ -8,7 +8,7 @@ use crate::interpreter::error::InterpreterError;
 use log::*;
 
 use crate::class::{Class, FieldSearchType, Object};
-use crate::types::DataValue;
+use crate::types::{DataValue, ReturnType};
 
 use crate::error::Throwables;
 use crate::interpreter::insn::bytecode::InsnReader;
@@ -188,10 +188,10 @@ insn_2!(Anewarray, "anewarray");
 insn_0!(Areturn, "areturn");
 insn_0!(Arraylength, "arraylength");
 insn_1!(Astore, "astore");
-insn_0!(Astore0, "astore_<n>");
-insn_0!(Astore1, "astore_<n>");
-insn_0!(Astore2, "astore_<n>");
-insn_0!(Astore3, "astore_<n>");
+insn_0!(Astore0, "astore_0");
+insn_0!(Astore1, "astore_1");
+insn_0!(Astore2, "astore_2");
+insn_0!(Astore3, "astore_3");
 insn_0!(Athrow, "athrow");
 insn_0!(Baload, "baload");
 insn_0!(Bastore, "bastore");
@@ -205,25 +205,25 @@ insn_0!(D2L, "d2l");
 insn_0!(Dadd, "dadd");
 insn_0!(Daload, "daload");
 insn_0!(Dastore, "dastore");
-insn_0!(Dcmpg, "dcmp<op>");
-insn_0!(Dcmpl, "dcmp<op>");
-insn_0!(Dconst0, "dconst_<d>");
-insn_0!(Dconst1, "dconst_<d>");
+insn_0!(Dcmpg, "dcmpg");
+insn_0!(Dcmpl, "dcmpl");
+insn_0!(Dconst0, "dconst_0");
+insn_0!(Dconst1, "dconst_1");
 insn_0!(Ddiv, "ddiv");
 insn_1!(Dload, "dload");
-insn_0!(Dload0, "dload_<n>");
-insn_0!(Dload1, "dload_<n>");
-insn_0!(Dload2, "dload_<n>");
-insn_0!(Dload3, "dload_<n>");
+insn_0!(Dload0, "dload_0");
+insn_0!(Dload1, "dload_1");
+insn_0!(Dload2, "dload_2");
+insn_0!(Dload3, "dload_3");
 insn_0!(Dmul, "dmul");
 insn_0!(Dneg, "dneg");
 insn_0!(Drem, "drem");
 insn_0!(Dreturn, "dreturn");
 insn_1!(Dstore, "dstore");
-insn_0!(Dstore0, "dstore_<n>");
-insn_0!(Dstore1, "dstore_<n>");
-insn_0!(Dstore2, "dstore_<n>");
-insn_0!(Dstore3, "dstore_<n>");
+insn_0!(Dstore0, "dstore_0");
+insn_0!(Dstore1, "dstore_1");
+insn_0!(Dstore2, "dstore_2");
+insn_0!(Dstore3, "dstore_3");
 insn_0!(Dsub, "dsub");
 insn_0!(Dup, "dup");
 insn_0!(Dup2, "dup2");
@@ -237,30 +237,30 @@ insn_0!(F2L, "f2l");
 insn_0!(Fadd, "fadd");
 insn_0!(Faload, "faload");
 insn_0!(Fastore, "fastore");
-insn_0!(Fcmpg, "fcmp<op>");
-insn_0!(Fcmpl, "fcmp<op>");
-insn_0!(Fconst0, "fconst_<f>");
-insn_0!(Fconst1, "fconst_<f>");
-insn_0!(Fconst2, "fconst_<f>");
+insn_0!(Fcmpg, "fcmpg");
+insn_0!(Fcmpl, "fcmpl");
+insn_0!(Fconst0, "fconst_0");
+insn_0!(Fconst1, "fconst_1");
+insn_0!(Fconst2, "fconst_2");
 insn_0!(Fdiv, "fdiv");
 insn_1!(Fload, "fload");
-insn_0!(Fload0, "fload_<n>");
-insn_0!(Fload1, "fload_<n>");
-insn_0!(Fload2, "fload_<n>");
-insn_0!(Fload3, "fload_<n>");
+insn_0!(Fload0, "fload_0");
+insn_0!(Fload1, "fload_1");
+insn_0!(Fload2, "fload_2");
+insn_0!(Fload3, "fload_3");
 insn_0!(Fmul, "fmul");
 insn_0!(Fneg, "fneg");
 insn_0!(Frem, "frem");
 insn_0!(Freturn, "freturn");
 insn_1!(Fstore, "fstore");
-insn_0!(Fstore0, "fstore_<n>");
-insn_0!(Fstore1, "fstore_<n>");
-insn_0!(Fstore2, "fstore_<n>");
-insn_0!(Fstore3, "fstore_<n>");
+insn_0!(Fstore0, "fstore_0");
+insn_0!(Fstore1, "fstore_1");
+insn_0!(Fstore2, "fstore_2");
+insn_0!(Fstore3, "fstore_3");
 insn_0!(Fsub, "fsub");
 insn_2!(Getfield, "getfield");
 insn_2!(Getstatic, "getstatic");
-insn_2!(Goto, "goto");
+insn_2s!(Goto, "goto");
 insn_4s!(GotoW, "goto_w");
 insn_0!(I2B, "i2b");
 insn_0!(I2C, "i2c");
@@ -273,35 +273,35 @@ insn_0!(Iaload, "iaload");
 insn_0!(Iand, "iand");
 insn_0!(Iastore, "iastore");
 insn_0!(Iconst0, "iconst_0");
-insn_0!(Iconst1, "iconst_<i>");
-insn_0!(Iconst2, "iconst_<i>");
-insn_0!(Iconst3, "iconst_<i>");
-insn_0!(Iconst4, "iconst_<i>");
-insn_0!(Iconst5, "iconst_<i>");
-insn_0!(IconstM1, "iconst_<i>");
+insn_0!(Iconst1, "iconst_1");
+insn_0!(Iconst2, "iconst_2");
+insn_0!(Iconst3, "iconst_3");
+insn_0!(Iconst4, "iconst_4");
+insn_0!(Iconst5, "iconst_5");
+insn_0!(IconstM1, "iconst_m1");
 insn_0!(Idiv, "idiv");
-insn_2s!(IfAcmpeq, "if_acmp<cond>");
-insn_2s!(IfAcmpne, "if_acmp<cond>");
-insn_2s!(IfIcmpeq, "if_icmp<cond>");
-insn_2s!(IfIcmpge, "if_icmp<cond>");
-insn_2s!(IfIcmpgt, "if_icmp<cond>");
-insn_2s!(IfIcmple, "if_icmp<cond>");
-insn_2s!(IfIcmplt, "if_icmp<cond>");
-insn_2s!(IfIcmpne, "if_icmp<cond>");
-insn_2s!(Ifeq, "if<cond>");
-insn_2s!(Ifge, "if<cond>");
-insn_2s!(Ifgt, "if<cond>");
-insn_2s!(Ifle, "if<cond>");
-insn_2s!(Iflt, "if<cond>");
-insn_2s!(Ifne, "if<cond>");
+insn_2s!(IfAcmpeq, "if_acmpeq");
+insn_2s!(IfAcmpne, "if_acmpne");
+insn_2s!(IfIcmpeq, "if_icmpeq");
+insn_2s!(IfIcmpge, "if_icmpge");
+insn_2s!(IfIcmpgt, "if_icmpgt");
+insn_2s!(IfIcmple, "if_icmple");
+insn_2s!(IfIcmplt, "if_icmplt");
+insn_2s!(IfIcmpne, "if_icmpne");
+insn_2s!(Ifeq, "ifeq");
+insn_2s!(Ifge, "ifge");
+insn_2s!(Ifgt, "ifgt");
+insn_2s!(Ifle, "ifle");
+insn_2s!(Iflt, "iflt");
+insn_2s!(Ifne, "ifne");
 insn_2s!(Ifnonnull, "ifnonnull");
 insn_2s!(Ifnull, "ifnull");
-insn_2x!(Iinc, "iinc"); // TODO second is signed byte, or just store separate u8s
+insn_2x!(Iinc, "iinc");
 insn_1!(Iload, "iload");
-insn_0!(Iload0, "iload_<n>");
-insn_0!(Iload1, "iload_<n>");
-insn_0!(Iload2, "iload_<n>");
-insn_0!(Iload3, "iload_<n>");
+insn_0!(Iload0, "iload_0");
+insn_0!(Iload1, "iload_1");
+insn_0!(Iload2, "iload_2");
+insn_0!(Iload3, "iload_3");
 insn_0!(Imul, "imul");
 insn_0!(Ineg, "ineg");
 insn_2!(Instanceof, "instanceof");
@@ -316,10 +316,10 @@ insn_0!(Ireturn, "ireturn");
 insn_0!(Ishl, "ishl");
 insn_0!(Ishr, "ishr");
 insn_1!(Istore, "istore");
-insn_0!(Istore0, "istore_<n>");
-insn_0!(Istore1, "istore_<n>");
-insn_0!(Istore2, "istore_<n>");
-insn_0!(Istore3, "istore_<n>");
+insn_0!(Istore0, "istore_0");
+insn_0!(Istore1, "istore_1");
+insn_0!(Istore2, "istore_2");
+insn_0!(Istore3, "istore_3");
 insn_0!(Isub, "isub");
 insn_0!(Iushr, "iushr");
 insn_0!(Ixor, "ixor");
@@ -333,17 +333,17 @@ insn_0!(Laload, "laload");
 insn_0!(Land, "land");
 insn_0!(Lastore, "lastore");
 insn_0!(Lcmp, "lcmp");
-insn_0!(Lconst0, "lconst_<l>");
-insn_0!(Lconst1, "lconst_<l>");
+insn_0!(Lconst0, "lconst_0");
+insn_0!(Lconst1, "lconst_1");
 insn_1!(Ldc, "ldc");
 insn_2!(Ldc2W, "ldc2_w");
 insn_2!(LdcW, "ldc_w");
 insn_0!(Ldiv, "ldiv");
 insn_1!(Lload, "lload");
-insn_0!(Lload0, "lload_<n>");
-insn_0!(Lload1, "lload_<n>");
-insn_0!(Lload2, "lload_<n>");
-insn_0!(Lload3, "lload_<n>");
+insn_0!(Lload0, "lload_0");
+insn_0!(Lload1, "lload_1");
+insn_0!(Lload2, "lload_2");
+insn_0!(Lload3, "lload_3");
 insn_0!(Lmul, "lmul");
 insn_0!(Lneg, "lneg");
 // insn_n!(Lookupswitch, "lookupswitch");
@@ -353,10 +353,10 @@ insn_0!(Lreturn, "lreturn");
 insn_0!(Lshl, "lshl");
 insn_0!(Lshr, "lshr");
 insn_1!(Lstore, "lstore");
-insn_0!(Lstore0, "lstore_<n>");
-insn_0!(Lstore1, "lstore_<n>");
-insn_0!(Lstore2, "lstore_<n>");
-insn_0!(Lstore3, "lstore_<n>");
+insn_0!(Lstore0, "lstore_0");
+insn_0!(Lstore1, "lstore_1");
+insn_0!(Lstore2, "lstore_2");
+insn_0!(Lstore3, "lstore_3");
 insn_0!(Lsub, "lsub");
 insn_0!(Lushr, "lushr");
 insn_0!(Lxor, "lxor");
@@ -430,7 +430,40 @@ impl Anewarray {
 
 impl Areturn {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Areturn")
+        let frame = interp.current_frame_mut();
+
+        // pop operand
+        let obj = frame
+            .operand_stack
+            .pop()
+            .ok_or(InterpreterError::NoOperand)?;
+
+        // ensure reference
+        if !obj.is_reference() {
+            return Err(InterpreterError::InvalidOperandForFieldOp(obj.data_type()));
+        }
+
+        // check return type matches sig
+        // TODO catch this at verification time
+        let ret = ReturnType::Returns(obj.data_type());
+        if frame.method.return_type() != &ret {
+            return Err(InterpreterError::InvalidReturnValue {
+                expected: frame.method.return_type().clone(),
+                actual: ret,
+            });
+        }
+
+        // pop frame this frame
+        if !interp.pop_frame() {
+            return Err(InterpreterError::NoFrame);
+        }
+
+        // push return value onto caller's stack
+        if let Some(caller) = interp.current_frame_mut_checked() {
+            caller.operand_stack.push(obj);
+        }
+
+        Ok(PostExecuteAction::Return)
     }
 }
 
@@ -468,32 +501,36 @@ impl Arraylength {
 
 impl Astore {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Astore")
+        let frame = interp.current_frame_mut();
+
+        let obj = frame
+            .operand_stack
+            .pop()
+            .ok_or(InterpreterError::NoOperand)?;
+
+        if !obj.is_reference_or_retaddr() {
+            return Err(InterpreterError::InvalidOperandForAstore(obj.data_type()));
+        }
+
+        frame.local_vars.store(self.0 as usize, obj)?;
+        Ok(PostExecuteAction::Continue)
     }
 }
 
 impl Astore0 {
-    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Astore0")
-    }
+    insn_delegate!(Astore(0));
 }
 
 impl Astore1 {
-    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Astore1")
-    }
+    insn_delegate!(Astore(1));
 }
 
 impl Astore2 {
-    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Astore2")
-    }
+    insn_delegate!(Astore(2));
 }
 
 impl Astore3 {
-    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Astore3")
-    }
+    insn_delegate!(Astore(3));
 }
 
 impl Athrow {
@@ -944,7 +981,7 @@ impl Getstatic {
 
 impl Goto {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Goto")
+        Ok(PostExecuteAction::Jmp(self.0 as i32))
     }
 }
 
