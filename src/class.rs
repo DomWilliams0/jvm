@@ -524,6 +524,16 @@ impl Class {
         )
     }
 
+    pub fn find_callable_method(
+        &self,
+        name: &mstr,
+        descriptor: &mstr,
+        flags: MethodAccessFlags,
+    ) -> VmResult<VmRef<Method>> {
+        self.find_method(name, descriptor, flags, MethodAccessFlags::ABSTRACT)
+            .ok_or_else(|| Throwables::Other("java/lang/NoSuchMethodError"))
+    }
+
     fn find_method(
         &self,
         name: &mstr,

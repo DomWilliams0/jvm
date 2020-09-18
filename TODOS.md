@@ -1,4 +1,4 @@
-# TODOs (91)
+# TODOs (94)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -49,7 +49,7 @@
    * `// TODO just allocate an object instead of this unsafeness`
    * `// TODO limit array length to i32::MAX somewhere`
    * `// TODO not quite correct toString`
- * [src/classloader.rs](src/classloader.rs) (11)
+ * [src/classloader.rs](src/classloader.rs) (13)
    * `// TODO types for str to differentiate java/lang/Object, java.lang.Object and descrptors e.g. Ljava/lang/Object;`
    * `// TODO register class "package" with loader (https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-5.html#jvms-5.3)`
    * `// TODO actually instantiate exceptions`
@@ -60,6 +60,8 @@
    * `let bytes = std::fs::read(path).expect("io error"); // TODO java.lang.IOError`
    * `// TODO define hardcoded preload classes in a better way`
    * `// TODO add array lookup with enum constants for common symbols like Object, or perfect hashing`
+   * `// TODO calling a method from native needs to be more ergonomic`
+   * `// TODO interpreter error -> internal vm error throwable`
    * `// TODO newtype VmRef should handle equality`
  * [src/classpath.rs](src/classpath.rs) (1)
    * `// TODO enum for path type, zip/jar or directory`
@@ -88,9 +90,10 @@
    * `// TODO natively intern new string instance`
    * `} // TODO int/float`
    * `// TODO class symbolic reference`
- * [src/jvm.rs](src/jvm.rs) (4)
+ * [src/jvm.rs](src/jvm.rs) (5)
    * `// TODO "catch" any exception during init, and log it properly with stacktrace etc`
    * `// TODO set all properties in gnu/classpath/VMSystemProperties.preinit`
+   * `// TODO load main class with system loader`
    * `// TODO wait for threads to die, unintialise TLS, assert this is the last ref to global state`
    * `// TODO actually parse args with something like clap`
  * [src/properties.rs](src/properties.rs) (2)

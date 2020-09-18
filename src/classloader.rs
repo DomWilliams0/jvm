@@ -9,9 +9,11 @@ use crate::error::{Throwables, VmResult};
 
 use crate::types::{ArrayType, PrimitiveDataType};
 use cafebabe::mutf8::mstr;
-use cafebabe::ClassError;
+use cafebabe::{ClassError, MethodAccessFlags};
 use parking_lot::RwLock;
 
+use crate::interpreter::{Frame, InterpreterResult};
+use crate::thread;
 use std::cell::RefCell;
 use std::thread::ThreadId;
 use strum_macros::EnumDiscriminants;
@@ -267,7 +269,7 @@ impl ClassLoader {
         let classes = [
             "java/lang/ClassLoader",
             "[I",
-            "java/lang/String",
+            // "java/lang/String",
             "java/util/HashMap",
         ];
 
@@ -298,6 +300,39 @@ impl ClassLoader {
         let array_cls_name = [b'[', prim.char() as u8];
         self.load_class(mstr::from_mutf8(&array_cls_name), WhichLoader::Bootstrap)
             .expect("primitive array class not loaded")
+    }
+
+    pub fn system_classloader(&self) -> VmResult<VmRef<Object>> {
+        trace!("getting system classloader");
+
+        // get classloader class
+        let classloader_class = self.load_class(
+            mstr::from_mutf8(b"java/lang/ClassLoader"),
+            WhichLoader::Bootstrap,
+        )?;
+        classloader_class.ensure_init()?;
+
+        // resolve method
+        let method = classloader_class.find_callable_method(
+            mstr::from_utf8(b"getSystemClassLoader").as_ref(),
+            mstr::from_mutf8(b"()Ljava/lang/ClassLoader;").as_ref(),
+            MethodAccessFlags::STATIC,
+        )?;
+
+        let thread = thread::get();
+        let interpreter = thread.interpreter();
+        let frame = Frame::new_no_args(method, classloader_class).expect("cant make frame");
+
+        // TODO calling a method from native needs to be more ergonomic
+        // TODO interpreter error -> internal vm error throwable
+        interpreter.state_mut().push_frame(frame);
+        if let InterpreterResult::Exception = interpreter.execute_until_return() {
+            let exc = thread.exception().unwrap();
+            error!("error getting system classloader: {:?}", exc);
+            panic!("system classloader");
+        }
+
+        todo!("return returned instance")
     }
 }
 

@@ -77,6 +77,13 @@ impl Jvm {
     }
 
     pub fn run_main(&mut self) -> JvmResult<()> {
+        let thread = thread::get();
+        let class_loader = thread.global().class_loader();
+
+        // instantiate system classloader
+        let system_loader = class_loader.system_classloader().throw()?;
+
+        // TODO load main class with system loader
         panic!("good job getting this far")
     }
 
