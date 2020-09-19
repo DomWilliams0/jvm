@@ -1,4 +1,4 @@
-# TODOs (96)
+# TODOs (107)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -24,7 +24,7 @@
    * `// TODO actually intern strings`
    * `// TODO methods on VmRef newtype`
    * `// TODO oom error`
- * [src/class.rs](src/class.rs) (24)
+ * [src/class.rs](src/class.rs) (25)
    * `// TODO store dimensions`
    * `/// TODO weak reference for cyclic?`
    * `// TODO arrays should live on the GC java heap`
@@ -41,6 +41,7 @@
    * `// update ptr - TODO use Arc::get_unchecked_mut when it is stable`
    * `// TODO set obj->vmdata field to vm_class`
    * `// TODO version to look in (super)interfaces too`
+   * `// TODO ensure there is only 1`
    * `// TODO initialise final static fields from ConstantValue attrs`
    * `// TODO only do this if its a class and not an iface`
    * `// TODO wrap exception here and return the proper type`
@@ -49,10 +50,11 @@
    * `// TODO just allocate an object instead of this unsafeness`
    * `// TODO limit array length to i32::MAX somewhere`
    * `// TODO not quite correct toString`
- * [src/classloader.rs](src/classloader.rs) (13)
+ * [src/classloader.rs](src/classloader.rs) (14)
    * `// TODO types for str to differentiate java/lang/Object, java.lang.Object and descrptors e.g. Ljava/lang/Object;`
    * `// TODO register class "package" with loader (https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-5.html#jvms-5.3)`
    * `// TODO actually instantiate exceptions`
+   * `/// TODO use a FnOnce() -> WhichLoader or &WhichLoader to avoid many useless clones`
    * `// TODO run user classloader first`
    * `// TODO array classes are treated differently`
    * `// TODO wait for other thread to finish loading`
@@ -73,24 +75,33 @@
    * `// TODO reference to class instead of name`
    * `// TODO reference to cause`
    * `// TODO backtrace`
- * [src/interpreter/frame.rs](src/interpreter/frame.rs) (6)
+ * [src/interpreter/frame.rs](src/interpreter/frame.rs) (7)
    * `// TODO validate local var slot in case of wide vars`
    * `// TODO longs and doubles take 2 slots!`
    * `// TODO tests for operand stack and local var array`
    * `// TODO instead of options, enum {Instance(obj), Static(class)}`
    * `// TODO pass args to native function`
+   * `// TODO expects()`
    * `// TODO impl Display for mstr`
- * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (10)
+ * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (18)
+   * `// TODO operand stack pop then verify might be wrong - only pop if its the right type?`
    * `/// TODO might be possible to continue with resolved methods/fields state instead of replay`
    * `// TODO better handling of interpreter error`
    * `// TODO some 2s are signed`
    * `// TODO catch this at verification time`
+   * `// TODO return error here`
+   * `// TODO ensure method is not static, IncompatibleClassChangeError`
+   * `// TODO native method`
    * `// TODO ensure class is not interface, method not abstract, not constructor`
    * `// TODO typecheck args at verification time`
    * `// TODO lookup natively interned string instance`
    * `// TODO natively intern new string instance`
    * `} // TODO int/float`
    * `// TODO class symbolic reference`
+   * `// TODO ensure not abstract, throw InstantiationError`
+   * `// TODO check value is compatible with field desc`
+   * `// TODO if final can only be in constructor`
+   * `// TODO if class is interface then can only be in constructor`
  * [src/interpreter/interp.rs](src/interpreter/interp.rs) (1)
    * `// TODO pass these into execute()`
  * [src/jvm.rs](src/jvm.rs) (5)

@@ -27,6 +27,9 @@ pub enum InterpreterError {
     #[error("Constant pool entry {0} is not present or a field ref")]
     NotFieldRef(u16),
 
+    #[error("Constant pool entry {0} is not present or a class ref")]
+    NotClassRef(u16),
+
     #[error("The method {class:?}.{name:?}:{desc:?} could not be resolved")]
     MethodNotFound {
         class: MString,

@@ -22,6 +22,10 @@ pub fn vmref_ptr<O>(vmref: &VmRef<O>) -> u64 {
     Arc::as_ptr(vmref) as u64
 }
 
+pub fn vmref_eq<A, B>(a: &VmRef<A>, b: &VmRef<B>) -> bool {
+    vmref_ptr(a) == vmref_ptr(b)
+}
+
 pub fn vmref_alloc_object(f: impl FnOnce() -> VmResult<Object>) -> VmResult<VmRef<Object>> {
     // TODO oom error
     Ok(VmRef::new(f()?))

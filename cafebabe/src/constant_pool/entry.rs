@@ -77,6 +77,7 @@ impl<'c> Entry<'c> for ClassRefEntry<'c> {
         }
     }
 }
+
 impl<'c> Entry<'c> for NameAndTypeEntry<'c> {
     const TAG: Tag = Tag::NameAndType;
 
@@ -94,6 +95,7 @@ impl<'c> Entry<'c> for NameAndTypeEntry<'c> {
         }
     }
 }
+
 impl<'c> Entry<'c> for MethodRefEntry<'c> {
     const TAG: Tag = Tag::MethodRef;
 
@@ -118,6 +120,32 @@ impl<'c> Entry<'c> for MethodRefEntry<'c> {
         }
     }
 }
+
+impl<'c> Entry<'c> for InterfaceMethodRefEntry<'c> {
+    const TAG: Tag = Tag::InterfaceMethodRef;
+
+    fn from_item(item: &Item<'c>, pool: &ConstantPool<'c>) -> ClassResult<Self> {
+        match item {
+            Item::InterfaceMethodRef {
+                class,
+                name_and_type,
+            } => {
+                let class: ClassRefEntry = pool.entry(*class)?;
+                let name_and_type: NameAndTypeEntry = pool.entry(*name_and_type)?;
+                Ok(InterfaceMethodRefEntry {
+                    class: class.name,
+                    name: name_and_type.name,
+                    desc: name_and_type.desc,
+                })
+            }
+            _ => Err(ClassError::WrongTag {
+                expected: Self::TAG,
+                actual: item.tag(),
+            }),
+        }
+    }
+}
+
 impl<'c> Entry<'c> for FieldRefEntry<'c> {
     const TAG: Tag = Tag::FieldRef;
 

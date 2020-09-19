@@ -1,7 +1,10 @@
 use crate::alloc::{InternedString, NativeString};
 use crate::types::DataType;
 use cafebabe::mutf8::MString;
-use cafebabe::{ClassError, ClassResult, FieldRefEntry, Item, MethodRefEntry};
+use cafebabe::{
+    ClassError, ClassRefEntry, ClassResult, FieldRefEntry, InterfaceMethodRefEntry, Item,
+    MethodRefEntry,
+};
 use std::fmt::{Debug, Formatter};
 
 #[derive(Debug)]
@@ -9,7 +12,9 @@ pub enum Entry {
     // TODO store interned string instance here
     String(MString),
     MethodRef(MethodRef),
+    InterfaceMethodRef(MethodRef),
     FieldRef(FieldRef),
+    ClassRef(ClassRef),
 }
 
 // TODO method and field refs should be resolved vtable indices instead of loads of strings
@@ -26,6 +31,11 @@ pub struct FieldRef {
     pub class: InternedString,
     pub name: NativeString,
     pub desc: DataType,
+}
+
+#[derive(Debug)]
+pub struct ClassRef {
+    pub name: InternedString,
 }
 
 pub struct RuntimeConstantPool(Vec<Option<Entry>>);
@@ -61,6 +71,17 @@ impl RuntimeConstantPool {
                         }),
                     );
                 }
+                Item::InterfaceMethodRef { .. } => {
+                    let methodref = pool.entry::<InterfaceMethodRefEntry>(idx)?;
+                    my_pool.put_entry(
+                        idx,
+                        Entry::InterfaceMethodRef(MethodRef {
+                            class: methodref.class.to_owned(),
+                            name: methodref.name.to_owned(),
+                            desc: methodref.desc.to_owned(),
+                        }),
+                    );
+                }
                 Item::FieldRef { .. } => {
                     let fieldref = pool.entry::<FieldRefEntry>(idx)?;
                     my_pool.put_entry(
@@ -74,6 +95,16 @@ impl RuntimeConstantPool {
                         }),
                     );
                 }
+                Item::Class { .. } => {
+                    let classref = pool.entry::<ClassRefEntry>(idx)?;
+                    my_pool.put_entry(
+                        idx,
+                        Entry::ClassRef(ClassRef {
+                            name: classref.name.to_owned(),
+                        }),
+                    );
+                }
+
                 _ => continue,
             }
         }
@@ -105,6 +136,7 @@ impl RuntimeConstantPool {
             .and_then(|e| if e.is_loadable() { Some(e) } else { None })
     }
 
+    /// Method ref only
     pub fn method_entry(&self, idx: u16) -> Option<&MethodRef> {
         self.entry(idx).and_then(|e| match e {
             Entry::MethodRef(m) => Some(m),
@@ -112,9 +144,23 @@ impl RuntimeConstantPool {
         })
     }
 
+    pub fn method_or_interface_entry(&self, idx: u16) -> Option<&MethodRef> {
+        self.entry(idx).and_then(|e| match e {
+            Entry::MethodRef(m) | Entry::InterfaceMethodRef(m) => Some(m),
+            _ => None,
+        })
+    }
+
     pub fn field_entry(&self, idx: u16) -> Option<&FieldRef> {
         self.entry(idx).and_then(|e| match e {
             Entry::FieldRef(f) => Some(f),
+            _ => None,
+        })
+    }
+
+    pub fn class_entry(&self, idx: u16) -> Option<&ClassRef> {
+        self.entry(idx).and_then(|e| match e {
+            Entry::ClassRef(f) => Some(f),
             _ => None,
         })
     }

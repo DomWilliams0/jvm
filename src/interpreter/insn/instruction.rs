@@ -1,6 +1,9 @@
+//! Hacky, repetitive and hopefully working in the success case only for now. Missing verification,
+//! type compatibility checks (e.g. field ops), value set conversion, narrowing etc. FOR NOW!!
+
 #![allow(unused_variables)]
 
-use crate::alloc::{vmref_alloc_object, VmRef};
+use crate::alloc::{vmref_alloc_object, vmref_eq, VmRef};
 use crate::constant_pool::Entry;
 
 use crate::interpreter::error::InterpreterError;
@@ -18,8 +21,10 @@ use crate::interpreter::insn::InstructionBlob;
 use crate::interpreter::{Frame, InterpreterState};
 use crate::thread;
 use cafebabe::mutf8::mstr;
-use cafebabe::MethodAccessFlags;
+use cafebabe::{AccessFlags, ClassAccessFlags, MethodAccessFlags};
 use std::fmt::Debug;
+
+// TODO operand stack pop then verify might be wrong - only pop if its the right type?
 
 pub enum PostExecuteAction {
     Continue,
@@ -433,6 +438,44 @@ impl Anewarray {
     }
 }
 
+fn do_return_value(interp: &mut InterpreterState, val: DataValue) -> ExecuteResult {
+    let frame = interp.current_frame_mut();
+
+    // check return type matches sig
+    // TODO catch this at verification time
+    let ret = ReturnType::Returns(val.data_type());
+    if frame.method.return_type() != &ret {
+        return Err(InterpreterError::InvalidReturnValue {
+            expected: frame.method.return_type().clone(),
+            actual: ret,
+        });
+    }
+
+    // pop this frame
+    if !interp.pop_frame() {
+        return Err(InterpreterError::NoFrame);
+    }
+
+    // push return value onto caller's stack
+    if let Some(caller) = interp.current_frame_mut_checked() {
+        caller.operand_stack.push(val);
+    } else {
+        warn!("no caller to return value to ({:?})", val);
+    }
+
+    Ok(PostExecuteAction::Return)
+}
+fn do_return_void(interp: &mut InterpreterState) -> ExecuteResult {
+    let frame = interp.current_frame_mut();
+
+    // pop this frame
+    if !interp.pop_frame() {
+        return Err(InterpreterError::NoFrame);
+    }
+
+    Ok(PostExecuteAction::Return)
+}
+
 impl Areturn {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
         let frame = interp.current_frame_mut();
@@ -448,27 +491,7 @@ impl Areturn {
             return Err(InterpreterError::InvalidOperandForFieldOp(obj.data_type()));
         }
 
-        // check return type matches sig
-        // TODO catch this at verification time
-        let ret = ReturnType::Returns(obj.data_type());
-        if frame.method.return_type() != &ret {
-            return Err(InterpreterError::InvalidReturnValue {
-                expected: frame.method.return_type().clone(),
-                actual: ret,
-            });
-        }
-
-        // pop frame this frame
-        if !interp.pop_frame() {
-            return Err(InterpreterError::NoFrame);
-        }
-
-        // push return value onto caller's stack
-        if let Some(caller) = interp.current_frame_mut_checked() {
-            caller.operand_stack.push(obj);
-        }
-
-        Ok(PostExecuteAction::Return)
+        do_return_value(interp, obj)
     }
 }
 
@@ -738,7 +761,19 @@ impl Dsub {
 
 impl Dup {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Dup")
+        let frame = interp.current_frame_mut();
+
+        // peek top operand
+        let obj = frame
+            .operand_stack
+            .peek()
+            .ok_or(InterpreterError::NoOperand)?;
+
+        // push clone
+        let obj_clone = obj.clone();
+        frame.operand_stack.push(obj_clone);
+
+        Ok(PostExecuteAction::Continue)
     }
 }
 
@@ -1419,7 +1454,121 @@ impl Invokeinterface {
 
 impl Invokespecial {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Invokespecial")
+        let frame = interp.current_frame_mut();
+        let thread = thread::get();
+        let class_loader = thread.global().class_loader();
+
+        let entry = frame
+            .class
+            .constant_pool()
+            .method_or_interface_entry(self.0)
+            .ok_or_else(|| InterpreterError::NotMethodRef(self.0))?;
+
+        let (class, method) = {
+            // resolve specified class and method
+            let resolved_class =
+                class_loader.load_class(&entry.class, frame.class.loader().clone())?;
+
+            let resolved_method = Class::find_method_recursive_in_superclasses(
+                &resolved_class,
+                &entry.name,
+                &entry.desc,
+                MethodAccessFlags::empty(),
+                MethodAccessFlags::ABSTRACT,
+            )
+            .ok_or_else(|| InterpreterError::MethodNotFound {
+                class: entry.class.clone(),
+                name: entry.name.clone(),
+                desc: entry.desc.clone(),
+            })?;
+
+            // choose actual class
+            let class = if
+            // The resolved method is not an instance initialization method
+            !resolved_method.is_instance_initializer() &&
+
+                // If the symbolic reference names a class (not an interface), then that class is a superclass of the current class.
+                (!resolved_class.is_interface() &&
+                    frame.class.super_class().map(|sup| vmref_eq(sup, &resolved_class)).unwrap_or(false)) &&
+
+                // The ACC_SUPER flag is set for the class file
+                resolved_class.flags().contains(ClassAccessFlags::SUPER)
+            {
+                let super_class = frame.class.super_class().unwrap(); // checked to be Some
+                super_class.clone()
+            } else {
+                resolved_class
+            };
+
+            // choose actual method
+            let lookup_actual_method = || {
+                if let Some(method) = class.find_method_in_this_only(
+                    resolved_method.name(),
+                    resolved_method.descriptor(),
+                    MethodAccessFlags::empty(),
+                    MethodAccessFlags::empty(),
+                ) {
+                    return method;
+                }
+
+                if !class.is_interface() {
+                    if class.super_class().is_some() {
+                        if let Some(method) = Class::find_method_recursive_in_superclasses(
+                            &class,
+                            resolved_method.name(),
+                            resolved_method.descriptor(),
+                            MethodAccessFlags::empty(),
+                            MethodAccessFlags::empty(),
+                        ) {
+                            return method;
+                        }
+                    }
+                } else {
+                    let object_class = class_loader.get_bootstrap_class("java/lang/Object");
+                    if let Some(method) = object_class.find_method_in_this_only(
+                        resolved_method.name(),
+                        resolved_method.descriptor(),
+                        MethodAccessFlags::PUBLIC,
+                        MethodAccessFlags::empty(),
+                    ) {
+                        return method;
+                    }
+                }
+
+                if let Some(method) = class.find_maximally_specific_method(
+                    resolved_method.name(),
+                    resolved_method.descriptor(),
+                    MethodAccessFlags::empty(),
+                    MethodAccessFlags::ABSTRACT,
+                ) {
+                    return method;
+                }
+
+                // TODO return error here
+                unreachable!("method not found")
+            };
+            let method = lookup_actual_method();
+            trace!(
+                "invokespecial resolved method to {:?}.{:?}",
+                class.name(),
+                method
+            );
+
+            // TODO ensure method is not static, IncompatibleClassChangeError
+            assert!(!method.flags().is_static());
+
+            // TODO native method
+            assert!(!method.flags().is_native(), "native not implemented");
+
+            (class, method)
+        };
+
+        // pop args and call method
+        let arg_count = method.args().len() + 1; // +1 for this
+        let callee_frame = Frame::new_with_caller(class, method, frame, arg_count)?;
+        interp.push_frame(callee_frame);
+
+        Ok(PostExecuteAction::MethodCall)
     }
 }
 
@@ -1432,14 +1581,14 @@ impl Invokestatic {
             .method_entry(self.0)
             .ok_or_else(|| InterpreterError::NotMethodRef(self.0))?;
         // TODO ensure class is not interface, method not abstract, not constructor
-        //
+
         // resolve class and method
         let class = thread::get()
             .global()
             .class_loader()
             .load_class(&entry.class, frame.class.loader().clone())?;
 
-        let method = Class::find_method_recursive(
+        let method = Class::find_method_recursive_in_superclasses(
             &class,
             &entry.name,
             &entry.desc,
@@ -1836,7 +1985,40 @@ impl Monitorexit {
 
 impl New {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction New")
+        let frame = interp.current_frame_mut();
+
+        // find class name
+        let classref = frame
+            .class
+            .constant_pool()
+            .class_entry(self.0)
+            .ok_or_else(|| InterpreterError::NotClassRef(self.0))?;
+
+        // resolve and init class
+        let class = thread::get()
+            .global()
+            .class_loader()
+            .load_class(classref.name.as_mstr(), frame.class.loader().clone())?;
+
+        // TODO ensure not abstract, throw InstantiationError
+
+        // initialise class on successful resolution
+        if class.needs_init() {
+            return Ok(PostExecuteAction::ClassInit(class));
+        }
+
+        // instantiate
+        let obj = vmref_alloc_object(|| Ok(Object::new(class)))?;
+        trace!(
+            "instantiated new instance of {:?}: {:?}",
+            obj.class().unwrap().name(),
+            obj
+        );
+
+        // push onto stack
+        frame.operand_stack.push(DataValue::reference(obj));
+
+        Ok(PostExecuteAction::Continue)
     }
 }
 
@@ -1872,7 +2054,50 @@ impl Putfield {
 
 impl Putstatic {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Putstatic")
+        let frame = interp.current_frame_mut();
+
+        // resolve field
+        let field = frame
+            .class
+            .constant_pool()
+            .field_entry(self.0)
+            .ok_or_else(|| InterpreterError::NotFieldRef(self.0))?;
+
+        trace!("putstatic {:?}", field);
+
+        // resolve class
+        let class = thread::get()
+            .global()
+            .class_loader()
+            .load_class(field.class.as_mstr(), frame.class.loader().clone())?;
+
+        // get field id
+        let field_id = class
+            .find_field_recursive(field.name.as_mstr(), &field.desc, FieldSearchType::Static)
+            .ok_or_else(|| InterpreterError::FieldNotFound {
+                name: field.name.clone(),
+                desc: field.desc.clone(),
+            })?;
+
+        // initialise class on successful resolution
+        if class.needs_init() {
+            return Ok(PostExecuteAction::ClassInit(class));
+        }
+
+        // pop value
+        let val = frame
+            .operand_stack
+            .pop()
+            .ok_or(InterpreterError::NoOperand)?;
+
+        // TODO check value is compatible with field desc
+        // TODO if final can only be in constructor
+        // TODO if class is interface then can only be in constructor
+
+        // set field
+        class.static_fields().ensure_set(field_id, val);
+
+        Ok(PostExecuteAction::Continue)
     }
 }
 
@@ -1884,7 +2109,7 @@ impl Ret {
 
 impl Return {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Return")
+        do_return_void(interp)
     }
 }
 

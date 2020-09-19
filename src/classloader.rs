@@ -111,6 +111,7 @@ impl ClassLoader {
     }
 
     /// Loads and creates Class object with ClassState::Uninitialised
+    /// TODO use a FnOnce() -> WhichLoader or &WhichLoader to avoid many useless clones
     pub fn load_class(&self, class_name: &mstr, mut loader: WhichLoader) -> VmResult<VmRef<Class>> {
         // TODO run user classloader first
         // TODO array classes are treated differently

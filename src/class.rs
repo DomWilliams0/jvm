@@ -516,7 +516,7 @@ impl Class {
     pub fn find_instance_constructor(&self, descriptor: &mstr) -> Option<VmRef<Method>> {
         debug_assert!(descriptor.to_utf8().ends_with('V'));
 
-        self.find_method(
+        self.find_method_in_this_only(
             mstr::from_utf8(b"<init>").as_ref(),
             descriptor,
             MethodAccessFlags::empty(),
@@ -530,11 +530,11 @@ impl Class {
         descriptor: &mstr,
         flags: MethodAccessFlags,
     ) -> VmResult<VmRef<Method>> {
-        self.find_method(name, descriptor, flags, MethodAccessFlags::ABSTRACT)
+        self.find_method_in_this_only(name, descriptor, flags, MethodAccessFlags::ABSTRACT)
             .ok_or_else(|| Throwables::Other("java/lang/NoSuchMethodError"))
     }
 
-    fn find_method(
+    pub fn find_method_in_this_only(
         &self,
         name: &mstr,
         desc: &mstr,
@@ -554,7 +554,7 @@ impl Class {
 
     /// Looks in super classes too
     // TODO version to look in (super)interfaces too
-    pub fn find_method_recursive(
+    pub fn find_method_recursive_in_superclasses(
         cls: &VmRef<Class>,
         name: &mstr,
         desc: &mstr,
@@ -563,7 +563,7 @@ impl Class {
     ) -> Option<VmRef<Method>> {
         let mut current = Some(cls);
         while let Some(cls) = current {
-            if let Some(method) = cls.find_method(name, desc, flags, antiflags) {
+            if let Some(method) = cls.find_method_in_this_only(name, desc, flags, antiflags) {
                 return Some(method);
             }
 
@@ -571,6 +571,30 @@ impl Class {
         }
 
         None
+    }
+    /// Looks in superinterfaces only
+    pub fn find_maximally_specific_method(
+        &self,
+        name: &mstr,
+        desc: &mstr,
+        flags: MethodAccessFlags,
+        antiflags: MethodAccessFlags,
+    ) -> Option<VmRef<Method>> {
+        let antiflags = antiflags | MethodAccessFlags::PRIVATE | MethodAccessFlags::STATIC;
+
+        let mut found = None;
+        self.with_superinterfaces(|iface| {
+            match iface.find_method_in_this_only(name, desc, flags, antiflags) {
+                m @ Some(_) => {
+                    found = m;
+                    // TODO ensure there is only 1
+                    SuperIteration::Stop
+                }
+                None => SuperIteration::KeepGoing,
+            }
+        });
+
+        found
     }
 
     fn find_field_index_with(
@@ -632,6 +656,10 @@ impl Class {
 
     pub const fn loader(&self) -> &WhichLoader {
         &self.loader
+    }
+
+    pub fn super_class(&self) -> Option<&VmRef<Class>> {
+        self.super_class.as_ref()
     }
 
     fn class_object(&self) -> &VmRef<Object> {
@@ -785,6 +813,7 @@ impl Class {
         }
     }
 
+    /// Recurses superclass then all superinterfaces
     fn with_supers(&self, mut f: impl FnMut(&VmRef<Class>) -> SuperIteration) {
         self.__with_supers_recurse(&mut f);
     }
@@ -801,6 +830,34 @@ impl Class {
         }
 
         // then recurse on direct superinterfaces
+        let mut ifaces = self.interfaces.iter();
+        while matches!(keep_going, SuperIteration::KeepGoing) {
+            match ifaces.next() {
+                Some(iface) => {
+                    keep_going = f(iface);
+
+                    if matches!(keep_going, SuperIteration::KeepGoing) {
+                        keep_going = Self::__with_supers_recurse(iface, f);
+                    }
+                }
+                None => break,
+            }
+        }
+
+        keep_going
+    }
+
+    /// Only recurses on superinterfaces
+    fn with_superinterfaces(&self, mut f: impl FnMut(&VmRef<Class>) -> SuperIteration) {
+        self.__with_superinterfaces_recurse(&mut f);
+    }
+
+    fn __with_superinterfaces_recurse(
+        &self,
+        f: &mut impl FnMut(&VmRef<Class>) -> SuperIteration,
+    ) -> SuperIteration {
+        let mut keep_going = SuperIteration::KeepGoing;
+
         let mut ifaces = self.interfaces.iter();
         while matches!(keep_going, SuperIteration::KeepGoing) {
             match ifaces.next() {
@@ -880,6 +937,14 @@ impl Class {
 
     pub fn static_fields(&self) -> &FieldStorage {
         &self.static_fields_values
+    }
+
+    pub fn is_interface(&self) -> bool {
+        self.access_flags.contains(ClassAccessFlags::INTERFACE)
+    }
+
+    pub fn flags(&self) -> ClassAccessFlags {
+        self.access_flags
     }
 }
 
@@ -1085,6 +1150,10 @@ impl Method {
         &self.name
     }
 
+    pub fn descriptor(&self) -> &mstr {
+        &self.desc
+    }
+
     pub fn args(&self) -> &[DataType] {
         &self.args
     }
@@ -1095,6 +1164,10 @@ impl Method {
 
     pub fn return_type(&self) -> &ReturnType {
         &self.return_type
+    }
+
+    pub fn is_instance_initializer(&self) -> bool {
+        self.name().as_bytes() == b"<init>"
     }
 }
 
