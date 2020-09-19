@@ -1,18 +1,19 @@
 use crate::class::null;
 
-use crate::alloc::{NativeString, VmRef};
+use crate::alloc::VmRef;
 use crate::class::Object;
 use cafebabe::mutf8::mstr;
 
-use std::convert::{TryFrom, TryInto};
+use std::borrow::Cow;
+use std::convert::TryInto;
 
-// TODO more efficient packing of data types, dont want huge enum discriminant taking up all the space
+// TODO more efficient packing of data values
 #[derive(PartialEq, Eq, Debug, Clone)]
-pub enum DataType {
+pub enum DataType<'a> {
     Primitive(PrimitiveDataType),
     ReturnAddress,
-    /// class types, array types, and interface types
-    Reference(ReferenceDataType),
+    /// Class name for class types, array types, and interface types.
+    Reference(Cow<'a, mstr>),
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
@@ -28,14 +29,6 @@ pub enum PrimitiveDataType {
     Double,
 }
 
-// TODO interned strings for class names?
-// TODO gross that we always need an allocation for reference type - Cow/vmref<class> for class and store array dim inline?
-#[derive(PartialEq, Eq, Debug, Clone)]
-pub enum ReferenceDataType {
-    Class(NativeString),
-    Array { dims: u8, elem_type: Box<DataType> },
-}
-
 #[derive(Debug, Clone)]
 pub enum DataValue {
     Boolean(bool),
@@ -48,7 +41,7 @@ pub enum DataValue {
     Float(f32),
     Double(f64),
     /// class types, array types, and interface types
-    Reference(ReferenceDataType, VmRef<Object>),
+    Reference(VmRef<Object>),
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -60,13 +53,13 @@ pub enum ArrayType<'a> {
 pub struct MethodSignature<'a> {
     descriptor: &'a [u8],
     errored: bool,
-    ret: ReturnType,
+    ret: ReturnType<'a>,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub enum ReturnType {
+pub enum ReturnType<'a> {
     Void,
-    Returns(DataType),
+    Returns(DataType<'a>),
 }
 
 enum SignatureState {
@@ -81,17 +74,18 @@ pub struct MethodSignatureIter<'a, 'b> {
     cursor: usize,
 }
 
-impl DataType {
+impl<'a> DataType<'a> {
     pub fn default_value(self) -> DataValue {
         match self {
             DataType::Primitive(prim) => prim.default_value(),
             DataType::ReturnAddress => DataValue::ReturnAddress(0),
-            DataType::Reference(reftype) => DataValue::Reference(reftype, null()),
+            DataType::Reference(_) => DataValue::Reference(null()),
         }
     }
-    pub fn from_descriptor(desc: &mstr) -> Option<Self> {
+    pub fn from_descriptor(desc: &'a mstr) -> Option<Self> {
         Self::from_descriptor_stream(desc.as_bytes()).and_then(|(data, cursor)| {
-            if cursor == desc.len() {
+            let len = desc.len();
+            if cursor == len {
                 Some(data)
             } else {
                 None
@@ -99,10 +93,27 @@ impl DataType {
         })
     }
 
-    fn from_descriptor_stream(desc: &[u8]) -> Option<(Self, usize)> {
+    fn from_descriptor_stream(desc: &'a [u8]) -> Option<(Self, usize)> {
         // collect array dimensions
         let array_dims = desc.iter().position(|b| *b != b'[')?;
 
+        match array_dims {
+            0 => {
+                // not an array
+            }
+            1..=255 => {
+                // valid array dimensions
+                // parse element type but dont store
+                let (_, idx) = Self::from_descriptor_stream(&desc[array_dims..])?;
+
+                let elem_type = mstr::from_mutf8(&desc[..array_dims + idx]);
+                return Some((Self::Reference(Cow::Borrowed(elem_type)), array_dims + idx));
+            }
+            _ => {
+                // invalid array dims
+                return None;
+            }
+        }
         let desc = &desc[array_dims..];
 
         let first = *desc.get(0)?;
@@ -116,23 +127,11 @@ impl DataType {
             }
 
             (
-                Self::Reference(ReferenceDataType::Class(NativeString::from_mutf8(name))),
+                Self::Reference(Cow::Borrowed(mstr::from_mutf8(name))),
                 semicolon + 1,
             )
         } else {
             return None;
-        };
-
-        let datatype = if array_dims == 0 {
-            datatype
-        } else {
-            // limit to 255
-            let array_dims = u8::try_from(array_dims).ok()?;
-
-            Self::Reference(ReferenceDataType::Array {
-                dims: array_dims as u8,
-                elem_type: Box::new(datatype),
-            })
         };
 
         Some((datatype, cursor + array_dims))
@@ -140,6 +139,17 @@ impl DataType {
 
     pub fn is_primitive(&self) -> bool {
         matches!(self, DataType::Primitive(_))
+    }
+
+    pub fn to_owned(&self) -> DataType<'static> {
+        match self {
+            DataType::Reference(r) => {
+                let str = r.clone();
+                DataType::Reference(Cow::Owned(str.into_owned()))
+            }
+            DataType::Primitive(p) => DataType::Primitive(*p),
+            DataType::ReturnAddress => DataType::ReturnAddress,
+        }
     }
 }
 
@@ -151,19 +161,8 @@ impl DataValue {
         }
     }
 
-    /// Must be non null
-    pub fn reference(reference: VmRef<Object>) -> Self {
-        let reference_data = ReferenceDataType::Class(
-            reference
-                .class()
-                .expect("should be non null")
-                .name()
-                .to_owned(),
-        );
-        DataValue::Reference(reference_data, reference)
-    }
-
-    pub fn data_type(&self) -> DataType {
+    /// Panics if null
+    pub fn data_type(&self) -> DataType<'static> {
         match self {
             DataValue::Boolean(_) => DataType::Primitive(PrimitiveDataType::Boolean),
             DataValue::Byte(_) => DataType::Primitive(PrimitiveDataType::Byte),
@@ -174,7 +173,10 @@ impl DataValue {
             DataValue::Float(_) => DataType::Primitive(PrimitiveDataType::Float),
             DataValue::Double(_) => DataType::Primitive(PrimitiveDataType::Double),
             DataValue::ReturnAddress(_) => DataType::ReturnAddress,
-            DataValue::Reference(ty, _) => DataType::Reference(ty.clone()),
+            DataValue::Reference(o) => {
+                let cls = o.class().expect("null");
+                DataType::Reference(Cow::Owned(cls.name().to_owned()))
+            }
         }
     }
 
@@ -185,33 +187,19 @@ impl DataValue {
         }
     }
 
-    pub fn as_reference_array(&self) -> Option<VmRef<Object>> {
+    pub fn as_reference(&self) -> Option<&VmRef<Object>> {
         match self {
-            DataValue::Reference(ReferenceDataType::Array { .. }, obj) => Some(obj.clone()),
-            _ => None,
-        }
-    }
-
-    pub fn as_reference_nonarray(&self) -> Option<VmRef<Object>> {
-        match self {
-            DataValue::Reference(ReferenceDataType::Class(_), obj) => Some(obj.clone()),
-            _ => None,
-        }
-    }
-
-    pub fn as_reference(&self) -> Option<VmRef<Object>> {
-        match self {
-            DataValue::Reference(_, obj) => Some(obj.clone()),
+            DataValue::Reference(obj) => Some(obj),
             _ => None,
         }
     }
 
     pub fn is_reference_or_retaddr(&self) -> bool {
-        matches!(self, DataValue::Reference(_, _) | DataValue::ReturnAddress(_))
+        matches!(self, DataValue::Reference(_) | DataValue::ReturnAddress(_))
     }
 
     pub fn is_reference(&self) -> bool {
-        matches!(self, DataValue::Reference(_, _))
+        matches!(self, DataValue::Reference(_))
     }
 }
 
@@ -309,6 +297,15 @@ impl<'a> ArrayType<'a> {
     }
 }
 
+impl<'a> ReturnType<'a> {
+    pub fn to_owned(&self) -> ReturnType<'static> {
+        match self {
+            ReturnType::Returns(ty) => ReturnType::Returns(ty.to_owned()),
+            ReturnType::Void => ReturnType::Void,
+        }
+    }
+}
+
 macro_rules! impl_data_value_type {
     ($ty:ty, $variant:ident) => {
         impl From<$ty> for DataValue {
@@ -367,7 +364,7 @@ impl<'a> MethodSignature<'a> {
 }
 
 impl<'a, 'b> Iterator for MethodSignatureIter<'a, 'b> {
-    type Item = DataType;
+    type Item = DataType<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
@@ -442,20 +439,19 @@ impl<'a, 'b> MethodSignatureIter<'a, 'b> {
 
 #[cfg(test)]
 mod tests {
-    use crate::types::{
-        ArrayType, DataType, MethodSignature, PrimitiveDataType, ReferenceDataType, ReturnType,
-    };
-    use cafebabe::mutf8::{mstr, MString};
+    use crate::types::{ArrayType, DataType, MethodSignature, PrimitiveDataType, ReturnType};
+    use cafebabe::mutf8::mstr;
 
     fn check(input: &str, expected: Option<DataType>) {
         let mstr = mstr::from_utf8(input.as_bytes());
         assert_eq!(DataType::from_descriptor(mstr.as_ref()), expected)
     }
 
-    fn check_ref(input: &str, expected: ReferenceDataType) {
-        let mstr = mstr::from_utf8(input.as_bytes());
+    fn check_ref(input: &str, expected: &str) {
+        let input = mstr::from_utf8(input.as_bytes());
+        let expected = mstr::from_utf8(expected.as_bytes());
         assert_eq!(
-            DataType::from_descriptor(mstr.as_ref()),
+            DataType::from_descriptor(input.as_ref()),
             Some(DataType::Reference(expected))
         )
     }
@@ -493,41 +489,16 @@ mod tests {
     fn class() {
         check("L", None);
         check("L;", None);
-        check_ref(
-            "Ljava/lang/Woopdedoo;",
-            ReferenceDataType::Class(MString::from_utf8(b"java/lang/Woopdedoo")),
-        );
+        check_ref("Ljava/lang/Woopdedoo;", "java/lang/Woopdedoo");
         check("Lwoop;nah", None);
     }
 
     #[test]
     fn array() {
         check("[", None);
-        check_ref(
-            "[I",
-            ReferenceDataType::Array {
-                dims: 1,
-                elem_type: Box::new(DataType::Primitive(PrimitiveDataType::Int)),
-            },
-        );
-        check_ref(
-            "[[[I",
-            ReferenceDataType::Array {
-                dims: 3,
-                elem_type: Box::new(DataType::Primitive(PrimitiveDataType::Int)),
-            },
-        );
-        check("[[[I;", None);
-
-        check_ref(
-            "[[Ljava/lang/Object;",
-            ReferenceDataType::Array {
-                dims: 2,
-                elem_type: Box::new(DataType::Reference(ReferenceDataType::Class(
-                    MString::from_utf8(b"java/lang/Object"),
-                ))),
-            },
-        );
+        check_ref("[I", "[I");
+        check_ref("[[D", "[[D");
+        check_ref("[[Ljava/lang/Object;", "[[Ljava/lang/Object;");
     }
 
     #[test]
@@ -563,9 +534,7 @@ mod tests {
             "()Lnice;",
             Some((
                 vec![],
-                ReturnType::Returns(DataType::Reference(ReferenceDataType::Class(
-                    MString::from_utf8(b"nice"),
-                ))),
+                ReturnType::Returns(DataType::Reference(mstr::from_utf8(b"nice"))),
             )),
         );
         check_method("()asdf", None);
@@ -575,10 +544,7 @@ mod tests {
             Some((
                 vec![
                     DataType::Primitive(PrimitiveDataType::Int),
-                    DataType::Reference(ReferenceDataType::Array {
-                        dims: 2,
-                        elem_type: Box::new(DataType::Primitive(PrimitiveDataType::Double)),
-                    }),
+                    DataType::Reference(mstr::from_utf8(b"[[D")),
                 ],
                 ReturnType::Void,
             )),

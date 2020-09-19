@@ -24,12 +24,12 @@ pub struct FieldStorageLayout {
     /// Indexed by field_id.class_id, the cumulative index of the first field of that class in storage
     counts: Box<[u32]>,
 
-    types: Box<[DataType]>,
+    types: Box<[DataType<'static>]>,
 }
 
 pub struct FieldStorageLayoutBuilder {
     counts: Vec<u32>,
-    types: Vec<DataType>,
+    types: Vec<DataType<'static>>,
 }
 
 impl FieldStorageLayoutBuilder {
@@ -40,7 +40,7 @@ impl FieldStorageLayoutBuilder {
         }
     }
 
-    pub fn add_fields_from_class(&mut self, tys: impl Iterator<Item = DataType>) {
+    pub fn add_fields_from_class(&mut self, tys: impl Iterator<Item = DataType<'static>>) {
         // store start offset of this class
         self.counts.push(self.types.len() as u32);
         self.types.extend(tys)

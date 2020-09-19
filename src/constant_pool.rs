@@ -30,7 +30,7 @@ pub struct MethodRef {
 pub struct FieldRef {
     pub class: InternedString,
     pub name: NativeString,
-    pub desc: DataType,
+    pub desc: DataType<'static>,
 }
 
 #[derive(Debug)]
@@ -89,9 +89,11 @@ impl RuntimeConstantPool {
                         Entry::FieldRef(FieldRef {
                             class: fieldref.class.to_owned(),
                             name: fieldref.name.to_owned(),
-                            desc: DataType::from_descriptor(fieldref.desc).ok_or_else(|| {
-                                ClassError::TypeDescriptor(fieldref.desc.to_owned())
-                            })?,
+                            desc: DataType::from_descriptor(fieldref.desc)
+                                .ok_or_else(|| {
+                                    ClassError::TypeDescriptor(fieldref.desc.to_owned())
+                                })?
+                                .to_owned(),
                         }),
                     );
                 }

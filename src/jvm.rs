@@ -5,7 +5,6 @@ use log::*;
 use clap::{App, AppSettings, Arg};
 use thiserror::*;
 
-use crate::alloc::NativeString;
 use crate::class::null;
 use crate::classloader::{ClassLoader, WhichLoader};
 use crate::classpath::ClassPath;
@@ -13,7 +12,7 @@ use crate::error::ResultExt;
 use crate::interpreter::{Frame, InstructionLookupTable, InterpreterResult};
 use crate::properties::SystemProperties;
 use crate::thread::JvmThreadState;
-use crate::types::{DataType, DataValue, ReferenceDataType};
+use crate::types::DataValue;
 use crate::{thread, JvmError, JvmResult};
 use cafebabe::mutf8::mstr;
 use cafebabe::MethodAccessFlags;
@@ -118,20 +117,11 @@ impl Jvm {
         let args_array = null();
 
         // execute it!!
-        // TODO this is very unergonomic
         let interp = thread.interpreter();
         let frame = Frame::new_with_args(
             main_method,
             main_class,
-            once(DataValue::Reference(
-                ReferenceDataType::Array {
-                    dims: 1,
-                    elem_type: Box::new(DataType::Reference(ReferenceDataType::Class(
-                        NativeString::from_utf8(b"java/lang/String"),
-                    ))),
-                },
-                args_array,
-            )),
+            once(DataValue::Reference(args_array)),
         )
         .unwrap();
 

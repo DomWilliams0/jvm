@@ -76,7 +76,7 @@ impl LocalVariables {
 
     pub fn load_reference(&mut self, idx: usize) -> Result<DataValue, InterpreterError> {
         self.load(idx).and_then(|val| match val {
-            DataValue::Reference(_, _) => Ok(val),
+            DataValue::Reference(_) => Ok(val),
             v => Err(InterpreterError::NotReference(idx, v)),
         })
     }

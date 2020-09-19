@@ -1,4 +1,4 @@
-# TODOs (108)
+# TODOs (105)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -104,11 +104,10 @@
    * `// TODO if class is interface then can only be in constructor`
  * [src/interpreter/interp.rs](src/interpreter/interp.rs) (1)
    * `// TODO pass these into execute()`
- * [src/jvm.rs](src/jvm.rs) (6)
+ * [src/jvm.rs](src/jvm.rs) (5)
    * `// TODO "catch" any exception during init, and log it properly with stacktrace etc`
    * `// TODO set all properties in gnu/classpath/VMSystemProperties.preinit`
    * `// TODO populate String[] args`
-   * `// TODO this is very unergonomic`
    * `// TODO wait for threads to die, unintialise TLS, assert this is the last ref to global state`
    * `// TODO standard jvm args`
  * [src/properties.rs](src/properties.rs) (2)
@@ -122,7 +121,5 @@
    * `// TODO test this once structure is settled`
  * [src/thread.rs](src/thread.rs) (1)
    * `exception: RefCell<Option<VmRef<Throwable /* TODO vmobject */>>>,`
- * [src/types.rs](src/types.rs) (3)
-   * `// TODO more efficient packing of data types, dont want huge enum discriminant taking up all the space`
-   * `// TODO interned strings for class names?`
-   * `// TODO gross that we always need an allocation for reference type - Cow/vmref<class> for class and store array dim inline?`
+ * [src/types.rs](src/types.rs) (1)
+   * `// TODO more efficient packing of data values`

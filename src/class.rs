@@ -9,9 +9,7 @@ use log::*;
 use crate::alloc::{vmref_alloc_object, vmref_ptr, InternedString, NativeString, VmRef};
 use crate::classloader::{current_thread, ClassLoader, WhichLoader};
 use crate::error::{Throwables, VmResult};
-use crate::types::{
-    DataType, DataValue, MethodSignature, PrimitiveDataType, ReferenceDataType, ReturnType,
-};
+use crate::types::{DataType, DataValue, MethodSignature, PrimitiveDataType, ReturnType};
 use cafebabe::mutf8::mstr;
 
 use crate::constant_pool::RuntimeConstantPool;
@@ -25,10 +23,11 @@ use parking_lot::{Mutex, MutexGuard};
 use std::cell::UnsafeCell;
 use std::fmt::{Debug, Formatter};
 
+use std::borrow::Cow;
 use std::sync::Arc;
 use std::thread::ThreadId;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ClassType {
     // TODO store dimensions
     Array(VmRef<Class>),
@@ -104,7 +103,7 @@ pub fn null() -> VmRef<Object> {
 #[derive(Debug)]
 pub struct Field {
     name: NativeString,
-    desc: DataType,
+    desc: DataType<'static>,
     flags: FieldAccessFlags,
 }
 
@@ -121,8 +120,8 @@ pub struct Method {
     flags: MethodAccessFlags,
 
     // TODO arrayvec
-    args: Vec<DataType>,
-    return_type: ReturnType,
+    args: Vec<DataType<'static>>,
+    return_type: ReturnType<'static>,
 
     /// Only present if not native or abstract
     code: Option<attribute::Code>,
@@ -260,7 +259,7 @@ impl Class {
                 };
 
                 let mut signature = MethodSignature::from_descriptor(method.descriptor);
-                let args = signature.iter_args().collect();
+                let args = signature.iter_args().map(|arg| arg.to_owned()).collect();
                 if signature.errored() {
                     warn!("invalid method descriptor {:?}", method.descriptor);
                     return Err(Throwables::ClassFormatError);
@@ -271,7 +270,7 @@ impl Class {
                     desc: method.descriptor.to_owned(),
                     flags: method.access_flags,
                     args,
-                    return_type: signature.return_type(),
+                    return_type: signature.return_type().to_owned(),
                     code,
                     attributes,
                 }))
@@ -294,7 +293,7 @@ impl Class {
 
                 vec.push(Field {
                     name: field.name.to_owned(),
-                    desc,
+                    desc: desc.to_owned(),
                     flags: field.access_flags,
                 })
             }
@@ -667,6 +666,10 @@ impl Class {
         self.super_class.as_ref()
     }
 
+    pub fn class_type(&self) -> &ClassType {
+        &self.class_type
+    }
+
     fn class_object(&self) -> &VmRef<Object> {
         let ptr = self.class_object.as_ptr();
         // safety: initialised unconditionally in link()
@@ -963,6 +966,12 @@ impl MethodLookupResult {
     }
 }
 
+impl ClassType {
+    pub fn is_array(&self) -> bool {
+        matches!(self, Self::Array(_))
+    }
+}
+
 impl Object {
     /// Only use this to create the sentinel NULL value
     fn new_null() -> Self {
@@ -998,10 +1007,8 @@ impl Object {
 
         let elem_type = match elem_cls.class_type {
             ClassType::Primitive(prim) => DataType::Primitive(prim),
-            ClassType::Normal => {
-                DataType::Reference(ReferenceDataType::Class(elem_cls.name.to_owned()))
-            }
-            ClassType::Array(_) => todo!("nested arrays?"),
+            ClassType::Normal => DataType::Reference(Cow::Owned(elem_cls.name.to_owned())),
+            ClassType::Array(_) => unreachable!(),
         };
 
         let data = vec![elem_type.default_value(); len];
@@ -1054,16 +1061,7 @@ impl Object {
             Ok(())
         };
 
-        set_field(
-            b"value",
-            DataValue::Reference(
-                ReferenceDataType::Array {
-                    dims: 1,
-                    elem_type: Box::new(DataType::Primitive(PrimitiveDataType::Char)),
-                },
-                char_array,
-            ),
-        )?;
+        set_field(b"value", DataValue::Reference(char_array))?;
 
         set_field(b"count", DataValue::Int(length as i32))?;
 
@@ -1131,6 +1129,10 @@ impl Object {
 
     pub fn array_length(&self) -> Option<i32> {
         self.array().map(|arr| arr.len() as i32)
+    }
+
+    pub fn is_array(&self) -> bool {
+        matches!(self.storage, ObjectStorage::Array(_))
     }
 }
 

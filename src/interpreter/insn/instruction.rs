@@ -446,7 +446,7 @@ fn do_return_value(interp: &mut InterpreterState, val: DataValue) -> ExecuteResu
     let ret = ReturnType::Returns(val.data_type());
     if frame.method.return_type() != &ret {
         return Err(InterpreterError::InvalidReturnValue {
-            expected: frame.method.return_type().clone(),
+            expected: frame.method.return_type().to_owned(),
             actual: ret,
         });
     }
@@ -488,7 +488,7 @@ impl Areturn {
 
         // ensure reference
         if !obj.is_reference() {
-            return Err(InterpreterError::InvalidOperandForFieldOp(obj.data_type()));
+            return Err(InterpreterError::InvalidOperandForObjectOp(obj.data_type()));
         }
 
         do_return_value(interp, obj)
@@ -507,8 +507,8 @@ impl Arraylength {
 
         // ensure non-null array reference
         let obj = obj
-            .as_reference_array()
-            .ok_or_else(|| InterpreterError::InvalidOperandForFieldOp(obj.data_type()))?;
+            .as_reference()
+            .ok_or_else(|| InterpreterError::InvalidOperandForObjectOp(obj.data_type()))?;
 
         if obj.is_null() {
             return Ok(PostExecuteAction::Exception(
@@ -517,7 +517,10 @@ impl Arraylength {
         }
 
         // get length
-        let length = obj.array_length().unwrap(); // just checked its an array
+        let length = obj.array_length().ok_or_else(|| {
+            let class = obj.class().unwrap();
+            InterpreterError::NotAnArray(class.class_type().to_owned())
+        })?;
 
         trace!("array length is {}", length);
 
@@ -990,12 +993,21 @@ impl Getfield {
 
         // ensure non-null non-array reference
         let obj = obj
-            .as_reference_nonarray()
-            .ok_or_else(|| InterpreterError::InvalidOperandForFieldOp(obj.data_type()))?;
+            .as_reference()
+            .ok_or_else(|| InterpreterError::InvalidOperandForObjectOp(obj.data_type()))?;
 
-        if obj.is_null() {
-            return Ok(PostExecuteAction::Exception(
-                Throwables::NullPointerException,
+        let obj_class = match obj.class() {
+            Some(cls) => cls,
+            None => {
+                return Ok(PostExecuteAction::Exception(
+                    Throwables::NullPointerException,
+                ))
+            }
+        };
+
+        if obj_class.class_type().is_array() {
+            return Err(InterpreterError::UnexpectedArray(
+                obj_class.class_type().to_owned(),
             ));
         }
 
@@ -1274,7 +1286,7 @@ fn obj_cmp_one(
     interp: &mut InterpreterState,
     offset: i16,
     wat: &'static str,
-    cmp: impl FnOnce(VmRef<Object>) -> bool,
+    cmp: impl FnOnce(&VmRef<Object>) -> bool,
 ) -> ExecuteResult {
     let frame = interp.current_frame_mut();
 
@@ -1805,7 +1817,7 @@ impl Ldc {
                 // push onto stack
                 frame
                     .operand_stack
-                    .push(DataValue::reference(string_instance));
+                    .push(DataValue::Reference(string_instance));
             } // TODO int/float
             // TODO class symbolic reference
             e => unimplemented!("loadable entry {:?}", e),
@@ -2016,7 +2028,7 @@ impl New {
         );
 
         // push onto stack
-        frame.operand_stack.push(DataValue::reference(obj));
+        frame.operand_stack.push(DataValue::Reference(obj));
 
         Ok(PostExecuteAction::Continue)
     }

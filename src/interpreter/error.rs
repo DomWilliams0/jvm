@@ -4,6 +4,8 @@ use crate::types::{DataType, DataValue, ReturnType};
 use cafebabe::mutf8::MString;
 use thiserror::*;
 
+use crate::class::ClassType;
+
 #[derive(Error, Debug, Clone)]
 pub enum InterpreterError {
     #[error("Incomplete instruction at byte {0}")]
@@ -38,7 +40,10 @@ pub enum InterpreterError {
     },
 
     #[error("The field {name:?}:{desc:?} could not be resolved")]
-    FieldNotFound { name: MString, desc: DataType },
+    FieldNotFound {
+        name: MString,
+        desc: DataType<'static>,
+    },
 
     #[error("Not enough operands on stack to pop, expected {expected} but only have {actual}")]
     NotEnoughArgs { expected: usize, actual: usize },
@@ -55,22 +60,25 @@ pub enum InterpreterError {
     #[error("Cannot pop from empty operand stack")]
     NoOperand,
 
-    #[error("Expected non-array reference type for field op but got {0:?} instead")]
-    InvalidOperandForFieldOp(DataType),
+    #[error("Expected non-array reference but got {0:?} instead")]
+    UnexpectedArray(ClassType),
 
     #[error("Expected integer operand but got {0:?} instead")]
-    InvalidOperandForIntOp(DataType),
+    InvalidOperandForIntOp(DataType<'static>),
 
     #[error("Expected reference or returnAddress operand but got {0:?} instead")]
-    InvalidOperandForAstore(DataType),
+    InvalidOperandForAstore(DataType<'static>),
 
     #[error("Expected reference operand for object op but got {0:?} instead")]
-    InvalidOperandForObjectOp(DataType),
+    InvalidOperandForObjectOp(DataType<'static>),
+
+    #[error("Class of type {0:?} is not an array")]
+    NotAnArray(ClassType),
 
     #[error("Expected return type of {expected:?} but got {actual:?}")]
     InvalidReturnValue {
-        expected: ReturnType,
-        actual: ReturnType,
+        expected: ReturnType<'static>,
+        actual: ReturnType<'static>,
     },
 
     #[error("Cannot pop from empty frame stack")]
