@@ -656,6 +656,11 @@ impl Class {
         }
     }
 
+    pub fn needs_init(&self) -> bool {
+        let _monitor = self.class_object().enter_monitor();
+        matches!(self.get_state(), ClassState::Uninitialised)
+    }
+
     pub fn ensure_init(self: &Arc<Class>) -> VmResult<()> {
         // synchronise on initialisation lock
         let mut monitor = self.class_object().enter_monitor();

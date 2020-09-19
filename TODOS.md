@@ -1,4 +1,4 @@
-# TODOs (95)
+# TODOs (96)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -81,16 +81,18 @@
    * `// TODO pass args to native function`
    * `// TODO impl Display for mstr`
  * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (10)
+   * `/// TODO might be possible to continue with resolved methods/fields state instead of replay`
    * `// TODO better handling of interpreter error`
    * `// TODO some 2s are signed`
    * `// TODO catch this at verification time`
-   * `// TODO this needs mutable interpreter state if theres a static constructor!!`
    * `// TODO ensure class is not interface, method not abstract, not constructor`
    * `// TODO typecheck args at verification time`
    * `// TODO lookup natively interned string instance`
    * `// TODO natively intern new string instance`
    * `} // TODO int/float`
    * `// TODO class symbolic reference`
+ * [src/interpreter/interp.rs](src/interpreter/interp.rs) (1)
+   * `// TODO pass these into execute()`
  * [src/jvm.rs](src/jvm.rs) (5)
    * `// TODO "catch" any exception during init, and log it properly with stacktrace etc`
    * `// TODO set all properties in gnu/classpath/VMSystemProperties.preinit`

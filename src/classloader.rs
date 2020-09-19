@@ -269,7 +269,7 @@ impl ClassLoader {
         let classes = [
             "java/lang/ClassLoader",
             "[I",
-            // "java/lang/String",
+            "java/lang/String",
             "java/util/HashMap",
         ];
 

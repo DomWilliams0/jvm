@@ -10,12 +10,14 @@ use log::*;
 use crate::class::{Class, FieldSearchType, Object};
 use crate::types::{DataValue, ReturnType};
 
+use crate::classloader::WhichLoader;
 use crate::error::Throwables;
 use crate::interpreter::insn::bytecode::InsnReader;
 use crate::interpreter::insn::opcode::Opcode;
 use crate::interpreter::insn::InstructionBlob;
 use crate::interpreter::{Frame, InterpreterState};
 use crate::thread;
+use cafebabe::mutf8::mstr;
 use cafebabe::MethodAccessFlags;
 use std::fmt::Debug;
 
@@ -28,6 +30,9 @@ pub enum PostExecuteAction {
     Jmp(i32),
     /// Absolute jump to pc
     JmpAbsolute(usize),
+    /// Initialise the given class then rerun this instruction
+    /// TODO might be possible to continue with resolved methods/fields state instead of replay
+    ClassInit(VmRef<Class>),
 }
 
 pub type ExecuteResult = Result<PostExecuteAction, InterpreterError>;
@@ -986,15 +991,11 @@ impl Getstatic {
 
         trace!("getstatic {:?}", field);
 
-        // resolve and init class
-        // release mut ref to interpreter state in case this runs a static constructor
+        // resolve class
         let class = thread::get()
             .global()
             .class_loader()
             .load_class(field.class.as_mstr(), frame.class.loader().clone())?;
-
-        // TODO this needs mutable interpreter state if theres a static constructor!!
-        class.ensure_init()?;
 
         // get field id
         let field_id = class
@@ -1003,6 +1004,11 @@ impl Getstatic {
                 name: field.name.clone(),
                 desc: field.desc.clone(),
             })?;
+
+        // initialise class on successful resolution
+        if class.needs_init() {
+            return Ok(PostExecuteAction::ClassInit(class));
+        }
 
         // get field value
         let value = class.static_fields().ensure_get(field_id);
@@ -1432,7 +1438,7 @@ impl Invokestatic {
             .global()
             .class_loader()
             .load_class(&entry.class, frame.class.loader().clone())?;
-        //
+
         let method = Class::find_method_recursive(
             &class,
             &entry.name,
@@ -1445,6 +1451,13 @@ impl Invokestatic {
             name: entry.name.clone(),
             desc: entry.desc.clone(),
         })?;
+
+        // On successful resolution of the method, the class or interface that declared the
+        // resolved method is initialized if that class or interface has not already been
+        // initialized (§5.5).
+        if class.needs_init() {
+            return Ok(PostExecuteAction::ClassInit(class));
+        }
 
         // TODO typecheck args at verification time
         let arg_count = method.args().len();
@@ -1625,7 +1638,15 @@ impl Ldc {
             Entry::String(s) => {
                 // TODO lookup natively interned string instance
 
-                let string_class = frame.ensure_loaded("java/lang/String")?;
+                let string_class = thread::get().global().class_loader().load_class(
+                    mstr::from_utf8(b"java/lang/String").as_ref(),
+                    WhichLoader::Bootstrap,
+                )?;
+
+                // ensure initialised
+                if string_class.needs_init() {
+                    return Ok(PostExecuteAction::ClassInit(string_class));
+                }
 
                 // create string instance
                 let string_instance = vmref_alloc_object(|| Object::new_string(s.as_mstr()))?;

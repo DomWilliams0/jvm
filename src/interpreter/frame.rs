@@ -5,9 +5,6 @@ use crate::types::DataValue;
 
 use log::*;
 
-use crate::error::VmResult;
-use crate::thread;
-use cafebabe::mutf8::mstr;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
@@ -267,23 +264,6 @@ impl Debug for Frame {
             method.name().to_utf8(),
             suffix
         )
-    }
-}
-
-impl JavaFrame {
-    /// Ensure the given class is loaded, linked and initialised
-    /// Name is utf8
-    pub fn ensure_loaded(&self, class_name: impl AsRef<[u8]>) -> VmResult<VmRef<Class>> {
-        let class_name = mstr::from_utf8(class_name.as_ref());
-        let loader = self.class.loader().clone();
-        thread::get()
-            .global()
-            .class_loader()
-            .load_class(class_name.as_ref(), loader)
-            .and_then(|c| {
-                c.ensure_init()?;
-                Ok(c)
-            })
     }
 }
 
