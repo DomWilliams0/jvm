@@ -109,7 +109,7 @@
    * `// TODO set all properties in gnu/classpath/VMSystemProperties.preinit`
    * `// TODO load main class with system loader`
    * `// TODO wait for threads to die, unintialise TLS, assert this is the last ref to global state`
-   * `// TODO actually parse args with something like clap`
+   * `// TODO standard jvm args`
  * [src/properties.rs](src/properties.rs) (2)
    * `// TODO remaining static ones`
    * `// TODO dynamic ones e.g. user.home`

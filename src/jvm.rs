@@ -4,6 +4,7 @@ use std::sync::Arc;
 use itertools::Itertools;
 use log::*;
 
+use clap::{App, AppSettings, Arg};
 use thiserror::*;
 
 use crate::classloader::ClassLoader;
@@ -94,15 +95,31 @@ impl Jvm {
 }
 
 impl JvmArgs {
-    pub fn parse(mut args: impl Iterator<Item = String>) -> Result<Self, ArgError> {
+    pub fn parse(args: impl Iterator<Item = String>) -> Result<Self, ArgError> {
+        // TODO standard jvm args
+        let matches = App::new("JVM")
+            .global_settings(&[AppSettings::NoBinaryName])
+            .arg(Arg::with_name("class").help("Class of which to execute main method"))
+            .arg(Arg::with_name("cp").long("cp").takes_value(true))
+            .arg(
+                Arg::with_name("bootcp")
+                    .long("Xbootclasspath")
+                    .takes_value(true),
+            )
+            .get_matches_from(args);
+
         let mut jvm_args = Self::default();
 
-        // TODO actually parse args with something like clap
-        jvm_args.main = args.next().ok_or(ArgError::MissingMain)?;
+        jvm_args.main = matches
+            .value_of("class")
+            .ok_or(ArgError::MissingMain)?
+            .to_owned();
 
-        let bootclasspath = ClassPath::new(vec![args.next().ok_or(ArgError::MissingBoot)?.into()]);
-        let classpath = ClassPath::new(args.map(PathBuf::from).collect_vec());
+        let bootclasspath =
+            ClassPath::from_colon_separated(matches.value_of("bootcp").unwrap_or(""));
+        let classpath = ClassPath::from_colon_separated(matches.value_of("cp").unwrap_or(""));
 
+        // setup properties
         jvm_args.properties.set_path("java.class.path", &classpath);
         jvm_args
             .properties

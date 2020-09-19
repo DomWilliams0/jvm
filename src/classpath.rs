@@ -13,6 +13,10 @@ impl ClassPath {
         Self(classpath)
     }
 
+    pub fn from_colon_separated(classpath: &str) -> Self {
+        Self(classpath.split(':').map(PathBuf::from).collect())
+    }
+
     pub fn find(&self, class_name: &str) -> Option<PathBuf> {
         self.0.iter().find_map(|dir| {
             let mut file = dir.join(class_name);
