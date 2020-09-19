@@ -93,7 +93,12 @@ pub struct Object {
 }
 
 lazy_static! {
-    pub static ref NULL: VmRef<Object> = VmRef::new(Object::new_null());
+    static ref NULL: VmRef<Object> = VmRef::new(Object::new_null());
+}
+
+/// Null object singleton
+pub fn null() -> VmRef<Object> {
+    NULL.clone()
 }
 
 #[derive(Debug)]

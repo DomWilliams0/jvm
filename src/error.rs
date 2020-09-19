@@ -11,7 +11,7 @@ pub type JvmResult<T> = Result<T, JvmError>;
 #[derive(Error)]
 pub enum JvmError {
     #[error("Exception thrown: {0:?}")]
-    ExceptionThrown(Throwables),
+    ExceptionThrown(VmRef<Throwable>),
 }
 
 pub type VmResult<T> = Result<T, Throwables>;
@@ -49,9 +49,9 @@ impl<T> ResultExt<T> for VmResult<T> {
                 let exc = VmRef::new(Throwable {
                     class_name: e.symbol(),
                 });
-                thread::get().set_exception(exc);
+                thread::get().set_exception(exc.clone());
 
-                Err(JvmError::ExceptionThrown(e))
+                Err(JvmError::ExceptionThrown(exc))
             }
         }
     }

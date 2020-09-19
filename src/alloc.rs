@@ -38,11 +38,16 @@ pub fn vmref_alloc_exception(throwable: Throwables) -> VmResult<VmRef<Throwable>
 
 #[cfg(test)]
 mod tests {
-    use crate::alloc::vmref_is_null;
-    use crate::class::NULL;
+    use crate::alloc::{vmref_eq, vmref_is_null};
+    use crate::class::null;
 
     #[test]
     fn null_is_null() {
-        assert!(vmref_is_null(&NULL));
+        assert!(vmref_is_null(&null()));
+    }
+
+    #[test]
+    fn null_singleton() {
+        assert!(vmref_eq(&null(), &null()));
     }
 }

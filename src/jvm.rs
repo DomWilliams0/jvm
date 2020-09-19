@@ -1,22 +1,26 @@
-use std::path::PathBuf;
 use std::sync::Arc;
 
-use itertools::Itertools;
 use log::*;
 
 use clap::{App, AppSettings, Arg};
 use thiserror::*;
 
-use crate::classloader::ClassLoader;
+use crate::alloc::NativeString;
+use crate::class::null;
+use crate::classloader::{ClassLoader, WhichLoader};
 use crate::classpath::ClassPath;
 use crate::error::ResultExt;
-use crate::interpreter::InstructionLookupTable;
+use crate::interpreter::{Frame, InstructionLookupTable, InterpreterResult};
 use crate::properties::SystemProperties;
 use crate::thread::JvmThreadState;
-use crate::{thread, JvmResult};
+use crate::types::{DataType, DataValue, ReferenceDataType};
+use crate::{thread, JvmError, JvmResult};
+use cafebabe::mutf8::mstr;
+use cafebabe::MethodAccessFlags;
+use std::iter::once;
 
 pub struct Jvm {
-    main: String,
+    args: JvmArgsPersist,
     state: Arc<JvmGlobalState>,
 }
 
@@ -27,12 +31,19 @@ pub struct JvmGlobalState {
 }
 
 #[derive(Default, Debug)]
+struct JvmArgsPersist {
+    main: String,
+    no_system_classloader: bool,
+}
+
+#[derive(Default, Debug)]
 pub struct JvmArgs {
     properties: SystemProperties,
-    main: String,
 
     bootclasspath: Arc<ClassPath>,
     userclasspath: Arc<ClassPath>,
+
+    args: JvmArgsPersist,
 }
 
 #[derive(Debug, Error)]
@@ -59,7 +70,7 @@ impl Jvm {
         });
 
         let jvm = Jvm {
-            main: args.main,
+            args: args.args,
             state: global.clone(),
         };
 
@@ -82,10 +93,55 @@ impl Jvm {
         let class_loader = thread.global().class_loader();
 
         // instantiate system classloader
-        let system_loader = class_loader.system_classloader().throw()?;
+        let loader = if self.args.no_system_classloader {
+            WhichLoader::Bootstrap
+        } else {
+            let system_loader = class_loader.system_classloader().throw()?;
+            WhichLoader::User(system_loader)
+        };
 
-        // TODO load main class with system loader
-        panic!("good job getting this far")
+        // load main class
+        let main_class = class_loader
+            .load_class(mstr::from_utf8(self.args.main.as_bytes()).as_ref(), loader)
+            .throw()?;
+
+        // find main method
+        let main_method = main_class
+            .find_callable_method(
+                mstr::from_utf8(b"main").as_ref(),
+                mstr::from_utf8(b"([Ljava/lang/String;)V").as_ref(),
+                MethodAccessFlags::PUBLIC | MethodAccessFlags::STATIC,
+            )
+            .throw()?;
+
+        // TODO populate String[] args
+        let args_array = null();
+
+        // execute it!!
+        // TODO this is very unergonomic
+        let interp = thread.interpreter();
+        let frame = Frame::new_with_args(
+            main_method,
+            main_class,
+            once(DataValue::Reference(
+                ReferenceDataType::Array {
+                    dims: 1,
+                    elem_type: Box::new(DataType::Reference(ReferenceDataType::Class(
+                        NativeString::from_utf8(b"java/lang/String"),
+                    ))),
+                },
+                args_array,
+            )),
+        )
+        .unwrap();
+
+        interp.state_mut().push_frame(frame);
+        if let InterpreterResult::Exception = interp.execute_until_return() {
+            let exc = thread.exception().unwrap();
+            Err(JvmError::ExceptionThrown(exc))
+        } else {
+            Ok(())
+        }
     }
 
     pub fn destroy(&mut self) -> JvmResult<()> {
@@ -106,14 +162,16 @@ impl JvmArgs {
                     .long("Xbootclasspath")
                     .takes_value(true),
             )
+            .arg(Arg::with_name("nosystemclassloader").long("XXnosystemclassloader"))
             .get_matches_from(args);
 
         let mut jvm_args = Self::default();
 
-        jvm_args.main = matches
+        jvm_args.args.main = matches
             .value_of("class")
             .ok_or(ArgError::MissingMain)?
             .to_owned();
+        jvm_args.args.no_system_classloader = matches.is_present("nosystemclassloader");
 
         let bootclasspath =
             ClassPath::from_colon_separated(matches.value_of("bootcp").unwrap_or(""));

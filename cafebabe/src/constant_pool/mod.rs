@@ -16,10 +16,6 @@ pub use entry::*;
 pub struct ConstantPool<'c>(Vec<Option<Item<'c>>>);
 
 impl<'c> ConstantPool<'c> {
-    pub(crate) fn empty() -> Self {
-        ConstantPool(Vec::new())
-    }
-
     pub(crate) fn load(buf: &mut Buffer<'c>) -> ClassResult<Self> {
         let count = buf.read::<u16>()? as usize;
         debug!("constant pool has {} entries", count);

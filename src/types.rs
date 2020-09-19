@@ -1,4 +1,4 @@
-use crate::class::NULL;
+use crate::class::null;
 
 use crate::alloc::{NativeString, VmRef};
 use crate::class::Object;
@@ -86,7 +86,7 @@ impl DataType {
         match self {
             DataType::Primitive(prim) => prim.default_value(),
             DataType::ReturnAddress => DataValue::ReturnAddress(0),
-            DataType::Reference(reftype) => DataValue::Reference(reftype, NULL.clone()),
+            DataType::Reference(reftype) => DataValue::Reference(reftype, null()),
         }
     }
     pub fn from_descriptor(desc: &mstr) -> Option<Self> {
