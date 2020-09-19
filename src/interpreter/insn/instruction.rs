@@ -1,6 +1,6 @@
 #![allow(unused_variables)]
 
-use crate::alloc::vmref_alloc_object;
+use crate::alloc::{vmref_alloc_object, VmRef};
 use crate::constant_pool::Entry;
 
 use crate::interpreter::error::InterpreterError;
@@ -975,7 +975,41 @@ impl Getfield {
 
 impl Getstatic {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Getstatic")
+        let frame = interp.current_frame_mut();
+
+        // resolve field
+        let field = frame
+            .class
+            .constant_pool()
+            .field_entry(self.0)
+            .ok_or_else(|| InterpreterError::NotFieldRef(self.0))?;
+
+        trace!("getstatic {:?}", field);
+
+        // resolve and init class
+        // release mut ref to interpreter state in case this runs a static constructor
+        let class = thread::get()
+            .global()
+            .class_loader()
+            .load_class(field.class.as_mstr(), frame.class.loader().clone())?;
+
+        // TODO this needs mutable interpreter state if theres a static constructor!!
+        class.ensure_init()?;
+
+        // get field id
+        let field_id = class
+            .find_field_recursive(field.name.as_mstr(), &field.desc, FieldSearchType::Static)
+            .ok_or_else(|| InterpreterError::FieldNotFound {
+                name: field.name.clone(),
+                desc: field.desc.clone(),
+            })?;
+
+        // get field value
+        let value = class.static_fields().ensure_get(field_id);
+
+        // push onto stack
+        frame.operand_stack.push(value);
+        Ok(PostExecuteAction::Continue)
     }
 }
 
@@ -1194,6 +1228,39 @@ fn int_cmp_two(
     Ok(action)
 }
 
+/// wat: "!= null"
+fn obj_cmp_one(
+    interp: &mut InterpreterState,
+    offset: i16,
+    wat: &'static str,
+    cmp: impl FnOnce(VmRef<Object>) -> bool,
+) -> ExecuteResult {
+    let frame = interp.current_frame_mut();
+
+    // pop value
+    let obj = frame
+        .operand_stack
+        .pop()
+        .ok_or(InterpreterError::NoOperand)?;
+
+    // ensure reference
+    let obj = obj
+        .as_reference()
+        .ok_or_else(|| InterpreterError::InvalidOperandForObjectOp(obj.data_type()))?;
+
+    // do comparison
+    let success = cmp(obj);
+    trace!("cmp reference {} => {}", wat, success);
+
+    let action = if success {
+        PostExecuteAction::Jmp(offset as i32)
+    } else {
+        PostExecuteAction::Continue
+    };
+
+    Ok(action)
+}
+
 impl IfIcmpeq {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
         int_cmp_two(interp, self.0, "==", |a, b| a == b)
@@ -1268,13 +1335,13 @@ impl Ifne {
 
 impl Ifnonnull {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Ifnonnull")
+        obj_cmp_one(interp, self.0, "!= null", |o| !o.is_null())
     }
 }
 
 impl Ifnull {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Ifnull")
+        obj_cmp_one(interp, self.0, "== null", |o| o.is_null())
     }
 }
 

@@ -86,7 +86,7 @@ impl FieldStorage {
         FieldStorage(RwLock::new(Box::from([])))
     }
 
-    pub fn get(&self, id: FieldId) -> Option<DataValue> {
+    pub fn try_get(&self, id: FieldId) -> Option<DataValue> {
         self.0.read().get(id.0 as usize).cloned()
     }
 
@@ -107,6 +107,12 @@ impl FieldStorage {
             })
             .unwrap_or(false)
     }
+
+    pub fn ensure_get(&self, id: FieldId) -> DataValue {
+        self.try_get(id)
+            .unwrap_or_else(|| panic!("no such field {:?}", id))
+    }
+
     pub fn ensure_set(&self, id: FieldId, value: impl Into<DataValue>) {
         assert!(self.try_set(id, value.into()), "no such field {:?}", id);
     }

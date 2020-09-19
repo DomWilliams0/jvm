@@ -615,7 +615,7 @@ impl Class {
         fieldid.and_then(|f| {
             let layout = match ty {
                 FieldSearchType::Instance => &self.instance_fields_layout,
-                FieldSearchType::Static => todo!("get static field"),
+                FieldSearchType::Static => &self.static_fields_layout,
             };
 
             layout.get_id(cls_idx, f)
@@ -872,6 +872,10 @@ impl Class {
 
         keep_going
     }
+
+    pub fn static_fields(&self) -> &FieldStorage {
+        &self.static_fields_values
+    }
 }
 
 impl MethodLookupResult {
@@ -1046,7 +1050,7 @@ impl Object {
         let fields = self.fields().expect("object has no field storage");
 
         fields
-            .get(field_id)
+            .try_get(field_id)
             .unwrap_or_else(|| panic!("bad field {:?}", field_id))
     }
 

@@ -61,7 +61,7 @@ pub enum InterpreterError {
     #[error("Expected reference or returnAddress operand but got {0:?} instead")]
     InvalidOperandForAstore(DataType),
 
-    #[error("Expected reference  operand for object op but got {0:?} instead")]
+    #[error("Expected reference operand for object op but got {0:?} instead")]
     InvalidOperandForObjectOp(DataType),
 
     #[error("Expected return type of {expected:?} but got {actual:?}")]

@@ -1,4 +1,4 @@
-# TODOs (94)
+# TODOs (95)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -80,10 +80,11 @@
    * `// TODO instead of options, enum {Instance(obj), Static(class)}`
    * `// TODO pass args to native function`
    * `// TODO impl Display for mstr`
- * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (9)
+ * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (10)
    * `// TODO better handling of interpreter error`
    * `// TODO some 2s are signed`
    * `// TODO catch this at verification time`
+   * `// TODO this needs mutable interpreter state if theres a static constructor!!`
    * `// TODO ensure class is not interface, method not abstract, not constructor`
    * `// TODO typecheck args at verification time`
    * `// TODO lookup natively interned string instance`
