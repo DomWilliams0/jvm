@@ -3,12 +3,12 @@ use std::sync::Arc;
 use log::*;
 
 use crate::alloc::{vmref_ptr, InternedString, VmRef};
-use crate::class::{Class, Object};
+use crate::class::{Class, ClassType, Object};
 use crate::classpath::ClassPath;
 use crate::error::{Throwables, VmResult};
 
 use crate::types::{ArrayType, PrimitiveDataType};
-use cafebabe::mutf8::mstr;
+use cafebabe::mutf8::{mstr, MString};
 use cafebabe::{ClassError, MethodAccessFlags};
 use parking_lot::RwLock;
 
@@ -115,7 +115,6 @@ impl ClassLoader {
     pub fn load_class(&self, class_name: &mstr, mut loader: WhichLoader) -> VmResult<VmRef<Class>> {
         // TODO run user classloader first
         // TODO array classes are treated differently
-        debug!("loading class {:?}", class_name);
 
         let array_type = ArrayType::from_descriptor(class_name);
 
@@ -156,6 +155,8 @@ impl ClassLoader {
             }
             LoadState::Unloaded | LoadState::Failed => {}
         }
+
+        debug!("loading class {:?}", class_name);
 
         // loading is required, update shared state
         // TODO record that this loader is an initiating loader
@@ -269,6 +270,7 @@ impl ClassLoader {
         // then the rest
         let classes = [
             "java/lang/ClassLoader",
+            "java/util/Hashtable",
             "[I",
             "java/lang/String",
             "java/util/HashMap",
@@ -301,6 +303,21 @@ impl ClassLoader {
         let array_cls_name = [b'[', prim.char() as u8];
         self.load_class(mstr::from_mutf8(&array_cls_name), WhichLoader::Bootstrap)
             .expect("primitive array class not loaded")
+    }
+
+    pub fn load_reference_array_class(
+        &self,
+        element_type: VmRef<Class>,
+        loader: WhichLoader,
+    ) -> VmResult<VmRef<Class>> {
+        debug_assert!(matches!(element_type.class_type(), ClassType::Normal));
+
+        // TODO mstr display impl
+        let array_cls_name = format!("[L{};", element_type.name().to_utf8());
+        self.load_class(
+            MString::from_utf8(array_cls_name.as_bytes()).as_mstr(),
+            loader,
+        )
     }
 
     pub fn system_classloader(&self) -> VmResult<VmRef<Object>> {

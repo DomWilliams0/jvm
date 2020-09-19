@@ -182,6 +182,7 @@ impl Class {
         let super_class = match loaded.super_class() {
             Ok(super_name) => {
                 // ensure loaded
+                trace!("super class: {:?}", super_name);
                 let super_class = classloader.load_class(super_name, loader.clone())?;
                 Some(super_class)
             }
@@ -209,6 +210,11 @@ impl Class {
                 let interface = classloader.load_class(interface_name, loader.clone())?;
                 vec.push(interface);
             }
+
+            trace!(
+                "interfaces: {:?}",
+                vec.iter().map(|iface| iface.name()).collect_vec()
+            );
             vec
         };
 
@@ -1084,7 +1090,7 @@ impl Object {
         self.monitor.enter()
     }
 
-    fn fields(&self) -> Option<&FieldStorage> {
+    pub fn fields(&self) -> Option<&FieldStorage> {
         match &self.storage {
             ObjectStorage::Fields(f) => Some(f),
             _ => None,

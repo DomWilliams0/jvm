@@ -6,6 +6,8 @@ use thiserror::*;
 
 use crate::class::ClassType;
 
+// TODO combine repetetive errors for different data types
+
 #[derive(Error, Debug, Clone)]
 pub enum InterpreterError {
     #[error("Incomplete instruction at byte {0}")]
@@ -51,6 +53,13 @@ pub enum InterpreterError {
     #[error("Local var {0:?} is not a reference ({1:?})")]
     NotReference(usize, DataValue),
 
+    #[error("Local var {local_var:?} is not {expected:?}, is actually {actual:?}")]
+    NotExpectedType {
+        local_var: usize,
+        expected: DataType<'static>,
+        actual: DataType<'static>,
+    },
+
     #[error("Cannot load/store local var {requested}/{count}")]
     InvalidLocalVar { requested: usize, count: usize },
 
@@ -65,6 +74,9 @@ pub enum InterpreterError {
 
     #[error("Expected integer operand but got {0:?} instead")]
     InvalidOperandForIntOp(DataType<'static>),
+
+    #[error("Expected float operand but got {0:?} instead")]
+    InvalidOperandForFloatOp(DataType<'static>),
 
     #[error("Expected reference or returnAddress operand but got {0:?} instead")]
     InvalidOperandForAstore(DataType<'static>),

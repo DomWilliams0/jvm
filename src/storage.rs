@@ -95,13 +95,13 @@ impl FieldStorage {
         guard
             .get_mut(id.0 as usize)
             .map(|val| {
-                debug_assert!(
-                    val.data_type() == value.data_type(),
-                    "field {:?} type is {:?} but trying to set to {:?}",
-                    id,
-                    val.data_type(),
-                    value.data_type()
-                );
+                // debug_assert!(
+                //     val.data_type() == value.data_type(),
+                //     "field {:?} type is {:?} but trying to set to {:?}",
+                //     id,
+                //     val.data_type(),
+                //     value.data_type()
+                // );
                 *val = value;
                 true
             })

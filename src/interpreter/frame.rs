@@ -113,7 +113,7 @@ impl OperandStack {
         val
     }
 
-    pub fn pop_n(&mut self, n: usize) -> Option<impl Iterator<Item = DataValue> + '_> {
+    pub fn pop_n(&mut self, n: usize) -> Option<impl DoubleEndedIterator<Item = DataValue> + '_> {
         if self.count() < n {
             None
         } else {
@@ -192,7 +192,7 @@ impl Frame {
     pub fn new_with_args(
         method: VmRef<Method>,
         class: VmRef<Class>,
-        mut args: impl Iterator<Item = DataValue>,
+        mut args: impl DoubleEndedIterator<Item = DataValue>,
     ) -> Result<Self, InterpreterError> {
         if method.flags().is_native() {
             // TODO pass args to native function
@@ -208,7 +208,7 @@ impl Frame {
             // ensure `this` is not null
             let offset = if !method.flags().is_static() {
                 // TODO expects()
-                let this = args.next().expect("no this arg");
+                let this = args.next_back().expect("no this arg");
                 let thisref = this.as_reference().expect("this is not reference");
                 assert!(!thisref.is_null(), "this is null");
 
@@ -218,7 +218,7 @@ impl Frame {
                 0
             };
 
-            for (i, arg) in args.enumerate() {
+            for (i, arg) in args.rev().enumerate() {
                 local_vars.store(i + offset, arg)?;
             }
 

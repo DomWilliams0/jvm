@@ -1,6 +1,6 @@
-use crate::{ClassError, ClassResult, ConstantPool};
 use crate::constant_pool::item::Item;
 use crate::constant_pool::Tag;
+use crate::{ClassError, ClassResult, ConstantPool};
 
 pub trait Entry<'c>: Sized {
     const TAG: Tag;
@@ -46,6 +46,8 @@ pub struct InterfaceMethodRefEntry<'c> {
     pub desc: &'c mutf8::mstr,
 }
 
+#[derive(Debug)]
+pub struct FloatEntry(pub f32);
 
 impl<'c> Entry<'c> for Utf8Entry<'c> {
     const TAG: Tag = Tag::Utf8;
@@ -152,7 +154,8 @@ impl<'c> Entry<'c> for FieldRefEntry<'c> {
     fn from_item(item: &Item<'c>, pool: &ConstantPool<'c>) -> ClassResult<Self> {
         match item {
             Item::FieldRef {
-                class, name_and_type
+                class,
+                name_and_type,
             } => {
                 let class: ClassRefEntry = pool.entry(*class)?;
                 let name_and_type: NameAndTypeEntry = pool.entry(*name_and_type)?;
@@ -162,6 +165,19 @@ impl<'c> Entry<'c> for FieldRefEntry<'c> {
                     desc: name_and_type.desc,
                 })
             }
+            _ => Err(ClassError::WrongTag {
+                expected: Self::TAG,
+                actual: item.tag(),
+            }),
+        }
+    }
+}
+impl<'c> Entry<'c> for FloatEntry {
+    const TAG: Tag = Tag::Float;
+
+    fn from_item(item: &Item<'c>, _: &ConstantPool<'c>) -> ClassResult<Self> {
+        match item {
+            Item::Float { float } => Ok(FloatEntry(*float)),
             _ => Err(ClassError::WrongTag {
                 expected: Self::TAG,
                 actual: item.tag(),

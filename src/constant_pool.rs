@@ -15,6 +15,7 @@ pub enum Entry {
     InterfaceMethodRef(MethodRef),
     FieldRef(FieldRef),
     ClassRef(ClassRef),
+    Float(f32),
 }
 
 // TODO method and field refs should be resolved vtable indices instead of loads of strings
@@ -106,6 +107,7 @@ impl RuntimeConstantPool {
                         }),
                     );
                 }
+                Item::Float { float } => my_pool.put_entry(idx, Entry::Float(*float)),
 
                 _ => continue,
             }
@@ -180,7 +182,12 @@ impl Entry {
     /// Static constants
     pub fn is_loadable(&self) -> bool {
         match self {
-            Entry::String(_) => true,
+            Entry::String(_)
+            | Entry::MethodRef(_)
+            | Entry::InterfaceMethodRef(_)
+            | Entry::FieldRef(_)
+            | Entry::ClassRef(_)
+            | Entry::Float(_) => true,
             _ => false,
         }
     }

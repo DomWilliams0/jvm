@@ -1,4 +1,4 @@
-# TODOs (105)
+# TODOs (114)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -50,7 +50,7 @@
    * `// TODO just allocate an object instead of this unsafeness`
    * `// TODO limit array length to i32::MAX somewhere`
    * `// TODO not quite correct toString`
- * [src/classloader.rs](src/classloader.rs) (14)
+ * [src/classloader.rs](src/classloader.rs) (15)
    * `// TODO types for str to differentiate java/lang/Object, java.lang.Object and descrptors e.g. Ljava/lang/Object;`
    * `// TODO register class "package" with loader (https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-5.html#jvms-5.3)`
    * `// TODO actually instantiate exceptions`
@@ -62,6 +62,7 @@
    * `let bytes = std::fs::read(path).expect("io error"); // TODO java.lang.IOError`
    * `// TODO define hardcoded preload classes in a better way`
    * `// TODO add array lookup with enum constants for common symbols like Object, or perfect hashing`
+   * `// TODO mstr display impl`
    * `// TODO calling a method from native needs to be more ergonomic`
    * `// TODO interpreter error -> internal vm error throwable`
    * `// TODO newtype VmRef should handle equality`
@@ -75,6 +76,8 @@
    * `// TODO reference to class instead of name`
    * `// TODO reference to cause`
    * `// TODO backtrace`
+ * [src/interpreter/error.rs](src/interpreter/error.rs) (1)
+   * `// TODO combine repetetive errors for different data types`
  * [src/interpreter/frame.rs](src/interpreter/frame.rs) (7)
    * `// TODO validate local var slot in case of wide vars`
    * `// TODO longs and doubles take 2 slots!`
@@ -83,12 +86,13 @@
    * `// TODO pass args to native function`
    * `// TODO expects()`
    * `// TODO impl Display for mstr`
- * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (18)
+ * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (25)
    * `// TODO operand stack pop then verify might be wrong - only pop if its the right type?`
    * `/// TODO might be possible to continue with resolved methods/fields state instead of replay`
    * `// TODO better handling of interpreter error`
    * `// TODO some 2s are signed`
    * `// TODO catch this at verification time`
+   * `// TODO sign extended?`
    * `// TODO return error here`
    * `// TODO ensure method is not static, IncompatibleClassChangeError`
    * `// TODO native method`
@@ -96,9 +100,15 @@
    * `// TODO typecheck args at verification time`
    * `// TODO lookup natively interned string instance`
    * `// TODO natively intern new string instance`
-   * `} // TODO int/float`
+   * `// TODO int constant`
+   * `// TODO deny long and double`
    * `// TODO class symbolic reference`
    * `// TODO ensure not abstract, throw InstantiationError`
+   * `// TODO verify not array class`
+   * `// TODO throw IncompatibleClassChangeError`
+   * `// TODO check value is compatible with field desc`
+   * `// TODO if final can only be in constructor`
+   * `// TODO throw IncompatibleClassChangeError`
    * `// TODO check value is compatible with field desc`
    * `// TODO if final can only be in constructor`
    * `// TODO if class is interface then can only be in constructor`

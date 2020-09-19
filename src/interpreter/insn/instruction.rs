@@ -11,7 +11,7 @@ use crate::interpreter::error::InterpreterError;
 use log::*;
 
 use crate::class::{Class, FieldSearchType, Object};
-use crate::types::{DataValue, ReturnType};
+use crate::types::{DataType, DataValue, PrimitiveDataType, ReturnType};
 
 use crate::classloader::WhichLoader;
 use crate::error::Throwables;
@@ -22,6 +22,7 @@ use crate::interpreter::{Frame, InterpreterState};
 use crate::thread;
 use cafebabe::mutf8::mstr;
 use cafebabe::{AccessFlags, ClassAccessFlags, MethodAccessFlags};
+use std::cmp::Ordering;
 use std::fmt::Debug;
 
 // TODO operand stack pop then verify might be wrong - only pop if its the right type?
@@ -389,6 +390,29 @@ insn_0!(Swap, "swap");
 // insn_n!(Tableswitch, "tableswitch");
 // insn_n!(Wide, "wide");
 
+fn do_load_primitive(
+    interp: &mut InterpreterState,
+    idx: u8,
+    f: impl FnOnce(&DataValue) -> bool,
+    prim: PrimitiveDataType,
+) -> ExecuteResult {
+    let frame = interp.current_frame_mut();
+    let value = frame.local_vars.load(idx as usize).and_then(|v| {
+        if f(&v) {
+            Ok(v)
+        } else {
+            Err(InterpreterError::NotExpectedType {
+                local_var: idx as usize,
+                expected: DataType::Primitive(prim),
+                actual: v.data_type(),
+            })
+        }
+    })?;
+
+    frame.operand_stack.push(value);
+    Ok(PostExecuteAction::Continue)
+}
+
 impl Aaload {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
         todo!("instruction Aaload")
@@ -434,7 +458,45 @@ impl Aload3 {
 
 impl Anewarray {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Anewarray")
+        let frame = interp.current_frame_mut();
+
+        let thread = thread::get();
+        let class_loader = thread.global().class_loader();
+
+        // resolve element type
+        let elem_type = frame
+            .class
+            .constant_pool()
+            .class_entry(self.0)
+            .ok_or_else(|| InterpreterError::NotClassRef(self.0))?;
+
+        let elem_class =
+            class_loader.load_class(elem_type.name.as_mstr(), frame.class.loader().clone())?;
+
+        // pop length
+        let length = frame
+            .operand_stack
+            .pop()
+            .ok_or(InterpreterError::NoOperand)
+            .and_then(|v| {
+                v.as_int()
+                    .ok_or_else(|| InterpreterError::InvalidOperandForIntOp(v.data_type()))
+            })?;
+
+        // resolve array class
+        let array_cls =
+            class_loader.load_reference_array_class(elem_class, frame.class.loader().clone())?;
+
+        // allocate array
+        let array_instance =
+            vmref_alloc_object(|| Ok(Object::new_array(array_cls, length as usize)))?;
+
+        // push to stack
+        frame
+            .operand_stack
+            .push(DataValue::Reference(array_instance));
+
+        Ok(PostExecuteAction::Continue)
     }
 }
 
@@ -584,7 +646,11 @@ impl Bastore {
 
 impl Bipush {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Bipush")
+        let val = DataValue::Int(self.0 as i8 as i32);
+        // TODO sign extended?
+
+        interp.current_frame_mut().operand_stack.push(val);
+        Ok(PostExecuteAction::Continue)
     }
 }
 
@@ -674,32 +740,24 @@ impl Ddiv {
 
 impl Dload {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Dload")
+        do_load_primitive(interp, self.0, |v| v.is_double(), PrimitiveDataType::Double)
     }
 }
 
 impl Dload0 {
-    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Dload0")
-    }
+    insn_delegate!(Dload(0));
 }
 
 impl Dload1 {
-    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Dload1")
-    }
+    insn_delegate!(Dload(1));
 }
 
 impl Dload2 {
-    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Dload2")
-    }
+    insn_delegate!(Dload(2));
 }
 
 impl Dload3 {
-    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Dload3")
-    }
+    insn_delegate!(Dload(3));
 }
 
 impl Dmul {
@@ -846,33 +904,94 @@ impl Fastore {
     }
 }
 
+fn float_cmp(interp: &mut InterpreterState, op: &'static str, nan_fallback: i32) -> ExecuteResult {
+    let frame = interp.current_frame_mut();
+
+    // pop values
+    let (val1, val2) = {
+        let mut objs = frame
+            .operand_stack
+            .pop_n(2)
+            .ok_or(InterpreterError::NoOperand)?;
+
+        // popped in reverse order
+        let val2 = objs.next().unwrap();
+        let val1 = objs.next().unwrap();
+
+        (val1, val2)
+    };
+
+    // ensure floats
+    let val1 = val1
+        .as_float()
+        .ok_or_else(|| InterpreterError::InvalidOperandForFloatOp(val1.data_type()))?;
+
+    let val2 = val2
+        .as_float()
+        .ok_or_else(|| InterpreterError::InvalidOperandForFloatOp(val2.data_type()))?;
+
+    // do comparison
+    let result = val1
+        .partial_cmp(&val2)
+        .map(|cmp| match cmp {
+            Ordering::Less => -1,
+            Ordering::Equal => 0,
+            Ordering::Greater => 1,
+        })
+        .unwrap_or(nan_fallback);
+
+    trace!(
+        "cmp {a} {op} {b} => {}",
+        result,
+        a = val1,
+        op = op,
+        b = val2
+    );
+
+    frame.operand_stack.push(DataValue::Int(result));
+
+    Ok(PostExecuteAction::Continue)
+}
+
 impl Fcmpg {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Fcmpg")
+        float_cmp(interp, "fcmpg", 1)
     }
 }
 
 impl Fcmpl {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Fcmpl")
+        float_cmp(interp, "fcmpg", -1)
     }
 }
 
 impl Fconst0 {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Fconst0")
+        interp
+            .current_frame_mut()
+            .operand_stack
+            .push(DataValue::Float(0.0));
+        Ok(PostExecuteAction::Continue)
     }
 }
 
 impl Fconst1 {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Fconst1")
+        interp
+            .current_frame_mut()
+            .operand_stack
+            .push(DataValue::Float(1.0));
+        Ok(PostExecuteAction::Continue)
     }
 }
 
 impl Fconst2 {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Fconst2")
+        interp
+            .current_frame_mut()
+            .operand_stack
+            .push(DataValue::Float(2.0));
+        Ok(PostExecuteAction::Continue)
     }
 }
 
@@ -884,32 +1003,24 @@ impl Fdiv {
 
 impl Fload {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Fload")
+        do_load_primitive(interp, self.0, |v| v.is_float(), PrimitiveDataType::Float)
     }
 }
 
 impl Fload0 {
-    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Fload0")
-    }
+    insn_delegate!(Fload(0));
 }
 
 impl Fload1 {
-    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Fload1")
-    }
+    insn_delegate!(Fload(1));
 }
 
 impl Fload2 {
-    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Fload2")
-    }
+    insn_delegate!(Fload(2));
 }
 
 impl Fload3 {
-    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Fload3")
-    }
+    insn_delegate!(Fload(3));
 }
 
 impl Fmul {
@@ -1143,33 +1254,23 @@ impl Iconst0 {
 }
 
 impl Iconst1 {
-    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Iconst1")
-    }
+    insn_delegate!(Bipush(1));
 }
 
 impl Iconst2 {
-    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Iconst2")
-    }
+    insn_delegate!(Bipush(2));
 }
 
 impl Iconst3 {
-    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Iconst3")
-    }
+    insn_delegate!(Bipush(3));
 }
 
 impl Iconst4 {
-    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Iconst4")
-    }
+    insn_delegate!(Bipush(4));
 }
 
 impl Iconst5 {
-    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Iconst5")
-    }
+    insn_delegate!(Bipush(5));
 }
 
 impl IconstM1 {
@@ -1406,32 +1507,24 @@ impl Iinc {
 
 impl Iload {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Iload")
+        do_load_primitive(interp, self.0, |v| v.is_int(), PrimitiveDataType::Int)
     }
 }
 
 impl Iload0 {
-    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Iload0")
-    }
+    insn_delegate!(Iload(0));
 }
 
 impl Iload1 {
-    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Iload1")
-    }
+    insn_delegate!(Iload(1));
 }
 
 impl Iload2 {
-    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Iload2")
-    }
+    insn_delegate!(Iload(2));
 }
 
 impl Iload3 {
-    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Iload3")
-    }
+    insn_delegate!(Iload(3));
 }
 
 impl Imul {
@@ -1792,10 +1885,9 @@ impl Ldc {
         let pool = frame.class.constant_pool();
         let entry = pool
             .loadable_entry(self.0 as u16)
-            .and_then(|e| if e.is_long_or_double() { None } else { Some(e) })
             .ok_or_else(|| InterpreterError::NotLoadable(self.0 as u16))?;
 
-        match entry {
+        let to_push = match entry {
             Entry::String(s) => {
                 // TODO lookup natively interned string instance
 
@@ -1813,15 +1905,16 @@ impl Ldc {
                 let string_instance = vmref_alloc_object(|| Object::new_string(s.as_mstr()))?;
 
                 // TODO natively intern new string instance
-
-                // push onto stack
-                frame
-                    .operand_stack
-                    .push(DataValue::Reference(string_instance));
-            } // TODO int/float
+                DataValue::Reference(string_instance)
+            }
+            Entry::Float(f) => DataValue::from(*f),
+            // TODO int constant
+            // TODO deny long and double
             // TODO class symbolic reference
             e => unimplemented!("loadable entry {:?}", e),
-        }
+        };
+
+        frame.operand_stack.push(to_push);
 
         Ok(PostExecuteAction::Continue)
     }
@@ -2060,7 +2153,63 @@ impl Pop2 {
 
 impl Putfield {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Putfield")
+        let frame = interp.current_frame_mut();
+
+        // resolve field
+        let field = frame
+            .class
+            .constant_pool()
+            .field_entry(self.0)
+            .ok_or_else(|| InterpreterError::NotFieldRef(self.0))?;
+
+        trace!("putfield {:?}", field);
+
+        // pop objects
+        let (value, object, class) = {
+            let mut popped = frame
+                .operand_stack
+                .pop_n(2)
+                .ok_or(InterpreterError::NoOperand)?;
+
+            let value = popped.next().unwrap();
+            let object = popped.next().unwrap();
+
+            // ensure object is non-null non-array reference
+            let object = object
+                .as_reference()
+                .ok_or_else(|| InterpreterError::InvalidOperandForObjectOp(object.data_type()))?
+                .clone();
+
+            let class = if let Some(cls) = object.class() {
+                cls
+            } else {
+                return Ok(PostExecuteAction::Exception(
+                    Throwables::NullPointerException,
+                ));
+            };
+
+            (value, object, class)
+        };
+
+        // TODO verify not array class
+        let fields = object.fields().expect("unexpected array");
+
+        // get field id
+        // TODO throw IncompatibleClassChangeError
+        let field_id = class
+            .find_field_recursive(field.name.as_mstr(), &field.desc, FieldSearchType::Instance)
+            .ok_or_else(|| InterpreterError::FieldNotFound {
+                name: field.name.clone(),
+                desc: field.desc.clone(),
+            })?;
+
+        // TODO check value is compatible with field desc
+        // TODO if final can only be in constructor
+
+        // set field
+        fields.ensure_set(field_id, value);
+
+        Ok(PostExecuteAction::Continue)
     }
 }
 
@@ -2084,6 +2233,7 @@ impl Putstatic {
             .load_class(field.class.as_mstr(), frame.class.loader().clone())?;
 
         // get field id
+        // TODO throw IncompatibleClassChangeError
         let field_id = class
             .find_field_recursive(field.name.as_mstr(), &field.desc, FieldSearchType::Static)
             .ok_or_else(|| InterpreterError::FieldNotFound {

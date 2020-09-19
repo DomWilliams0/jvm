@@ -187,6 +187,13 @@ impl DataValue {
         }
     }
 
+    pub fn as_float(&self) -> Option<f32> {
+        match self {
+            DataValue::Float(f) => Some(*f),
+            _ => None,
+        }
+    }
+
     pub fn as_reference(&self) -> Option<&VmRef<Object>> {
         match self {
             DataValue::Reference(obj) => Some(obj),
@@ -200,6 +207,111 @@ impl DataValue {
 
     pub fn is_reference(&self) -> bool {
         matches!(self, DataValue::Reference(_))
+    }
+
+    pub fn is_int(&self) -> bool {
+        matches!(self, DataValue::Int(_))
+    }
+
+    pub fn is_float(&self) -> bool {
+        matches!(self, DataValue::Float(_))
+    }
+
+    pub fn is_long(&self) -> bool {
+        matches!(self, DataValue::Long(_))
+    }
+
+    pub fn is_double(&self) -> bool {
+        matches!(self, DataValue::Double(_))
+    }
+
+    pub fn is_short(&self) -> bool {
+        matches!(self, DataValue::Short(_))
+    }
+
+    pub fn is_byte(&self) -> bool {
+        matches!(self, DataValue::Byte(_))
+    }
+
+    pub fn is_char(&self) -> bool {
+        matches!(self, DataValue::Char(_))
+    }
+
+    pub fn is_boolean(&self) -> bool {
+        matches!(self, DataValue::Boolean(_))
+    }
+
+    /// For putfield/putstatic. Self is type of value being assigned to field
+    /// https://docs.oracle.com/javase/specs/jls/se11/html/jls-5.html#jls-5.2
+    pub fn assign_to(&self, field_type: &DataType) -> Option<Cow<DataValue>> {
+        let my_type = self.data_type();
+
+        // identity conversion
+        if field_type == &my_type {
+            return Some(Cow::Borrowed(self));
+        }
+
+        Some(Cow::Owned(match (field_type, my_type) {
+            // primitives
+            (DataType::Primitive(field_prim), DataType::Primitive(_)) => {
+                match (field_prim, self) {
+                    // widening
+                    (PrimitiveDataType::Short, DataValue::Byte(val)) => {
+                        DataValue::from(*val as i16)
+                    }
+
+                    (PrimitiveDataType::Int, DataValue::Byte(val)) => DataValue::from(*val as i32),
+                    (PrimitiveDataType::Int, DataValue::Short(val)) => DataValue::from(*val as i32),
+                    (PrimitiveDataType::Int, DataValue::Char(val)) => DataValue::from(*val as i32),
+
+                    (PrimitiveDataType::Long, DataValue::Byte(val)) => DataValue::from(*val as i64),
+                    (PrimitiveDataType::Long, DataValue::Short(val)) => {
+                        DataValue::from(*val as i64)
+                    }
+                    (PrimitiveDataType::Long, DataValue::Char(val)) => DataValue::from(*val as i64),
+                    (PrimitiveDataType::Long, DataValue::Int(val)) => DataValue::from(*val as i64),
+
+                    (PrimitiveDataType::Float, DataValue::Byte(val)) => {
+                        DataValue::from(*val as f32)
+                    }
+                    (PrimitiveDataType::Float, DataValue::Short(val)) => {
+                        DataValue::from(*val as f32)
+                    }
+                    (PrimitiveDataType::Float, DataValue::Char(val)) => {
+                        DataValue::from(*val as f32)
+                    }
+                    (PrimitiveDataType::Float, DataValue::Int(val)) => DataValue::from(*val as f32),
+                    (PrimitiveDataType::Float, DataValue::Long(val)) => {
+                        DataValue::from(*val as f32)
+                    }
+
+                    (PrimitiveDataType::Double, DataValue::Byte(val)) => {
+                        DataValue::from(*val as f64)
+                    }
+                    (PrimitiveDataType::Double, DataValue::Short(val)) => {
+                        DataValue::from(*val as f64)
+                    }
+                    (PrimitiveDataType::Double, DataValue::Char(val)) => {
+                        DataValue::from(*val as f64)
+                    }
+                    (PrimitiveDataType::Double, DataValue::Int(val)) => {
+                        DataValue::from(*val as f64)
+                    }
+                    (PrimitiveDataType::Double, DataValue::Long(val)) => {
+                        DataValue::from(*val as f64)
+                    }
+                    (PrimitiveDataType::Double, DataValue::Float(val)) => {
+                        DataValue::from(*val as f64)
+                    }
+
+                    _ => return None,
+                }
+            }
+
+            // reference types
+            // (DataType::Reference(ReferenceDataType::Class(o)))
+            _ => return None,
+        }))
     }
 }
 
@@ -439,7 +551,9 @@ impl<'a, 'b> MethodSignatureIter<'a, 'b> {
 
 #[cfg(test)]
 mod tests {
-    use crate::types::{ArrayType, DataType, MethodSignature, PrimitiveDataType, ReturnType};
+    use crate::types::{
+        ArrayType, DataType, DataValue, MethodSignature, PrimitiveDataType, ReturnType,
+    };
     use cafebabe::mutf8::mstr;
 
     fn check(input: &str, expected: Option<DataType>) {
@@ -549,5 +663,43 @@ mod tests {
                 ReturnType::Void,
             )),
         );
+    }
+
+    #[test]
+    fn assignment_trivial() {
+        let boolean = DataValue::Boolean(true);
+        let byte = DataValue::Byte(50);
+        let short = DataValue::Short(20_000);
+        let int = DataValue::Int(100_000);
+        let long = DataValue::Long(6_000_000_000);
+        let float = DataValue::Float(6.2);
+        let double = DataValue::Double(4.111111111111123);
+
+        let all = &[
+            boolean.clone(),
+            byte.clone(),
+            short.clone(),
+            int.clone(),
+            long.clone(),
+            float.clone(),
+            double.clone(),
+        ];
+
+        // identity
+        for val in all {
+            assert_eq!(
+                val.assign_to(&val.data_type()).map(|v| v.data_type()),
+                Some(val.data_type())
+            );
+        }
+
+        // widening primitive
+        assert_eq!(
+            short.assign_to(&int.data_type()).map(|v| v.data_type()),
+            Some(int.data_type())
+        );
+
+        // but not narrowing
+        assert!(short.assign_to(&byte.data_type()).is_none());
     }
 }
