@@ -258,67 +258,52 @@ impl DataValue {
             return Some(Cow::Borrowed(self));
         }
 
-        Some(Cow::Owned(match (field_type, my_type) {
+        let result = match (field_type, my_type) {
             // primitives
             (DataType::Primitive(field_prim), DataType::Primitive(_)) => {
-                match (field_prim, self) {
-                    // widening
-                    (PrimitiveDataType::Short, DataValue::Byte(val)) => {
-                        DataValue::from(*val as i16)
-                    }
-
-                    (PrimitiveDataType::Int, DataValue::Byte(val)) => DataValue::from(*val as i32),
-                    (PrimitiveDataType::Int, DataValue::Short(val)) => DataValue::from(*val as i32),
-                    (PrimitiveDataType::Int, DataValue::Char(val)) => DataValue::from(*val as i32),
-
-                    (PrimitiveDataType::Long, DataValue::Byte(val)) => DataValue::from(*val as i64),
-                    (PrimitiveDataType::Long, DataValue::Short(val)) => {
-                        DataValue::from(*val as i64)
-                    }
-                    (PrimitiveDataType::Long, DataValue::Char(val)) => DataValue::from(*val as i64),
-                    (PrimitiveDataType::Long, DataValue::Int(val)) => DataValue::from(*val as i64),
-
-                    (PrimitiveDataType::Float, DataValue::Byte(val)) => {
-                        DataValue::from(*val as f32)
-                    }
-                    (PrimitiveDataType::Float, DataValue::Short(val)) => {
-                        DataValue::from(*val as f32)
-                    }
-                    (PrimitiveDataType::Float, DataValue::Char(val)) => {
-                        DataValue::from(*val as f32)
-                    }
-                    (PrimitiveDataType::Float, DataValue::Int(val)) => DataValue::from(*val as f32),
-                    (PrimitiveDataType::Float, DataValue::Long(val)) => {
-                        DataValue::from(*val as f32)
-                    }
-
-                    (PrimitiveDataType::Double, DataValue::Byte(val)) => {
-                        DataValue::from(*val as f64)
-                    }
-                    (PrimitiveDataType::Double, DataValue::Short(val)) => {
-                        DataValue::from(*val as f64)
-                    }
-                    (PrimitiveDataType::Double, DataValue::Char(val)) => {
-                        DataValue::from(*val as f64)
-                    }
-                    (PrimitiveDataType::Double, DataValue::Int(val)) => {
-                        DataValue::from(*val as f64)
-                    }
-                    (PrimitiveDataType::Double, DataValue::Long(val)) => {
-                        DataValue::from(*val as f64)
-                    }
-                    (PrimitiveDataType::Double, DataValue::Float(val)) => {
-                        DataValue::from(*val as f64)
-                    }
-
-                    _ => return None,
-                }
+                self.widen_primitive_to(*field_prim).or_else(|| {
+                    // TODO narrowing
+                    None
+                })
             }
 
             // reference types
             // (DataType::Reference(ReferenceDataType::Class(o)))
             _ => return None,
-        }))
+        };
+
+        result.map(Cow::Owned)
+    }
+
+    pub fn widen_primitive_to(&self, target: PrimitiveDataType) -> Option<DataValue> {
+        Some(match (target, self) {
+            // widening
+            (PrimitiveDataType::Short, DataValue::Byte(val)) => DataValue::from(*val as i16),
+
+            (PrimitiveDataType::Int, DataValue::Byte(val)) => DataValue::from(*val as i32),
+            (PrimitiveDataType::Int, DataValue::Short(val)) => DataValue::from(*val as i32),
+            (PrimitiveDataType::Int, DataValue::Char(val)) => DataValue::from(*val as i32),
+
+            (PrimitiveDataType::Long, DataValue::Byte(val)) => DataValue::from(*val as i64),
+            (PrimitiveDataType::Long, DataValue::Short(val)) => DataValue::from(*val as i64),
+            (PrimitiveDataType::Long, DataValue::Char(val)) => DataValue::from(*val as i64),
+            (PrimitiveDataType::Long, DataValue::Int(val)) => DataValue::from(*val as i64),
+
+            (PrimitiveDataType::Float, DataValue::Byte(val)) => DataValue::from(*val as f32),
+            (PrimitiveDataType::Float, DataValue::Short(val)) => DataValue::from(*val as f32),
+            (PrimitiveDataType::Float, DataValue::Char(val)) => DataValue::from(*val as f32),
+            (PrimitiveDataType::Float, DataValue::Int(val)) => DataValue::from(*val as f32),
+            (PrimitiveDataType::Float, DataValue::Long(val)) => DataValue::from(*val as f32),
+
+            (PrimitiveDataType::Double, DataValue::Byte(val)) => DataValue::from(*val as f64),
+            (PrimitiveDataType::Double, DataValue::Short(val)) => DataValue::from(*val as f64),
+            (PrimitiveDataType::Double, DataValue::Char(val)) => DataValue::from(*val as f64),
+            (PrimitiveDataType::Double, DataValue::Int(val)) => DataValue::from(*val as f64),
+            (PrimitiveDataType::Double, DataValue::Long(val)) => DataValue::from(*val as f64),
+            (PrimitiveDataType::Double, DataValue::Float(val)) => DataValue::from(*val as f64),
+
+            _ => return None,
+        })
     }
 }
 

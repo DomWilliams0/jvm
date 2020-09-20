@@ -307,6 +307,13 @@ impl JavaFrame {
         })
     }
 
+    pub fn pop_float(&mut self) -> Result<f32, InterpreterError> {
+        self.pop_value().and_then(|v| {
+            v.as_float()
+                .ok_or_else(|| InterpreterError::InvalidOperandForFloatOp(v.data_type()))
+        })
+    }
+
     pub fn pop_reference_value(&mut self) -> Result<DataValue, InterpreterError> {
         self.pop_value().and_then(|v| {
             if v.is_reference() {
@@ -322,6 +329,54 @@ impl JavaFrame {
             v.into_reference()
                 .map_err(InterpreterError::InvalidOperandForObjectOp)
         })
+    }
+
+    /// "..., value1, value2 →"
+    /// Returns (value1, value2)
+    pub fn pop_2_ints(&mut self) -> Result<(i32, i32), InterpreterError> {
+        let (val1, val2) = {
+            let mut objs = self.pop_values(2)?;
+
+            // popped in reverse order
+            let val2 = objs.next().unwrap();
+            let val1 = objs.next().unwrap();
+
+            (val1, val2)
+        };
+
+        let val1 = val1
+            .as_int()
+            .ok_or_else(|| InterpreterError::InvalidOperandForIntOp(val1.data_type()))?;
+
+        let val2 = val2
+            .as_int()
+            .ok_or_else(|| InterpreterError::InvalidOperandForIntOp(val2.data_type()))?;
+
+        Ok((val1, val2))
+    }
+
+    /// "..., value1, value2 →"
+    /// Returns (value1, value2)
+    pub fn pop_2_floats(&mut self) -> Result<(f32, f32), InterpreterError> {
+        let (val1, val2) = {
+            let mut objs = self.pop_values(2)?;
+
+            // popped in reverse order
+            let val2 = objs.next().unwrap();
+            let val1 = objs.next().unwrap();
+
+            (val1, val2)
+        };
+
+        let val1 = val1
+            .as_float()
+            .ok_or_else(|| InterpreterError::InvalidOperandForFloatOp(val1.data_type()))?;
+
+        let val2 = val2
+            .as_float()
+            .ok_or_else(|| InterpreterError::InvalidOperandForFloatOp(val2.data_type()))?;
+
+        Ok((val1, val2))
     }
 }
 

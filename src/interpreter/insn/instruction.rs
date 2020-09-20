@@ -851,7 +851,16 @@ impl F2D {
 
 impl F2I {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction F2I")
+        let frame = interp.current_frame_mut();
+
+        // pop float
+        let float = frame.pop_float()?;
+
+        // TODO narrow float to int properly
+        let int = float as i32;
+
+        frame.operand_stack.push(DataValue::Int(int));
+        Ok(PostExecuteAction::Continue)
     }
 }
 
@@ -863,7 +872,7 @@ impl F2L {
 
 impl Fadd {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Fadd")
+        float_two_op(interp, "+", |a, b| a + b)
     }
 }
 
@@ -883,24 +892,7 @@ fn float_cmp(interp: &mut InterpreterState, op: &'static str, nan_fallback: i32)
     let frame = interp.current_frame_mut();
 
     // pop values
-    let (val1, val2) = {
-        let mut objs = frame.pop_values(2)?;
-
-        // popped in reverse order
-        let val2 = objs.next().unwrap();
-        let val1 = objs.next().unwrap();
-
-        (val1, val2)
-    };
-
-    // ensure floats
-    let val1 = val1
-        .as_float()
-        .ok_or_else(|| InterpreterError::InvalidOperandForFloatOp(val1.data_type()))?;
-
-    let val2 = val2
-        .as_float()
-        .ok_or_else(|| InterpreterError::InvalidOperandForFloatOp(val2.data_type()))?;
+    let (val1, val2) = frame.pop_2_floats()?;
 
     // do comparison
     let result = val1
@@ -969,7 +961,7 @@ impl Fconst2 {
 
 impl Fdiv {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Fdiv")
+        float_two_op(interp, "/", |a, b| a / b)
     }
 }
 
@@ -995,9 +987,31 @@ impl Fload3 {
     insn_delegate!(Fload(3));
 }
 
+fn float_two_op(
+    interp: &mut InterpreterState,
+    wat: &'static str,
+    op: impl FnOnce(f32, f32) -> f32,
+) -> ExecuteResult {
+    let frame = interp.current_frame_mut();
+
+    let (val1, val2) = frame.pop_2_floats()?;
+    let result = op(val1, val2);
+
+    trace!(
+        "{a} {op} {b} = {result}",
+        a = val1,
+        op = wat,
+        b = val2,
+        result = result
+    );
+
+    frame.operand_stack.push(DataValue::Float(result));
+    Ok(PostExecuteAction::Continue)
+}
+
 impl Fmul {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Fmul")
+        float_two_op(interp, "*", |a, b| a * b)
     }
 }
 
@@ -1009,7 +1023,8 @@ impl Fneg {
 
 impl Frem {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Frem")
+        // TODO is probably wrong
+        float_two_op(interp, "%", |a, b| a.rem_euclid(b))
     }
 }
 
@@ -1051,7 +1066,7 @@ impl Fstore3 {
 
 impl Fsub {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Fsub")
+        float_two_op(interp, "-", |a, b| a - b)
     }
 }
 
@@ -1181,7 +1196,17 @@ impl I2D {
 
 impl I2F {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction I2F")
+        let frame = interp.current_frame_mut();
+
+        // pop int
+        let int = frame.pop_int()?;
+
+        // convert to float
+        // TODO "converted to the float result using IEEE 754 round to nearest mode"
+        let float = int as f32;
+
+        frame.operand_stack.push(DataValue::Float(float));
+        Ok(PostExecuteAction::Continue)
     }
 }
 
@@ -1305,24 +1330,7 @@ fn int_cmp_two(
     let frame = interp.current_frame_mut();
 
     // pop values
-    let (val1, val2) = {
-        let mut objs = frame.pop_values(2)?;
-
-        // popped in reverse order
-        let val2 = objs.next().unwrap();
-        let val1 = objs.next().unwrap();
-
-        (val1, val2)
-    };
-
-    // ensure ints
-    let val1 = val1
-        .as_int()
-        .ok_or_else(|| InterpreterError::InvalidOperandForIntOp(val1.data_type()))?;
-
-    let val2 = val2
-        .as_int()
-        .ok_or_else(|| InterpreterError::InvalidOperandForIntOp(val2.data_type()))?;
+    let (val1, val2) = frame.pop_2_ints()?;
 
     // do comparison
     let success = cmp(val1, val2);

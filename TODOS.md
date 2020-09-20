@@ -1,4 +1,4 @@
-# TODOs (116)
+# TODOs (119)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -87,13 +87,16 @@
    * `// TODO expects()`
    * `// TODO impl Display for mstr`
    * `// TODO move these to extension trait on operandstack`
- * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (25)
+ * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (28)
    * `// TODO operand stack pop then verify might be wrong - only pop if its the right type?`
    * `/// TODO might be possible to continue with resolved methods/fields state instead of replay`
    * `// TODO better handling of interpreter error`
    * `// TODO some 2s are signed`
    * `// TODO catch this at verification time`
    * `// TODO sign extended?`
+   * `// TODO narrow float to int properly`
+   * `// TODO is probably wrong`
+   * `// TODO "converted to the float result using IEEE 754 round to nearest mode"`
    * `// TODO return error here`
    * `// TODO ensure method is not static, IncompatibleClassChangeError`
    * `// TODO native method`
