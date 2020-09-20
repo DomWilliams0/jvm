@@ -474,14 +474,7 @@ impl Anewarray {
             class_loader.load_class(elem_type.name.as_mstr(), frame.class.loader().clone())?;
 
         // pop length
-        let length = frame
-            .operand_stack
-            .pop()
-            .ok_or(InterpreterError::NoOperand)
-            .and_then(|v| {
-                v.as_int()
-                    .ok_or_else(|| InterpreterError::InvalidOperandForIntOp(v.data_type()))
-            })?;
+        let length = frame.pop_int()?;
 
         // resolve array class
         let array_cls =
@@ -527,6 +520,7 @@ fn do_return_value(interp: &mut InterpreterState, val: DataValue) -> ExecuteResu
 
     Ok(PostExecuteAction::Return)
 }
+
 fn do_return_void(interp: &mut InterpreterState) -> ExecuteResult {
     let frame = interp.current_frame_mut();
 
@@ -542,16 +536,8 @@ impl Areturn {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
         let frame = interp.current_frame_mut();
 
-        // pop operand
-        let obj = frame
-            .operand_stack
-            .pop()
-            .ok_or(InterpreterError::NoOperand)?;
-
-        // ensure reference
-        if !obj.is_reference() {
-            return Err(InterpreterError::InvalidOperandForObjectOp(obj.data_type()));
-        }
+        // pop reference operand
+        let obj = frame.pop_reference_value()?;
 
         do_return_value(interp, obj)
     }
@@ -561,16 +547,8 @@ impl Arraylength {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
         let frame = interp.current_frame_mut();
 
-        // pop operand
-        let obj = frame
-            .operand_stack
-            .pop()
-            .ok_or(InterpreterError::NoOperand)?;
-
-        // ensure non-null array reference
-        let obj = obj
-            .as_reference()
-            .ok_or_else(|| InterpreterError::InvalidOperandForObjectOp(obj.data_type()))?;
+        // pop non-null array reference
+        let obj = frame.pop_reference()?;
 
         if obj.is_null() {
             return Ok(PostExecuteAction::Exception(
@@ -596,10 +574,7 @@ impl Astore {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
         let frame = interp.current_frame_mut();
 
-        let obj = frame
-            .operand_stack
-            .pop()
-            .ok_or(InterpreterError::NoOperand)?;
+        let obj = frame.pop_value()?;
 
         if !obj.is_reference_or_retaddr() {
             return Err(InterpreterError::InvalidOperandForAstore(obj.data_type()));
@@ -909,10 +884,7 @@ fn float_cmp(interp: &mut InterpreterState, op: &'static str, nan_fallback: i32)
 
     // pop values
     let (val1, val2) = {
-        let mut objs = frame
-            .operand_stack
-            .pop_n(2)
-            .ok_or(InterpreterError::NoOperand)?;
+        let mut objs = frame.pop_values(2)?;
 
         // popped in reverse order
         let val2 = objs.next().unwrap();
@@ -1306,16 +1278,8 @@ fn int_cmp_one(
 ) -> ExecuteResult {
     let frame = interp.current_frame_mut();
 
-    // pop value
-    let obj = frame
-        .operand_stack
-        .pop()
-        .ok_or(InterpreterError::NoOperand)?;
-
-    // ensure int
-    let int = obj
-        .as_int()
-        .ok_or_else(|| InterpreterError::InvalidOperandForIntOp(obj.data_type()))?;
+    // pop int
+    let int = frame.pop_int()?;
 
     // do comparison
     let success = cmp(int);
@@ -1342,10 +1306,7 @@ fn int_cmp_two(
 
     // pop values
     let (val1, val2) = {
-        let mut objs = frame
-            .operand_stack
-            .pop_n(2)
-            .ok_or(InterpreterError::NoOperand)?;
+        let mut objs = frame.pop_values(2)?;
 
         // popped in reverse order
         let val2 = objs.next().unwrap();
@@ -1391,19 +1352,11 @@ fn obj_cmp_one(
 ) -> ExecuteResult {
     let frame = interp.current_frame_mut();
 
-    // pop value
-    let obj = frame
-        .operand_stack
-        .pop()
-        .ok_or(InterpreterError::NoOperand)?;
-
-    // ensure reference
-    let obj = obj
-        .as_reference()
-        .ok_or_else(|| InterpreterError::InvalidOperandForObjectOp(obj.data_type()))?;
+    // pop reference
+    let obj = frame.pop_reference()?;
 
     // do comparison
-    let success = cmp(obj);
+    let success = cmp(&obj);
     trace!("cmp reference {} => {}", wat, success);
 
     let action = if success {
@@ -2176,9 +2129,8 @@ impl Putfield {
 
             // ensure object is non-null non-array reference
             let object = object
-                .as_reference()
-                .ok_or_else(|| InterpreterError::InvalidOperandForObjectOp(object.data_type()))?
-                .clone();
+                .into_reference()
+                .map_err(InterpreterError::InvalidOperandForObjectOp)?;
 
             let class = if let Some(cls) = object.class() {
                 cls
@@ -2247,10 +2199,7 @@ impl Putstatic {
         }
 
         // pop value
-        let val = frame
-            .operand_stack
-            .pop()
-            .ok_or(InterpreterError::NoOperand)?;
+        let val = frame.pop_value()?;
 
         // TODO check value is compatible with field desc
         // TODO if final can only be in constructor

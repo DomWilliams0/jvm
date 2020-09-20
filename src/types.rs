@@ -201,6 +201,13 @@ impl DataValue {
         }
     }
 
+    pub fn into_reference(self) -> Result<VmRef<Object>, DataType<'static>> {
+        match self {
+            DataValue::Reference(obj) => Ok(obj),
+            v => Err(v.data_type()),
+        }
+    }
+
     pub fn is_reference_or_retaddr(&self) -> bool {
         matches!(self, DataValue::Reference(_) | DataValue::ReturnAddress(_))
     }

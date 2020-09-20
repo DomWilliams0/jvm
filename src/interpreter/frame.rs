@@ -1,5 +1,5 @@
 use crate::alloc::VmRef;
-use crate::class::{Class, Method};
+use crate::class::{Class, Method, Object};
 use crate::interpreter::error::InterpreterError;
 use crate::types::DataValue;
 
@@ -282,6 +282,46 @@ impl Debug for Frame {
             method.name().to_utf8(),
             suffix
         )
+    }
+}
+
+impl JavaFrame {
+    // TODO move these to extension trait on operandstack
+    pub fn pop_value(&mut self) -> Result<DataValue, InterpreterError> {
+        self.operand_stack.pop().ok_or(InterpreterError::NoOperand)
+    }
+
+    pub fn pop_values(
+        &mut self,
+        n: usize,
+    ) -> Result<impl DoubleEndedIterator<Item = DataValue> + '_, InterpreterError> {
+        self.operand_stack
+            .pop_n(n)
+            .ok_or(InterpreterError::NoOperand)
+    }
+
+    pub fn pop_int(&mut self) -> Result<i32, InterpreterError> {
+        self.pop_value().and_then(|v| {
+            v.as_int()
+                .ok_or_else(|| InterpreterError::InvalidOperandForIntOp(v.data_type()))
+        })
+    }
+
+    pub fn pop_reference_value(&mut self) -> Result<DataValue, InterpreterError> {
+        self.pop_value().and_then(|v| {
+            if v.is_reference() {
+                Ok(v)
+            } else {
+                Err(InterpreterError::InvalidOperandForObjectOp(v.data_type()))
+            }
+        })
+    }
+
+    pub fn pop_reference(&mut self) -> Result<VmRef<Object>, InterpreterError> {
+        self.pop_value().and_then(|v| {
+            v.into_reference()
+                .map_err(InterpreterError::InvalidOperandForObjectOp)
+        })
     }
 }
 
