@@ -24,7 +24,7 @@
    * `// TODO actually intern strings`
    * `// TODO methods on VmRef newtype`
    * `// TODO oom error`
- * [src/class.rs](src/class.rs) (25)
+ * [src/class.rs](src/class.rs) (26)
    * `// TODO store dimensions`
    * `/// TODO weak reference for cyclic?`
    * `// TODO arrays should live on the GC java heap`
@@ -47,6 +47,7 @@
    * `// TODO wrap exception here and return the proper type`
    * `// TODO proper exception type here`
    * `// TODO specific exception type e.g. ExceptionInInitializerError`
+   * `// TODO method.as_full_name() impls Debug to make this easier`
    * `// TODO just allocate an object instead of this unsafeness`
    * `// TODO limit array length to i32::MAX somewhere`
    * `// TODO not quite correct toString`
@@ -78,12 +79,11 @@
    * `// TODO backtrace`
  * [src/interpreter/error.rs](src/interpreter/error.rs) (1)
    * `// TODO combine repetetive errors for different data types`
- * [src/interpreter/frame.rs](src/interpreter/frame.rs) (8)
+ * [src/interpreter/frame.rs](src/interpreter/frame.rs) (7)
    * `// TODO validate local var slot in case of wide vars`
    * `// TODO longs and doubles take 2 slots!`
    * `// TODO tests for operand stack and local var array`
-   * `// TODO instead of options, enum {Instance(obj), Static(class)}`
-   * `// TODO pass args to native function`
+   * `// TODO impl display on mstr`
    * `// TODO expects()`
    * `// TODO impl Display for mstr`
    * `// TODO move these to extension trait on operandstack`

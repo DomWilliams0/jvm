@@ -17,7 +17,7 @@ use crate::interpreter::{Frame, InterpreterError, InterpreterResult};
 use crate::monitor::{Monitor, MonitorGuard};
 use crate::storage::{FieldId, FieldStorage, FieldStorageLayout, FieldStorageLayoutBuilder};
 use crate::thread;
-use cafebabe::attribute::Code;
+
 use itertools::Itertools;
 use parking_lot::{Mutex, MutexGuard};
 use std::cell::UnsafeCell;
@@ -114,6 +114,28 @@ pub enum FieldSearchType {
 }
 
 #[derive(Debug)]
+pub enum MethodCode {
+    /// Abstract, no code
+    Abstract,
+
+    /// Non-abstract method
+    Java(attribute::Code),
+
+    Native(Mutex<NativeCode>),
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum NativeCode {
+    Unbound,
+
+    /// Fn pointer to internal Rust function
+    Bound(usize),
+
+    /// Could not be bound
+    FailedToBind,
+}
+
+#[derive(Debug)]
 pub struct Method {
     name: NativeString,
     desc: NativeString,
@@ -123,8 +145,7 @@ pub struct Method {
     args: Vec<DataType<'static>>,
     return_type: ReturnType<'static>,
 
-    /// Only present if not native or abstract
-    code: Option<attribute::Code>,
+    code: MethodCode,
     attributes: Vec<attribute::OwnedAttribute>,
 }
 
@@ -240,27 +261,46 @@ impl Class {
                     let idx = attributes
                         .iter()
                         .position(|a| matches!(a, attribute::OwnedAttribute::Code(_)));
-                    if let Some(idx) = idx {
-                        if method
-                            .access_flags
-                            .intersects(MethodAccessFlags::ABSTRACT | MethodAccessFlags::NATIVE)
-                        {
+
+                    match idx {
+                        // abstract
+                        _ if method.access_flags.contains(MethodAccessFlags::ABSTRACT) => {
+                            if idx.is_some() {
+                                warn!("abstract method {:?} has Code attribute", method.name);
+                                return Err(Throwables::ClassFormatError);
+                            }
+
+                            MethodCode::Abstract
+                        }
+
+                        // native
+                        _ if method.access_flags.contains(MethodAccessFlags::NATIVE) => {
+                            if idx.is_some() {
+                                warn!("native method {:?} has Code attribute", method.name);
+                                return Err(Throwables::ClassFormatError);
+                            }
+
+                            MethodCode::Native(Mutex::new(NativeCode::Unbound))
+                        }
+
+                        // normal
+                        Some(idx) => {
+                            // pop from attributes list
+                            let code = match attributes.swap_remove(idx) {
+                                attribute::OwnedAttribute::Code(code) => code,
+                                _ => unreachable!(),
+                            };
+
+                            MethodCode::Java(code)
+                        }
+
+                        None => {
                             warn!(
-                                "abstract or native method {:?} has Code attribute",
+                                "missing Code attribute from non-abstrct non-native method {:?}",
                                 method.name
                             );
                             return Err(Throwables::ClassFormatError);
                         }
-
-                        // pop from attributes list
-                        let code = match attributes.swap_remove(idx) {
-                            attribute::OwnedAttribute::Code(code) => code,
-                            _ => unreachable!(),
-                        };
-
-                        Some(code)
-                    } else {
-                        None
                     }
                 };
 
@@ -270,6 +310,14 @@ impl Class {
                     warn!("invalid method descriptor {:?}", method.descriptor);
                     return Err(Throwables::ClassFormatError);
                 }
+
+                trace!(
+                    "method {:?} ({:?}), {:?}, {:?}",
+                    method.name,
+                    method.descriptor,
+                    method.access_flags,
+                    code
+                );
 
                 vec.push(VmRef::new(Method {
                     name: method.name.to_owned(),
@@ -960,6 +1008,40 @@ impl Class {
     pub fn flags(&self) -> ClassAccessFlags {
         self.access_flags
     }
+
+    pub fn ensure_method_bound(&self, method: &Method) -> Result<(), InterpreterError> {
+        let _guard = match &method.code {
+            MethodCode::Native(native) => {
+                let guard = native.lock();
+                match *guard {
+                    NativeCode::Unbound => guard,
+                    _ => return Ok(()),
+                }
+            }
+            _ => return Ok(()),
+        };
+
+        // TODO method.as_full_name() impls Debug to make this easier
+        debug!("binding native method {:?}.{:?}", self.name, method.name);
+
+        todo!("resolve mangled native method")
+    }
+
+    pub unsafe fn bind_native_method(&self, method: &Method, fn_ptr: usize) -> bool {
+        if let MethodCode::Native(native) = &method.code {
+            let mut guard = native.lock();
+            if let NativeCode::Unbound = *guard {
+                *guard = NativeCode::Bound(fn_ptr);
+                debug!(
+                    "bound {:?}.{:?} to function {:#x}",
+                    self.name, method.name, fn_ptr
+                );
+                return true;
+            }
+        }
+
+        false
+    }
 }
 
 impl MethodLookupResult {
@@ -1155,8 +1237,8 @@ impl Debug for Object {
 }
 
 impl Method {
-    pub fn code(&self) -> Option<&Code> {
-        self.code.as_ref()
+    pub fn code(&self) -> &MethodCode {
+        &self.code
     }
 
     pub fn name(&self) -> &mstr {

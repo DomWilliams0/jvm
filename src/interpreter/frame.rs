@@ -1,10 +1,11 @@
 use crate::alloc::VmRef;
-use crate::class::{Class, Method, Object};
+use crate::class::{Class, Method, MethodCode, NativeCode, Object};
 use crate::interpreter::error::InterpreterError;
 use crate::types::DataValue;
 
 use log::*;
 
+use crate::error::Throwables;
 use cafebabe::AccessFlags;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
@@ -188,49 +189,74 @@ impl StackValue {
 // TODO tests for operand stack and local var array
 
 impl Frame {
-    // TODO instead of options, enum {Instance(obj), Static(class)}
     pub fn new_with_args(
         method: VmRef<Method>,
         class: VmRef<Class>,
         mut args: impl DoubleEndedIterator<Item = DataValue>,
     ) -> Result<Self, InterpreterError> {
-        if method.flags().is_native() {
-            // TODO pass args to native function
-            Ok(Frame::Native(NativeFrame { class, method }))
-        } else {
-            let code = method.code().ok_or_else(|| {
-                warn!("method {:?}:{:?} has no code", class.name(), method.name());
-                InterpreterError::NoCode
-            })?;
+        // TODO impl display on mstr
+        match method.code() {
+            MethodCode::Abstract => {
+                warn!("method {:?}:{:?} is abstract", class.name(), method.name());
+                Err(InterpreterError::ExceptionRaised(Throwables::Other(
+                    "java/lang/AbstractMethodError",
+                )))
+            }
+            MethodCode::Java(code) => {
+                let mut local_vars = LocalVariables::new_static(code.max_locals as usize);
 
-            let mut local_vars = LocalVariables::new_static(code.max_locals as usize);
+                // ensure `this` is not null
+                let offset = if !method.flags().is_static() {
+                    // TODO expects()
+                    let this = args.next_back().expect("no this arg");
+                    let thisref = this.as_reference().expect("this is not reference");
+                    assert!(!thisref.is_null(), "this is null");
 
-            // ensure `this` is not null
-            let offset = if !method.flags().is_static() {
-                // TODO expects()
-                let this = args.next_back().expect("no this arg");
-                let thisref = this.as_reference().expect("this is not reference");
-                assert!(!thisref.is_null(), "this is null");
+                    local_vars.store(0, this)?;
+                    1
+                } else {
+                    0
+                };
 
-                local_vars.store(0, this)?;
-                1
-            } else {
-                0
-            };
+                for (i, arg) in args.rev().enumerate() {
+                    local_vars.store(i + offset, arg)?;
+                }
 
-            for (i, arg) in args.rev().enumerate() {
-                local_vars.store(i + offset, arg)?;
+                Ok(Frame::Java(JavaFrame {
+                    class,
+                    method: method.clone(),
+                    local_vars,
+                    operand_stack: OperandStack::new(code.max_stack as usize),
+                    code: code.code.clone(),
+                }))
             }
 
-            Ok(Frame::Java(JavaFrame {
-                class,
-                method: method.clone(),
-                local_vars,
-                operand_stack: OperandStack::new(code.max_stack as usize),
-                code: code.code.clone(),
-            }))
+            MethodCode::Native(native) => {
+                let state = *native.lock();
+                match state {
+                    NativeCode::Unbound => {
+                        unreachable!(
+                            "native method {:?}.{:?} has not been bound",
+                            class.name(),
+                            method.name()
+                        );
+                    }
+                    NativeCode::FailedToBind => {
+                        warn!(
+                            "native method {:?}.{:?} could not be bound",
+                            class.name(),
+                            method.name()
+                        );
+                        Err(InterpreterError::ExceptionRaised(Throwables::Other(
+                            "java/lang/UnsatisfiedLinkError",
+                        )))
+                    }
+                    NativeCode::Bound(ptr) => todo!("call native method {:#x}", ptr),
+                }
+            }
         }
     }
+
     pub fn new_no_args(
         method: VmRef<Method>,
         class: VmRef<Class>,

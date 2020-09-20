@@ -13,6 +13,7 @@ use cafebabe::{ClassError, MethodAccessFlags};
 use parking_lot::RwLock;
 
 use crate::interpreter::{Frame, InterpreterResult};
+use crate::properties::vm_systemproperties_preinit;
 use crate::thread;
 use std::cell::RefCell;
 use std::thread::ThreadId;
@@ -240,13 +241,16 @@ impl ClassLoader {
     pub fn init_bootstrap_classes(&self) -> VmResult<()> {
         // TODO define hardcoded preload classes in a better way
 
-        fn load_class(loader: &ClassLoader, name: impl AsRef<[u8]>) -> VmResult<()> {
+        fn load_class(loader: &ClassLoader, name: impl AsRef<[u8]>) -> VmResult<VmRef<Class>> {
             loader
                 .load_class(
                     mstr::from_utf8(name.as_ref()).as_ref(),
                     WhichLoader::Bootstrap,
                 )
-                .and_then(|class| class.ensure_init())
+                .and_then(|class| {
+                    class.ensure_init()?;
+                    Ok(class)
+                })
         }
 
         // our lord and saviour Object first
@@ -267,17 +271,68 @@ impl ClassLoader {
             self.primitives.replace(Some(primitives.into_boxed_slice()));
         }
 
+        struct Preload {
+            class: &'static str,
+            native_methods: &'static [(&'static str, &'static str, *const ())],
+        }
+
+        impl Preload {
+            fn new(name: &'static str) -> Self {
+                Self::with_natives(name, &[])
+            }
+
+            fn with_natives(
+                name: &'static str,
+                natives: &'static [(&'static str, &'static str, *const ())],
+            ) -> Self {
+                Preload {
+                    class: name,
+                    native_methods: natives,
+                }
+            }
+        }
+
         // then the rest
         let classes = [
-            "java/lang/ClassLoader",
-            "java/util/Hashtable",
-            "[I",
-            "java/lang/String",
-            "java/util/HashMap",
+            Preload::new("java/lang/ClassLoader"),
+            Preload::with_natives(
+                "gnu/classpath/VMSystemProperties",
+                &[(
+                    "preInit",
+                    "(Ljava/util/Properties;)V",
+                    vm_systemproperties_preinit as *const _,
+                )],
+            ),
+            Preload::new("[I"),
+            Preload::new("java/lang/String"),
+            Preload::new("java/util/HashMap"),
         ];
 
         for class in classes.iter() {
-            load_class(self, class)?;
+            let cls = load_class(self, class.class)?;
+            for (method_name, method_desc, fn_ptr) in class.native_methods.iter() {
+                let method = cls
+                    .find_method_in_this_only(
+                        mstr::from_utf8(method_name.as_bytes()).as_ref(),
+                        mstr::from_utf8(method_desc.as_bytes()).as_ref(),
+                        MethodAccessFlags::NATIVE,
+                        MethodAccessFlags::ABSTRACT,
+                    )
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "cant find native method {:?}.{:?} ({:?}) to bind",
+                            class.class, method_name, method_desc
+                        )
+                    });
+
+                // safety: hardcoded function pointers
+                let bound = unsafe { cls.bind_native_method(&method, fn_ptr as *const _ as usize) };
+                assert!(
+                    bound,
+                    "failed to bind native method {:?}.{:?}",
+                    class.class, method_name
+                );
+            }
         }
 
         Ok(())

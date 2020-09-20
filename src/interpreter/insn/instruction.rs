@@ -1674,6 +1674,9 @@ impl Invokestatic {
             return Ok(PostExecuteAction::ClassInit(class));
         }
 
+        // ensure native method is bound
+        class.ensure_method_bound(&method)?;
+
         // TODO typecheck args at verification time
         let arg_count = method.args().len();
         let callee_frame = Frame::new_with_caller(class, method, frame, arg_count)?;

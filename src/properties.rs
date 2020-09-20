@@ -2,6 +2,8 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::iter::FromIterator;
 
+use crate::alloc::VmRef;
+use crate::class::Object;
 use crate::classpath::ClassPath;
 
 #[derive(Debug)]
@@ -86,3 +88,7 @@ impl From<String> for SystemProperty {
 // user.name
 // user.home
 // user.dir
+
+pub fn vm_systemproperties_preinit(properties: VmRef<Object>) {
+    todo!("set properties")
+}
