@@ -1,8 +1,9 @@
 use crate::alloc::VmRef;
-use crate::class::Method;
+use crate::class::{Method, MethodCode, NativeCode};
 use log::*;
 use parking_lot::{Condvar, Mutex};
 use std::fmt::{Debug, Formatter};
+use std::hint::unreachable_unchecked;
 use std::sync::mpsc;
 use std::thread::JoinHandle;
 
@@ -26,14 +27,17 @@ pub enum JitRequest {
 #[derive(Debug)]
 enum CompileState {
     NotCompiled,
+    Queued,
     Compiling,
     Compiled(()),
+    Failed(CompileError),
 }
 
+pub type CompileError = ();
+
 pub struct CompiledCode {
-    mutex: Mutex<()>,
+    mutex: Mutex<CompileState>,
     cvar: Condvar,
-    state: CompileState,
     code_type: CodeType,
 }
 
@@ -63,40 +67,128 @@ impl JitThread {
 
 fn jit_loop(rx: mpsc::Receiver<JitRequest>) {
     while let Ok(JitRequest::CompileTrampoline { method, fn_ptr }) = rx.recv() {
-        todo!("{:?}", method.name());
+        // safety: checked is_native_and_bound()
+        unsafe {
+            method.set_state(CompileState::Compiling);
+        }
+
+        // TODO actually compile
+        let trampoline = ();
+
+        // update method code reference
+        // safety: checked is_native_and_bound()
+        unsafe {
+            method.set_state(CompileState::Compiled(trampoline));
+        }
     }
 
     info!("jit thread exiting");
 }
 
+impl Method {
+    /// Must have checked is_native_and_bound() first
+    unsafe fn set_state(&self, state: CompileState) {
+        self.do_with_state(|s| *s = state);
+    }
+
+    /// Must have checked is_native_and_bound() first
+    unsafe fn do_with_state<R>(&self, f: impl FnOnce(&mut CompileState) -> R) -> R {
+        let native_code = match self.code() {
+            MethodCode::Native(native) => native,
+            _ => unreachable_unchecked(),
+        };
+
+        let native_guard = native_code.lock();
+        let compiled_code = match &*native_guard {
+            NativeCode::Bound(code) => code,
+            _ => unreachable_unchecked(),
+        };
+
+        let mut state_guard = compiled_code.mutex.lock();
+        f(&mut *state_guard)
+    }
+
+    fn is_native_and_bound(&self) -> bool {
+        let native_code = match self.code() {
+            MethodCode::Native(native) => native,
+            _ => return false,
+        };
+
+        let native_guard = native_code.lock();
+        match &*native_guard {
+            NativeCode::Bound(_) => true,
+            _ => false,
+        }
+    }
+}
+
 impl JitClient {
     /// Trampoline should not already be compiled
-    pub fn queue_trampoline(&self, method: VmRef<Method>, fn_ptr: usize) {
-        // TODO debug assert not already compiled
+    // TODO return result
+    pub fn queue_trampoline(&self, method: VmRef<Method>, fn_ptr: usize) -> bool {
+        // ensure compilable
+        if !method.is_native_and_bound() {
+            warn!("method {:?} is either not native or unbound", method.name());
+            return false;
+        }
+
+        // ensure not already queued or compiled, then update state to queued
+        // safety: checked is_native_and_bound()
+        unsafe {
+            let success = method.do_with_state(|state| match *state {
+                CompileState::NotCompiled => {
+                    *state = CompileState::Queued;
+                    true
+                }
+                _ => {
+                    warn!("method {:?} is already queued or compiled", method.name());
+                    false
+                }
+            });
+
+            if !success {
+                return false;
+            }
+        }
+
         trace!(
             "queueing jit compilation of method trampoline {:?} -> {:#x}",
             method.name(),
             fn_ptr
         );
-        let _ = self
-            .tx
-            .send(JitRequest::CompileTrampoline { method, fn_ptr });
+        self.tx
+            .send(JitRequest::CompileTrampoline { method, fn_ptr })
+            .is_ok()
     }
 }
 
 impl CompiledCode {
     pub fn new(ty: CodeType) -> Self {
         CompiledCode {
-            mutex: Mutex::new(()),
+            mutex: Mutex::new(CompileState::NotCompiled),
             cvar: Condvar::new(),
-            state: CompileState::NotCompiled,
             code_type: ty,
+        }
+    }
+
+    pub fn ensure_compiled(&self) -> Result<(), CompileError> {
+        let mut state = self.mutex.lock();
+        match &*state {
+            CompileState::NotCompiled => unreachable!("not queued"), // TODO queue here?
+            CompileState::Queued | CompileState::Compiling => {
+                // wait for completion then try again
+                debug!("waiting for compilation to finish");
+                self.cvar.wait(&mut state);
+                self.ensure_compiled()
+            }
+            CompileState::Compiled(_) => Ok(()),
+            CompileState::Failed(err) => Err(err.clone()),
         }
     }
 }
 
 impl Debug for CompiledCode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "CompiledCode({:?})", self.state)
+        write!(f, "CompiledCode({:?})", self.mutex.lock())
     }
 }

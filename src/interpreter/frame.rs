@@ -251,7 +251,11 @@ impl Frame {
                             "java/lang/UnsatisfiedLinkError",
                         )))
                     }
-                    NativeCode::Bound(code) => todo!("call native method {:?}", code),
+                    NativeCode::Bound(code) => {
+                        code.ensure_compiled()
+                            .expect("failed to compile trampoline");
+                        todo!("call native method {:?}", code)
+                    }
                 }
             }
         }
