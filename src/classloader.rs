@@ -308,6 +308,8 @@ impl ClassLoader {
             Preload::new("java/util/HashMap"),
         ];
 
+        let thread = thread::get();
+        let jit = thread.global().jit();
         for class in classes.iter() {
             let cls = load_class(self, class.class)?;
             for (method_name, method_desc, fn_ptr) in class.native_methods.iter() {
@@ -325,13 +327,19 @@ impl ClassLoader {
                         )
                     });
 
+                let fn_ptr = fn_ptr as *const _ as usize;
+
+                // mark method as bound
                 // safety: hardcoded function pointers
-                let bound = unsafe { cls.bind_native_method(&method, fn_ptr as *const _ as usize) };
+                let bound = unsafe { cls.bind_native_method(&method, fn_ptr) };
                 assert!(
                     bound,
                     "failed to bind native method {:?}.{:?}",
                     class.class, method_name
                 );
+
+                // queue trampoline compilation
+                jit.queue_trampoline(method, fn_ptr);
             }
         }
 

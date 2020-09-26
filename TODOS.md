@@ -1,4 +1,4 @@
-# TODOs (119)
+# TODOs (120)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -118,6 +118,8 @@
    * `// TODO if class is interface then can only be in constructor`
  * [src/interpreter/interp.rs](src/interpreter/interp.rs) (1)
    * `// TODO pass these into execute()`
+ * [src/jit/mod.rs](src/jit/mod.rs) (1)
+   * `// TODO debug assert not already compiled`
  * [src/jvm.rs](src/jvm.rs) (5)
    * `// TODO "catch" any exception during init, and log it properly with stacktrace etc`
    * `// TODO set all properties in gnu/classpath/VMSystemProperties.preinit`

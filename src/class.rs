@@ -23,6 +23,7 @@ use parking_lot::{Mutex, MutexGuard};
 use std::cell::UnsafeCell;
 use std::fmt::{Debug, Formatter};
 
+use crate::jit::{CodeType, CompiledCode};
 use std::borrow::Cow;
 use std::sync::Arc;
 use std::thread::ThreadId;
@@ -124,12 +125,12 @@ pub enum MethodCode {
     Native(Mutex<NativeCode>),
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug)]
 pub enum NativeCode {
     Unbound,
 
-    /// Fn pointer to internal Rust function
-    Bound(usize),
+    /// Compiled trampoline
+    Bound(CompiledCode),
 
     /// Could not be bound
     FailedToBind,
@@ -1031,7 +1032,7 @@ impl Class {
         if let MethodCode::Native(native) = &method.code {
             let mut guard = native.lock();
             if let NativeCode::Unbound = *guard {
-                *guard = NativeCode::Bound(fn_ptr);
+                *guard = NativeCode::Bound(CompiledCode::new(CodeType::Trampoline(fn_ptr)));
                 debug!(
                     "bound {:?}.{:?} to function {:#x}",
                     self.name, method.name, fn_ptr

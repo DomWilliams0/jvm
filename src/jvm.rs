@@ -10,6 +10,7 @@ use crate::classloader::{ClassLoader, WhichLoader};
 use crate::classpath::ClassPath;
 use crate::error::ResultExt;
 use crate::interpreter::{Frame, InstructionLookupTable, InterpreterResult};
+use crate::jit::{JitClient, JitThread};
 use crate::properties::SystemProperties;
 use crate::thread::JvmThreadState;
 use crate::types::DataValue;
@@ -21,12 +22,14 @@ use std::iter::once;
 pub struct Jvm {
     args: JvmArgsPersist,
     state: Arc<JvmGlobalState>,
+    jit: JitThread,
 }
 
 /// Each thread shares a reference through an Arc
 pub struct JvmGlobalState {
     classloader: ClassLoader,
     insn_lookup: InstructionLookupTable,
+    jit: JitClient,
 }
 
 #[derive(Default, Debug)]
@@ -61,16 +64,19 @@ impl Jvm {
     // TODO "catch" any exception during init, and log it properly with stacktrace etc
     pub fn new(args: JvmArgs) -> JvmResult<Self> {
         let classloader = ClassLoader::new(args.bootclasspath.clone());
+        let (jit, jit_client) = JitThread::start();
 
         // create global JVM state
         let global = Arc::new(JvmGlobalState {
             classloader,
             insn_lookup: InstructionLookupTable::new(),
+            jit: jit_client,
         });
 
         let jvm = Jvm {
             args: args.args,
             state: global.clone(),
+            jit,
         };
 
         // initialise main thread TLS
@@ -187,5 +193,9 @@ impl JvmGlobalState {
 
     pub(crate) fn insn_lookup(&self) -> &InstructionLookupTable {
         &self.insn_lookup
+    }
+
+    pub(crate) fn jit(&self) -> &JitClient {
+        &self.jit
     }
 }

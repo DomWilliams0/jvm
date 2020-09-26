@@ -232,7 +232,7 @@ impl Frame {
             }
 
             MethodCode::Native(native) => {
-                let state = *native.lock();
+                let state = &*native.lock();
                 match state {
                     NativeCode::Unbound => {
                         unreachable!(
@@ -251,7 +251,7 @@ impl Frame {
                             "java/lang/UnsatisfiedLinkError",
                         )))
                     }
-                    NativeCode::Bound(ptr) => todo!("call native method {:#x}", ptr),
+                    NativeCode::Bound(code) => todo!("call native method {:?}", code),
                 }
             }
         }

@@ -10,6 +10,7 @@ mod classpath;
 mod constant_pool;
 mod error;
 mod interpreter;
+mod jit;
 mod jvm;
 mod monitor;
 mod properties;
