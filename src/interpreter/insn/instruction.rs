@@ -1659,7 +1659,51 @@ impl Invokestatic {
 
 impl Invokevirtual {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Invokevirtual")
+        let frame = interp.current_frame_mut();
+        let thread = thread::get();
+        let class_loader = thread.global().class_loader();
+
+        let entry = frame
+            .class
+            .constant_pool()
+            .method_or_interface_entry(self.0)
+            .ok_or_else(|| InterpreterError::NotMethodRef(self.0))?;
+
+        // resolve class and method
+        let class = class_loader.load_class(&entry.class, frame.class.loader().clone())?;
+
+        let method = Class::find_method_recursive_in_superclasses(
+            &class,
+            &entry.name,
+            &entry.desc,
+            MethodAccessFlags::empty(),
+            MethodAccessFlags::ABSTRACT,
+        )
+        .ok_or_else(|| InterpreterError::MethodNotFound {
+            class: entry.class.clone(),
+            name: entry.name.clone(),
+            desc: entry.desc.clone(),
+        })?;
+
+        // should already be initialised if its been instantiated
+        debug_assert!(!class.needs_init());
+
+        // TODO ensure method is not static, IncompatibleClassChangeError
+        assert!(!method.flags().is_static());
+
+        trace!(
+            "invokevirtual {:?}.{:?} ({:?})",
+            class.name(),
+            method.name(),
+            method.descriptor()
+        );
+
+        // pop args and call method
+        let arg_count = method.args().len() + 1; // +1 for this
+        let callee_frame = Frame::new_with_caller(class, method, frame, arg_count)?;
+        interp.push_frame(callee_frame);
+
+        Ok(PostExecuteAction::MethodCall)
     }
 }
 

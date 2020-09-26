@@ -620,8 +620,7 @@ impl Class {
             .cloned()
     }
 
-    /// Looks in super classes too
-    // TODO version to look in (super)interfaces too
+    /// Looks in self, super classes and super interfaces
     pub fn find_method_recursive_in_superclasses(
         cls: &VmRef<Class>,
         name: &mstr,
@@ -638,7 +637,8 @@ impl Class {
             current = cls.super_class.as_ref();
         }
 
-        None
+        // then superifaces if not yet found
+        cls.find_maximally_specific_method(name, desc, flags, antiflags)
     }
     /// Looks in superinterfaces only
     pub fn find_maximally_specific_method(

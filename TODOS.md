@@ -24,7 +24,7 @@
    * `// TODO actually intern strings`
    * `// TODO methods on VmRef newtype`
    * `// TODO oom error`
- * [src/class.rs](src/class.rs) (27)
+ * [src/class.rs](src/class.rs) (26)
    * `// TODO store dimensions`
    * `/// TODO weak reference for cyclic?`
    * `// TODO arrays should live on the GC java heap`
@@ -41,7 +41,6 @@
    * `// TODO Every array type implements the interfaces Cloneable and java.io.Serializable.`
    * `// update ptr - TODO use Arc::get_unchecked_mut when it is stable`
    * `// TODO set obj->vmdata field to vm_class`
-   * `// TODO version to look in (super)interfaces too`
    * `// TODO ensure there is only 1`
    * `// TODO initialise final static fields from ConstantValue attrs`
    * `// TODO only do this if its a class and not an iface`
@@ -88,7 +87,7 @@
    * `// TODO expects()`
    * `// TODO impl Display for mstr`
    * `// TODO move these to extension trait on operandstack`
- * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (27)
+ * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (28)
    * `// TODO operand stack pop then verify might be wrong - only pop if its the right type?`
    * `/// TODO might be possible to continue with resolved methods/fields state instead of replay`
    * `// TODO better handling of interpreter error`
@@ -102,6 +101,7 @@
    * `// TODO native method`
    * `// TODO ensure class is not interface, method not abstract, not constructor`
    * `// TODO typecheck args at verification time`
+   * `// TODO ensure method is not static, IncompatibleClassChangeError`
    * `// TODO lookup natively interned string instance`
    * `// TODO natively intern new string instance`
    * `// TODO int constant`
