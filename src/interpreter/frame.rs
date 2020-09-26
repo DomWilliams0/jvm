@@ -1,5 +1,5 @@
 use crate::alloc::VmRef;
-use crate::class::{Class, Method, MethodCode, NativeCode, Object};
+use crate::class::{Class, FunctionArgs, Method, MethodCode, NativeCode, NativeFunction, Object};
 use crate::interpreter::error::InterpreterError;
 use crate::types::DataValue;
 
@@ -30,6 +30,8 @@ pub struct JavaFrame {
 pub struct NativeFrame {
     pub class: VmRef<Class>,
     pub method: VmRef<Method>,
+    pub function: NativeFunction,
+    pub args: Box<[DataValue]>,
 }
 
 pub enum Frame {
@@ -251,10 +253,17 @@ impl Frame {
                             "java/lang/UnsatisfiedLinkError",
                         )))
                     }
-                    NativeCode::Bound(code) => {
-                        code.ensure_compiled()
-                            .expect("failed to compile trampoline");
-                        todo!("call native method {:?}", code)
+                    NativeCode::Bound(function) => {
+                        // code.ensure_compiled()
+                        //     .expect("failed to compile trampoline");
+
+                        let args = args.collect();
+                        Ok(Frame::Native(NativeFrame {
+                            class,
+                            method: method.clone(),
+                            function: *function,
+                            args,
+                        }))
                     }
                 }
             }
@@ -407,6 +416,15 @@ impl JavaFrame {
             .ok_or_else(|| InterpreterError::InvalidOperandForFloatOp(val2.data_type()))?;
 
         Ok((val1, val2))
+    }
+}
+
+impl NativeFrame {
+    pub fn invoke(&mut self) -> Option<DataValue> {
+        let args = FunctionArgs::from(self.args.as_mut());
+        match self.function {
+            NativeFunction::Internal(func) => func(args),
+        }
     }
 }
 

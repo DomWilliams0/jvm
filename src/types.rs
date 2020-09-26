@@ -410,6 +410,13 @@ impl<'a> ReturnType<'a> {
     }
 }
 
+impl<'a> From<Option<&'a DataValue>> for ReturnType<'static> {
+    fn from(val: Option<&'a DataValue>) -> Self {
+        val.map(|val| ReturnType::Returns(val.data_type()))
+            .unwrap_or(ReturnType::Void)
+    }
+}
+
 macro_rules! impl_data_value_type {
     ($ty:ty, $variant:ident) => {
         impl From<$ty> for DataValue {

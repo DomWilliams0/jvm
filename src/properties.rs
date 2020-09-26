@@ -2,9 +2,9 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::iter::FromIterator;
 
-use crate::alloc::VmRef;
-use crate::class::Object;
+use crate::class::FunctionArgs;
 use crate::classpath::ClassPath;
+use crate::types::DataValue;
 
 #[derive(Debug)]
 pub struct SystemProperties(HashMap<&'static str, SystemProperty>);
@@ -89,6 +89,8 @@ impl From<String> for SystemProperty {
 // user.home
 // user.dir
 
-pub fn vm_systemproperties_preinit(properties: VmRef<Object>) {
-    todo!("set properties")
+pub fn vm_systemproperties_preinit(mut args: FunctionArgs) -> Option<DataValue> {
+    let _props = args.take(0).into_reference().unwrap();
+    // TODO actually do preInit
+    None
 }

@@ -11,7 +11,7 @@ use crate::interpreter::error::InterpreterError;
 use log::*;
 
 use crate::class::{Class, FieldSearchType, Object};
-use crate::types::{DataType, DataValue, PrimitiveDataType, ReturnType};
+use crate::types::{DataType, DataValue, PrimitiveDataType};
 
 use crate::classloader::WhichLoader;
 use crate::error::Throwables;
@@ -494,41 +494,12 @@ impl Anewarray {
 }
 
 fn do_return_value(interp: &mut InterpreterState, val: DataValue) -> ExecuteResult {
-    let frame = interp.current_frame_mut();
-
-    // check return type matches sig
-    // TODO catch this at verification time
-    let ret = ReturnType::Returns(val.data_type());
-    if frame.method.return_type() != &ret {
-        return Err(InterpreterError::InvalidReturnValue {
-            expected: frame.method.return_type().to_owned(),
-            actual: ret,
-        });
-    }
-
-    // pop this frame
-    if !interp.pop_frame() {
-        return Err(InterpreterError::NoFrame);
-    }
-
-    // push return value onto caller's stack
-    if let Some(caller) = interp.current_frame_mut_checked() {
-        caller.operand_stack.push(val);
-    } else {
-        warn!("no caller to return value to ({:?})", val);
-    }
-
+    interp.return_value_to_caller(Some(val))?;
     Ok(PostExecuteAction::Return)
 }
 
 fn do_return_void(interp: &mut InterpreterState) -> ExecuteResult {
-    let frame = interp.current_frame_mut();
-
-    // pop this frame
-    if !interp.pop_frame() {
-        return Err(InterpreterError::NoFrame);
-    }
-
+    interp.return_value_to_caller(None)?;
     Ok(PostExecuteAction::Return)
 }
 

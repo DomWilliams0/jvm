@@ -23,7 +23,6 @@ use parking_lot::{Mutex, MutexGuard};
 use std::cell::UnsafeCell;
 use std::fmt::{Debug, Formatter};
 
-use crate::jit::{CodeType, CompiledCode};
 use std::borrow::Cow;
 use std::sync::Arc;
 use std::thread::ThreadId;
@@ -129,11 +128,21 @@ pub enum MethodCode {
 pub enum NativeCode {
     Unbound,
 
-    /// Compiled trampoline
-    Bound(CompiledCode),
+    Bound(NativeFunction),
 
     /// Could not be bound
     FailedToBind,
+}
+
+pub type NativeInternalFn = fn(FunctionArgs) -> Option<DataValue>;
+
+pub struct FunctionArgs<'a>(&'a mut [DataValue]);
+
+#[derive(Copy, Clone)]
+pub enum NativeFunction {
+    /// Rust function
+    Internal(NativeInternalFn),
+    // TODO JNI style C function
 }
 
 #[derive(Debug)]
@@ -1028,15 +1037,13 @@ impl Class {
         todo!("resolve mangled native method")
     }
 
-    pub unsafe fn bind_native_method(&self, method: &Method, fn_ptr: usize) -> bool {
+    pub fn bind_internal_method(&self, method: &Method, function: NativeInternalFn) -> bool {
         if let MethodCode::Native(native) = &method.code {
             let mut guard = native.lock();
             if let NativeCode::Unbound = *guard {
-                *guard = NativeCode::Bound(CompiledCode::new(CodeType::Trampoline(fn_ptr)));
-                debug!(
-                    "bound {:?}.{:?} to function {:#x}",
-                    self.name, method.name, fn_ptr
-                );
+                // *guard = NativeCode::Bound(CompiledCode::new(CodeType::Trampoline(fn_ptr)));
+                *guard = NativeCode::Bound(NativeFunction::Internal(function));
+                debug!("bound {:?}.{:?} to {:?}", self.name, method.name, *guard);
                 return true;
             }
         }
@@ -1286,5 +1293,27 @@ impl FieldSearchType {
     pub fn matches(&self, flags: FieldAccessFlags) -> bool {
         let is_static = matches!(self, Self::Static);
         is_static == flags.is_static()
+    }
+}
+
+impl Debug for NativeFunction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let ptr = match self {
+            NativeFunction::Internal(f) => f as *const _ as usize,
+        };
+        write!(f, "NativeFunction({:#x})", ptr)
+    }
+}
+
+impl<'a> From<&'a mut [DataValue]> for FunctionArgs<'a> {
+    fn from(args: &'a mut [DataValue]) -> Self {
+        Self(args)
+    }
+}
+
+impl<'a> FunctionArgs<'a> {
+    pub fn take(&mut self, idx: usize) -> DataValue {
+        let val = self.0.get_mut(idx).unwrap(); // verified
+        std::mem::replace(val, DataValue::Boolean(false))
     }
 }

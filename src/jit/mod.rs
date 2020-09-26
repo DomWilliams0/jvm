@@ -7,6 +7,8 @@ use std::hint::unreachable_unchecked;
 use std::sync::mpsc;
 use std::thread::JoinHandle;
 
+// TODO reorganise into modules
+
 pub struct JitThread {
     thread: JoinHandle<()>,
 }
@@ -74,6 +76,7 @@ fn jit_loop(rx: mpsc::Receiver<JitRequest>) {
 
         // TODO actually compile
         let trampoline = ();
+        todo!("compile");
 
         // update method code reference
         // safety: checked is_native_and_bound()
@@ -104,8 +107,9 @@ impl Method {
             _ => unreachable_unchecked(),
         };
 
-        let mut state_guard = compiled_code.mutex.lock();
-        f(&mut *state_guard)
+        todo!()
+        // let mut state_guard = compiled_code.mutex.lock();
+        // f(&mut *state_guard)
     }
 
     fn is_native_and_bound(&self) -> bool {

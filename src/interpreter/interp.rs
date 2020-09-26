@@ -6,6 +6,9 @@ use crate::interpreter::frame::{Frame, FrameStack, JavaFrame};
 use crate::interpreter::insn::{get_insn, InstructionBlob, PostExecuteAction};
 use crate::thread;
 
+use crate::class::Method;
+use crate::interpreter::InterpreterError;
+use crate::types::{DataValue, ReturnType};
 use std::cell::{RefCell, RefMut};
 
 pub enum InterpreterResult {
@@ -54,6 +57,52 @@ impl InterpreterState {
 
     pub fn current_frame_mut_checked(&mut self) -> Option<&mut JavaFrame> {
         self.frames.top_java_mut().map(|(frame, _)| frame)
+    }
+
+    fn current_method(&self) -> Option<&Method> {
+        match self.frames.top()? {
+            Frame::Java(frame) => Some(&frame.method),
+            Frame::Native(frame) => Some(&frame.method),
+        }
+    }
+
+    pub fn return_value_to_caller(
+        &mut self,
+        val: Option<DataValue>,
+    ) -> Result<(), InterpreterError> {
+        // check return type matches sig
+        // TODO catch this at verification time
+        let this_ret = ReturnType::from(val.as_ref());
+        let method_ret = self.current_method().unwrap().return_type();
+        if method_ret != &this_ret {
+            return Err(InterpreterError::InvalidReturnValue {
+                expected: method_ret.to_owned(),
+                actual: this_ret,
+            });
+        }
+
+        // pop frame
+        if !self.pop_frame() {
+            return Err(InterpreterError::NoFrame);
+        }
+
+        // push return value onto caller's stack
+        if let Some(val) = val {
+            if let Some(caller) = self.current_frame_mut_checked() {
+                caller.operand_stack.push(val);
+            } else {
+                warn!("no caller to return value to ({:?})", val);
+                if self
+                    .current_method()
+                    .map(|m| m.flags().is_native())
+                    .unwrap_or_default()
+                {
+                    unimplemented!("native method called native method wtf");
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -112,8 +161,21 @@ impl Interpreter {
         let thread = thread::get();
         let mut state = self.state_mut();
 
-        if let Some(_native) = state.frames.top_native_mut() {
-            todo!("native frame")
+        if let Some(native) = state.frames.top_native_mut() {
+            trace!(
+                "invoking native method {:?}.{:?}",
+                native.class.name(),
+                native.method.name()
+            );
+            let return_value = native.invoke();
+            return match state.return_value_to_caller(return_value) {
+                Err(err) => {
+                    error!("interpreter error: {}", err);
+                    // TODO better handling of interpreter error
+                    PostExecuteAction::Exception(Throwables::Other("java/lang/InternalError"))
+                }
+                Ok(()) => PostExecuteAction::Return,
+            };
         }
 
         loop {

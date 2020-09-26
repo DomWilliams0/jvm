@@ -3,7 +3,7 @@ use std::sync::Arc;
 use log::*;
 
 use crate::alloc::{vmref_ptr, InternedString, VmRef};
-use crate::class::{Class, ClassType, Object};
+use crate::class::{Class, ClassType, NativeInternalFn, Object};
 use crate::classpath::ClassPath;
 use crate::error::{Throwables, VmResult};
 
@@ -273,7 +273,7 @@ impl ClassLoader {
 
         struct Preload {
             class: &'static str,
-            native_methods: &'static [(&'static str, &'static str, *const ())],
+            native_methods: &'static [(&'static str, &'static str, NativeInternalFn)],
         }
 
         impl Preload {
@@ -283,7 +283,7 @@ impl ClassLoader {
 
             fn with_natives(
                 name: &'static str,
-                natives: &'static [(&'static str, &'static str, *const ())],
+                natives: &'static [(&'static str, &'static str, NativeInternalFn)],
             ) -> Self {
                 Preload {
                     class: name,
@@ -300,7 +300,7 @@ impl ClassLoader {
                 &[(
                     "preInit",
                     "(Ljava/util/Properties;)V",
-                    vm_systemproperties_preinit as *const _,
+                    vm_systemproperties_preinit,
                 )],
             ),
             Preload::new("[I"),
@@ -308,8 +308,6 @@ impl ClassLoader {
             Preload::new("java/util/HashMap"),
         ];
 
-        let thread = thread::get();
-        let jit = thread.global().jit();
         for class in classes.iter() {
             let cls = load_class(self, class.class)?;
             for (method_name, method_desc, fn_ptr) in class.native_methods.iter() {
@@ -327,11 +325,8 @@ impl ClassLoader {
                         )
                     });
 
-                let fn_ptr = fn_ptr as *const _ as usize;
-
                 // mark method as bound
-                // safety: hardcoded function pointers
-                let bound = unsafe { cls.bind_native_method(&method, fn_ptr) };
+                let bound = cls.bind_internal_method(&method, *fn_ptr);
                 assert!(
                     bound,
                     "failed to bind native method {:?}.{:?}",
@@ -339,7 +334,7 @@ impl ClassLoader {
                 );
 
                 // queue trampoline compilation
-                jit.queue_trampoline(method, fn_ptr);
+                // jit.queue_trampoline(method, fn_ptr);
             }
         }
 

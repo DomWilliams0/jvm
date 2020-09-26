@@ -1,4 +1,4 @@
-# TODOs (122)
+# TODOs (126)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -24,11 +24,12 @@
    * `// TODO actually intern strings`
    * `// TODO methods on VmRef newtype`
    * `// TODO oom error`
- * [src/class.rs](src/class.rs) (26)
+ * [src/class.rs](src/class.rs) (27)
    * `// TODO store dimensions`
    * `/// TODO weak reference for cyclic?`
    * `// TODO arrays should live on the GC java heap`
    * `// TODO arrays should be specialised and not hold massive DataValues`
+   * `// TODO JNI style C function`
    * `// TODO arrayvec`
    * `// TODO get classloader reference from tls instead of parameter`
    * `// TODO verify constant pool offsets so we can raise a single classformaterror then trust it`
@@ -87,12 +88,11 @@
    * `// TODO expects()`
    * `// TODO impl Display for mstr`
    * `// TODO move these to extension trait on operandstack`
- * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (28)
+ * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (27)
    * `// TODO operand stack pop then verify might be wrong - only pop if its the right type?`
    * `/// TODO might be possible to continue with resolved methods/fields state instead of replay`
    * `// TODO better handling of interpreter error`
    * `// TODO some 2s are signed`
-   * `// TODO catch this at verification time`
    * `// TODO sign extended?`
    * `// TODO narrow float to int properly`
    * `// TODO is probably wrong`
@@ -116,9 +116,12 @@
    * `// TODO check value is compatible with field desc`
    * `// TODO if final can only be in constructor`
    * `// TODO if class is interface then can only be in constructor`
- * [src/interpreter/interp.rs](src/interpreter/interp.rs) (1)
+ * [src/interpreter/interp.rs](src/interpreter/interp.rs) (3)
+   * `// TODO catch this at verification time`
    * `// TODO pass these into execute()`
- * [src/jit/mod.rs](src/jit/mod.rs) (3)
+   * `// TODO better handling of interpreter error`
+ * [src/jit/mod.rs](src/jit/mod.rs) (4)
+   * `// TODO reorganise into modules`
    * `// TODO actually compile`
    * `// TODO return result`
    * `CompileState::NotCompiled => unreachable!("not queued"), // TODO queue here?`
@@ -128,9 +131,10 @@
    * `// TODO populate String[] args`
    * `// TODO wait for threads to die, unintialise TLS, assert this is the last ref to global state`
    * `// TODO standard jvm args`
- * [src/properties.rs](src/properties.rs) (2)
+ * [src/properties.rs](src/properties.rs) (3)
    * `// TODO remaining static ones`
    * `// TODO dynamic ones e.g. user.home`
+   * `// TODO actually do preInit`
  * [src/storage.rs](src/storage.rs) (5)
    * `// TODO field storage should be inline in VmRef<Object>`
    * `// TODO compact field storage i.e. not using DataValue enum`
