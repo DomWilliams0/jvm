@@ -8,6 +8,7 @@ mod class;
 mod classloader;
 mod classpath;
 mod constant_pool;
+mod debug;
 mod error;
 mod interpreter;
 mod jit;

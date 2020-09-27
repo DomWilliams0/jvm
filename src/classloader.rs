@@ -24,6 +24,9 @@ pub struct ClassLoader {
     bootclasspath: Arc<ClassPath>,
     /// Indexed by PrimitiveDataType, initialised during bootstrap
     primitives: RefCell<Option<Box<[VmRef<Class>]>>>,
+
+    #[cfg(feature = "log-class-loading")]
+    logger: parking_lot::Mutex<crate::debug::ClassLoadGraph>,
 }
 
 #[derive(Clone, Debug, EnumDiscriminants)]
@@ -46,6 +49,11 @@ impl ClassLoader {
             bootclasspath,
             classes: Default::default(),
             primitives: RefCell::default(),
+            #[cfg(feature = "log-class-loading")]
+            logger: parking_lot::Mutex::new(
+                crate::debug::ClassLoadGraph::with_file("/tmp/jvm-classes.dot")
+                    .expect("failed to make class logger"),
+            ),
         }
     }
 
@@ -113,7 +121,12 @@ impl ClassLoader {
 
     /// Loads and creates Class object with ClassState::Uninitialised
     /// TODO use a FnOnce() -> WhichLoader or &WhichLoader to avoid many useless clones
-    pub fn load_class(&self, class_name: &mstr, mut loader: WhichLoader) -> VmResult<VmRef<Class>> {
+    fn do_load_class(
+        &self,
+        class_name: &mstr,
+        mut loader: WhichLoader,
+        _cause: Option<&mstr>,
+    ) -> VmResult<VmRef<Class>> {
         // TODO run user classloader first
         // TODO array classes are treated differently
 
@@ -133,7 +146,7 @@ impl ClassLoader {
                 }
                 Some(ArrayType::Reference(elem)) => {
                     // load element class first
-                    let elem_cls = self.load_class(elem, loader.clone())?;
+                    let elem_cls = self.load_class_caused_by(elem, loader.clone(), &class_name)?;
 
                     // use same loader for this array class
                     loader = elem_cls.loader().clone();
@@ -159,6 +172,8 @@ impl ClassLoader {
         }
 
         debug!("loading class {:?}", class_name);
+        #[cfg(feature = "log-class-loading")]
+        self.logger.lock().register_class_load(class_name, cause);
 
         // loading is required, update shared state
         // TODO record that this loader is an initiating loader
@@ -204,6 +219,19 @@ impl ClassLoader {
         Ok(linked_class)
     }
 
+    pub fn load_class(&self, class_name: &mstr, loader: WhichLoader) -> VmResult<VmRef<Class>> {
+        self.do_load_class(class_name, loader, None)
+    }
+
+    pub fn load_class_caused_by(
+        &self,
+        class_name: &mstr,
+        loader: WhichLoader,
+        cause: &mstr,
+    ) -> VmResult<VmRef<Class>> {
+        self.do_load_class(class_name, loader, Some(cause))
+    }
+
     fn do_load_array_class(
         &self,
         name: &mstr,
@@ -213,7 +241,7 @@ impl ClassLoader {
         // array class
         let elem_cls = match array {
             ArrayType::Primitive(prim) => self.get_primitive(prim),
-            ArrayType::Reference(elem) => self.load_class(elem, loader)?,
+            ArrayType::Reference(elem) => self.load_class_caused_by(elem, loader, name)?,
         };
 
         // array classloader = element classloader

@@ -18,3 +18,7 @@ num_enum = "^0.5"
 strum = "^0.19"
 strum_macros = "^0.19"
 clap = "^2.33"
+
+[features]
+default = []
+log-class-loading = []

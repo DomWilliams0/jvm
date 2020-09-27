@@ -1,4 +1,4 @@
-# TODOs (121)
+# TODOs (123)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -69,18 +69,21 @@
    * `// TODO store interned string instance here`
    * `// TODO method and field refs should be resolved vtable indices instead of loads of strings`
    * `// TODO A numeric constant of type long or double OR A symbolic reference to a`
+ * [src/debug.rs](src/debug.rs) (1)
+   * `// TODO log IO error`
  * [src/error.rs](src/error.rs) (3)
    * `// TODO reference to class instead of name`
    * `// TODO reference to cause`
    * `// TODO backtrace`
  * [src/interpreter/error.rs](src/interpreter/error.rs) (1)
    * `// TODO combine repetetive errors for different data types`
- * [src/interpreter/frame.rs](src/interpreter/frame.rs) (6)
+ * [src/interpreter/frame.rs](src/interpreter/frame.rs) (7)
    * `// TODO is this always the same as method.class() ?`
    * `// TODO validate local var slot in case of wide vars`
    * `// TODO longs and doubles take 2 slots!`
    * `// TODO tests for operand stack and local var array`
    * `// TODO expects()`
+   * `// TODO long and double are wide`
    * `// TODO move these to extension trait on operandstack`
  * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (28)
    * `// TODO operand stack pop then verify might be wrong - only pop if its the right type?`

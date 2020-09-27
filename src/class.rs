@@ -216,7 +216,8 @@ impl Class {
             Ok(super_name) => {
                 // ensure loaded
                 trace!("super class: {:?}", super_name);
-                let super_class = classloader.load_class(super_name, loader.clone())?;
+                let super_class =
+                    classloader.load_class_caused_by(super_name, loader.clone(), &name)?;
                 Some(super_class)
             }
             Err(ClassError::NoSuper) if name.as_bytes() == b"java/lang/Object" => {
@@ -240,7 +241,8 @@ impl Class {
                     }
                 };
 
-                let interface = classloader.load_class(interface_name, loader.clone())?;
+                let interface =
+                    classloader.load_class_caused_by(interface_name, loader.clone(), &name)?;
                 vec.push(interface);
             }
 

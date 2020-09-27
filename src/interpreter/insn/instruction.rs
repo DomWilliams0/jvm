@@ -470,7 +470,11 @@ impl Anewarray {
             .class_entry(self.0)
             .ok_or_else(|| InterpreterError::NotClassRef(self.0))?;
 
-        let elem_class = class_loader.load_class(&elem_type.name, frame.class.loader().clone())?;
+        let elem_class = class_loader.load_class_caused_by(
+            &elem_type.name,
+            frame.class.loader().clone(),
+            frame.class.name(),
+        )?;
 
         // pop length
         let length = frame.pop_int()?;
@@ -1107,10 +1111,11 @@ impl Getstatic {
         trace!("getstatic {:?}", field);
 
         // resolve class
-        let class = thread::get()
-            .global()
-            .class_loader()
-            .load_class(&field.class, frame.class.loader().clone())?;
+        let class = thread::get().global().class_loader().load_class_caused_by(
+            &field.class,
+            frame.class.loader().clone(),
+            frame.class.name(),
+        )?;
 
         // get field id
         let field_id = class
@@ -1504,8 +1509,11 @@ impl Invokespecial {
 
         let (class, method) = {
             // resolve specified class and method
-            let resolved_class =
-                class_loader.load_class(&entry.class, frame.class.loader().clone())?;
+            let resolved_class = class_loader.load_class_caused_by(
+                &entry.class,
+                frame.class.loader().clone(),
+                frame.class.name(),
+            )?;
 
             let resolved_method = Class::find_method_recursive_in_superclasses(
                 &resolved_class,
@@ -1617,10 +1625,11 @@ impl Invokestatic {
         // TODO ensure class is not interface, method not abstract, not constructor
 
         // resolve class and method
-        let class = thread::get()
-            .global()
-            .class_loader()
-            .load_class(&entry.class, frame.class.loader().clone())?;
+        let class = thread::get().global().class_loader().load_class_caused_by(
+            &entry.class,
+            frame.class.loader().clone(),
+            frame.class.name(),
+        )?;
 
         let method = Class::find_method_recursive_in_superclasses(
             &class,
@@ -1667,7 +1676,11 @@ impl Invokevirtual {
             .ok_or_else(|| InterpreterError::NotMethodRef(self.0))?;
 
         // resolve class and method
-        let class = class_loader.load_class(&entry.class, frame.class.loader().clone())?;
+        let class = class_loader.load_class_caused_by(
+            &entry.class,
+            frame.class.loader().clone(),
+            frame.class.name(),
+        )?;
 
         let method = Class::find_method_recursive_in_superclasses(
             &class,
@@ -2071,10 +2084,11 @@ impl New {
             .ok_or_else(|| InterpreterError::NotClassRef(self.0))?;
 
         // resolve and init class
-        let class = thread::get()
-            .global()
-            .class_loader()
-            .load_class(&classref.name, frame.class.loader().clone())?;
+        let class = thread::get().global().class_loader().load_class_caused_by(
+            &classref.name,
+            frame.class.loader().clone(),
+            frame.class.name(),
+        )?;
 
         // TODO ensure not abstract, throw InstantiationError
 
@@ -2197,10 +2211,11 @@ impl Putstatic {
         trace!("putstatic {:?}", field);
 
         // resolve class
-        let class = thread::get()
-            .global()
-            .class_loader()
-            .load_class(&field.class, frame.class.loader().clone())?;
+        let class = thread::get().global().class_loader().load_class_caused_by(
+            &field.class,
+            frame.class.loader().clone(),
+            frame.class.name(),
+        )?;
 
         // get field id
         // TODO throw IncompatibleClassChangeError
