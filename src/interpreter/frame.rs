@@ -231,6 +231,8 @@ impl Frame {
                 };
 
                 for (i, arg) in args.rev().enumerate() {
+                    // TODO long and double are wide
+                    debug_assert!(!arg.is_wide(), "wide local var");
                     local_vars.store(i + offset, arg)?;
                 }
 

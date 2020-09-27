@@ -24,6 +24,7 @@ use std::cell::UnsafeCell;
 use std::fmt::{Debug, Display, Formatter};
 
 use std::borrow::Cow;
+use std::num::NonZeroI32;
 use std::sync::Arc;
 use std::thread::ThreadId;
 
@@ -89,6 +90,8 @@ pub struct Object {
     class: VmRef<Class>,
     monitor: Monitor,
     storage: ObjectStorage,
+    // TODO mutex only needed in edge case, try with atomic op first
+    hashcode: Mutex<Option<NonZeroI32>>,
 }
 
 lazy_static! {
@@ -627,6 +630,11 @@ impl Class {
         flags: MethodAccessFlags,
         antiflags: MethodAccessFlags,
     ) -> Option<VmRef<Method>> {
+        debug_assert!(
+            MethodSignature::is_valid(desc),
+            "invalid method descriptor {:?}",
+            desc
+        );
         self.methods
             .iter()
             .find(|m| {
@@ -1133,6 +1141,7 @@ impl Object {
             class: null_class,
             monitor: Monitor::new(),
             storage,
+            hashcode: Mutex::new(None),
         }
     }
 
@@ -1141,6 +1150,7 @@ impl Object {
             class,
             monitor: Monitor::new(),
             storage,
+            hashcode: Mutex::new(None),
         }
     }
 
@@ -1285,6 +1295,23 @@ impl Object {
 
     pub fn is_array(&self) -> bool {
         matches!(self.storage, ObjectStorage::Array(_))
+    }
+
+    /// Calculates and stores on first call
+    pub fn identity_hashcode(self: &VmRef<Self>) -> i32 {
+        let mut guard = self.hashcode.lock();
+        match *guard {
+            Some(hash) => hash.get(),
+            None => {
+                let ptr = vmref_ptr(self);
+                let hash = (ptr & 0xffffffff) as i32;
+                *guard = unsafe {
+                    debug_assert_ne!(hash, 0, "lmao null pointer what");
+                    Some(NonZeroI32::new_unchecked(hash))
+                };
+                hash
+            }
+        }
     }
 }
 

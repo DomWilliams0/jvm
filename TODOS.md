@@ -1,4 +1,4 @@
-# TODOs (122)
+# TODOs (124)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -24,11 +24,12 @@
    * `// TODO actually intern strings`
    * `// TODO methods on VmRef newtype`
    * `// TODO oom error`
- * [src/class.rs](src/class.rs) (24)
+ * [src/class.rs](src/class.rs) (25)
    * `// TODO store dimensions`
    * `/// TODO weak reference for cyclic?`
    * `// TODO arrays should live on the GC java heap`
    * `// TODO arrays should be specialised and not hold massive DataValues`
+   * `// TODO mutex only needed in edge case, try with atomic op first`
    * `// TODO JNI style C function`
    * `// TODO arrayvec`
    * `// TODO get classloader reference from tls instead of parameter`
@@ -128,10 +129,13 @@
    * `// TODO populate String[] args`
    * `// TODO wait for threads to die, unintialise TLS, assert this is the last ref to global state`
    * `// TODO standard jvm args`
- * [src/properties.rs](src/properties.rs) (3)
+ * [src/natives/gnu_classpath_vmsystemproperties.rs](src/natives/gnu_classpath_vmsystemproperties.rs) (1)
+   * `// TODO actually do preInit`
+ * [src/natives/java_lang_vmsystem.rs](src/natives/java_lang_vmsystem.rs) (1)
+   * `// TODO dont unwrap`
+ * [src/properties.rs](src/properties.rs) (2)
    * `// TODO remaining static ones`
    * `// TODO dynamic ones e.g. user.home`
-   * `// TODO actually do preInit`
  * [src/storage.rs](src/storage.rs) (5)
    * `// TODO field storage should be inline in VmRef<Object>`
    * `// TODO compact field storage i.e. not using DataValue enum`

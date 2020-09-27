@@ -1726,7 +1726,9 @@ impl Irem {
 
 impl Ireturn {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Ireturn")
+        let frame = interp.current_frame_mut();
+        let val = frame.pop_int()?;
+        do_return_value(interp, DataValue::Int(val))
     }
 }
 

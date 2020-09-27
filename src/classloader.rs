@@ -13,7 +13,7 @@ use cafebabe::{ClassError, MethodAccessFlags};
 use parking_lot::RwLock;
 
 use crate::interpreter::Frame;
-use crate::properties::vm_systemproperties_preinit;
+use crate::natives::*;
 use crate::thread;
 use std::cell::RefCell;
 use std::thread::ThreadId;
@@ -327,9 +327,18 @@ impl ClassLoader {
                 &[(
                     "preInit",
                     "(Ljava/util/Properties;)V",
-                    vm_systemproperties_preinit,
+                    gnu_classpath_vmsystemproperties::vm_systemproperties_preinit,
                 )],
             ),
+            Preload::with_natives(
+                "java/lang/VMSystem",
+                &[(
+                    "identityHashCode",
+                    "(Ljava/lang/Object;)I",
+                    java_lang_vmsystem::vm_identity_hashcode,
+                )],
+            ),
+            Preload::new("java/lang/System"),
             Preload::new("[I"),
             Preload::new("java/util/HashMap"),
         ];

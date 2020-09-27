@@ -472,6 +472,12 @@ impl<'a> MethodSignature<'a> {
             state: SignatureState::Start,
         }
     }
+
+    pub fn is_valid(descriptor: &mstr) -> bool {
+        let mut desc = MethodSignature::from_descriptor(descriptor);
+        for _ in desc.iter_args() {}
+        !desc.errored()
+    }
 }
 
 impl<'a, 'b> Iterator for MethodSignatureIter<'a, 'b> {

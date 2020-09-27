@@ -9,7 +9,7 @@ use crate::class::null;
 use crate::classloader::{ClassLoader, WhichLoader};
 use crate::classpath::ClassPath;
 use crate::error::ResultExt;
-use crate::interpreter::{Frame, InstructionLookupTable, InterpreterResult};
+use crate::interpreter::{Frame, InstructionLookupTable};
 use crate::jit::{JitClient, JitThread};
 use crate::properties::SystemProperties;
 use crate::thread::JvmThreadState;
