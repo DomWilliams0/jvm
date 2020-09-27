@@ -819,20 +819,57 @@ impl Class {
 
                 // TODO initialise final static fields from ConstantValue attrs
 
-                // recursively initialise super class, interfaces and super interfaces
-                // TODO only do this if its a class and not an iface
+                // recursively initialise super classes only if this is a class
                 let mut result = Ok(());
-                self.with_supers(|cls| {
-                    trace!("initialising super: {:?}", cls.name);
+                if !self.is_interface() {
+                    if let Some(super_class) = self.super_class() {
+                        trace!(
+                            "initialising super class of {}: {}",
+                            self.name(),
+                            super_class.name()
+                        );
 
-                    if let Err(e) = cls.ensure_init() {
-                        debug!("super class initialisation failed: {:?}", e);
-                        result = Err(e);
-                        SuperIteration::Stop
-                    } else {
-                        SuperIteration::KeepGoing
+                        result = super_class.ensure_init().map_err(|e| {
+                            debug!("super class initialisation failed: {:?}", e);
+                            e
+                        });
                     }
-                });
+
+                    // initialise all superinterfaces that have at least one non-abstract and
+                    // non-static method
+
+                    result = result.and_then(|_| {
+                        let mut result = Ok(());
+                        self.with_superinterfaces(|iface| {
+                            let should_init = iface.methods.iter().any(|m| {
+                                let antiflags =
+                                    MethodAccessFlags::STATIC | MethodAccessFlags::ABSTRACT;
+                                (m.flags - antiflags) == m.flags
+                            });
+
+                            let mut iter_result = SuperIteration::KeepGoing;
+                            if should_init {
+                                trace!(
+                                    "initialising super interface of {}: {}",
+                                    self.name(),
+                                    iface.name()
+                                );
+
+                                match iface.ensure_init() {
+                                    Err(e) => {
+                                        debug!("super interface initialisation failed: {:?}", e);
+                                        result = Err(e);
+                                        iter_result = SuperIteration::Stop;
+                                    }
+                                    Ok(_) => {}
+                                }
+                            }
+
+                            iter_result
+                        });
+                        result
+                    });
+                }
 
                 // run class constructor
                 result = result.and_then(|_| {

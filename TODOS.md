@@ -1,4 +1,4 @@
-# TODOs (123)
+# TODOs (122)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -24,7 +24,7 @@
    * `// TODO actually intern strings`
    * `// TODO methods on VmRef newtype`
    * `// TODO oom error`
- * [src/class.rs](src/class.rs) (25)
+ * [src/class.rs](src/class.rs) (24)
    * `// TODO store dimensions`
    * `/// TODO weak reference for cyclic?`
    * `// TODO arrays should live on the GC java heap`
@@ -43,7 +43,6 @@
    * `// TODO set obj->vmdata field to vm_class`
    * `// TODO ensure there is only 1`
    * `// TODO initialise final static fields from ConstantValue attrs`
-   * `// TODO only do this if its a class and not an iface`
    * `// TODO wrap exception here and return the proper type`
    * `// TODO proper exception type here`
    * `// TODO specific exception type e.g. ExceptionInInitializerError`
