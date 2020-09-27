@@ -15,7 +15,7 @@ use crate::properties::SystemProperties;
 use crate::thread::JvmThreadState;
 use crate::types::DataValue;
 use crate::{thread, JvmError, JvmResult};
-use cafebabe::mutf8::mstr;
+use cafebabe::mutf8::StrExt;
 use cafebabe::MethodAccessFlags;
 use std::iter::once;
 
@@ -109,14 +109,14 @@ impl Jvm {
 
         // load main class
         let main_class = class_loader
-            .load_class(mstr::from_utf8(self.args.main.as_bytes()).as_ref(), loader)
+            .load_class(&self.args.main.to_mstr(), loader)
             .throw()?;
 
         // find main method
         let main_method = main_class
             .find_callable_method(
-                mstr::from_utf8(b"main").as_ref(),
-                mstr::from_utf8(b"([Ljava/lang/String;)V").as_ref(),
+                "main".as_mstr(),
+                "([Ljava/lang/String;)V".as_mstr(),
                 MethodAccessFlags::PUBLIC | MethodAccessFlags::STATIC,
             )
             .throw()?;

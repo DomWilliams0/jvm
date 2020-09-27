@@ -1,9 +1,9 @@
 use crate::constant_pool::{Index, Tag};
 use crate::types::ClassVersion;
 
+use mutf8::MString;
 use std::str::Utf8Error;
 use thiserror::*;
-use mutf8::MString;
 
 pub type ClassResult<T> = Result<T, ClassError>;
 

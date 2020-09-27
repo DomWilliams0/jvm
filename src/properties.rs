@@ -8,7 +8,7 @@ use crate::classpath::ClassPath;
 use crate::interpreter::{Frame, InterpreterResult};
 use crate::thread;
 use crate::types::DataValue;
-use cafebabe::mutf8::mstr;
+use cafebabe::mutf8::StrExt;
 use cafebabe::MethodAccessFlags;
 
 #[derive(Debug)]
@@ -106,8 +106,8 @@ pub fn vm_systemproperties_preinit(mut args: FunctionArgs) -> Option<DataValue> 
     let props_class = props.class().unwrap();
     let method = props_class
         .find_callable_method(
-            mstr::from_mutf8(b"setProperty"),
-            mstr::from_mutf8(b"(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/Object;"),
+            "setProperty".as_mstr(),
+            "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/Object;".as_mstr(),
             MethodAccessFlags::empty(),
         )
         .expect("cant find setProperty");
@@ -116,12 +116,8 @@ pub fn vm_systemproperties_preinit(mut args: FunctionArgs) -> Option<DataValue> 
         log::debug!("setting property {:?} => {:?}", key, val);
 
         // alloc jvm string
-        let key =
-            vmref_alloc_object(|| Object::new_string(mstr::from_utf8(key.as_bytes()).as_ref()))
-                .expect("bad key");
-        let val =
-            vmref_alloc_object(|| Object::new_string(mstr::from_utf8(val.as_bytes()).as_ref()))
-                .expect("bad value");
+        let key = vmref_alloc_object(|| Object::new_string(&key.to_mstr())).expect("bad key");
+        let val = vmref_alloc_object(|| Object::new_string(&val.to_mstr())).expect("bad value");
 
         // make frame for method call
         let args = [props.clone(), key, val];

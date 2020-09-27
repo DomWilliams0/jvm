@@ -12,4 +12,4 @@ byte = "^0.2.4"
 log = "^0.4.11"
 num_enum = "^0.5.1"
 bitflags = "^1.2.1"
-mutf8 = "^0.4"
+mutf8 = {git = "https://github.com/DomWilliams0/mutf8"}

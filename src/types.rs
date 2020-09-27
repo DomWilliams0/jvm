@@ -553,30 +553,25 @@ mod tests {
     use crate::types::{
         ArrayType, DataType, DataValue, MethodSignature, PrimitiveDataType, ReturnType,
     };
-    use cafebabe::mutf8::mstr;
+    use cafebabe::mutf8::StrExt;
 
-    fn check(input: &str, expected: Option<DataType>) {
-        let mstr = mstr::from_utf8(input.as_bytes());
-        assert_eq!(DataType::from_descriptor(mstr.as_ref()), expected)
+    fn check(input: &'static str, expected: Option<DataType>) {
+        assert_eq!(DataType::from_descriptor(input.as_mstr()), expected)
     }
 
-    fn check_ref(input: &str, expected: &str) {
-        let input = mstr::from_utf8(input.as_bytes());
-        let expected = mstr::from_utf8(expected.as_bytes());
+    fn check_ref(input: &'static str, expected: &'static str) {
         assert_eq!(
-            DataType::from_descriptor(input.as_ref()),
-            Some(DataType::Reference(expected))
+            DataType::from_descriptor(input.as_mstr()),
+            Some(DataType::Reference(expected.to_mstr()))
         )
     }
 
-    fn check_array(input: &str, expected: Option<ArrayType>) {
-        let mstr = mstr::from_utf8(input.as_bytes());
-        assert_eq!(ArrayType::from_descriptor(mstr.as_ref()), expected)
+    fn check_array(input: &'static str, expected: Option<ArrayType>) {
+        assert_eq!(ArrayType::from_descriptor(input.as_mstr()), expected)
     }
 
-    fn check_method(input: &str, expected: Option<(Vec<DataType>, ReturnType)>) {
-        let mstr = mstr::from_utf8(input.as_bytes());
-        let mut sig = MethodSignature::from_descriptor(mstr.as_ref());
+    fn check_method(input: &'static str, expected: Option<(Vec<DataType>, ReturnType)>) {
+        let mut sig = MethodSignature::from_descriptor(input.as_mstr());
         let types: Vec<_> = sig.iter_args().collect();
 
         match expected {
@@ -626,10 +621,7 @@ mod tests {
         check_array("[nothing", None);
         check_array("[Lcool", None);
         check_array("[L;", None);
-        check_array(
-            "[Lcool;",
-            Some(ArrayType::Reference(mstr::from_utf8(b"cool").as_ref())),
-        );
+        check_array("[Lcool;", Some(ArrayType::Reference("cool".as_mstr())));
     }
 
     #[test]
@@ -647,7 +639,7 @@ mod tests {
             "()Lnice;",
             Some((
                 vec![],
-                ReturnType::Returns(DataType::Reference(mstr::from_utf8(b"nice"))),
+                ReturnType::Returns(DataType::Reference("nice".to_mstr())),
             )),
         );
         check_method("()asdf", None);
@@ -657,7 +649,7 @@ mod tests {
             Some((
                 vec![
                     DataType::Primitive(PrimitiveDataType::Int),
-                    DataType::Reference(mstr::from_utf8(b"[[D")),
+                    DataType::Reference("[[D".to_mstr()),
                 ],
                 ReturnType::Void,
             )),

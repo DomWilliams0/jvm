@@ -10,7 +10,7 @@ use crate::alloc::{vmref_alloc_object, vmref_ptr, InternedString, NativeString, 
 use crate::classloader::{current_thread, ClassLoader, WhichLoader};
 use crate::error::{Throwables, VmResult};
 use crate::types::{DataType, DataValue, MethodSignature, PrimitiveDataType, ReturnType};
-use cafebabe::mutf8::mstr;
+use cafebabe::mutf8::{mstr, StrExt};
 
 use crate::constant_pool::RuntimeConstantPool;
 use crate::interpreter::{Frame, InterpreterError, InterpreterResult};
@@ -591,8 +591,8 @@ impl Class {
 
     pub fn find_class_constructor(&self) -> MethodLookupResult {
         self.find_method_no_dups(
-            mstr::from_utf8(b"<clinit>").as_ref(),
-            mstr::from_mutf8(b"()V").as_ref(),
+            "<clinit>".as_mstr(),
+            "()V".as_mstr(),
             MethodAccessFlags::STATIC,
         )
     }
@@ -601,7 +601,7 @@ impl Class {
         debug_assert!(descriptor.to_utf8().ends_with('V'));
 
         self.find_method_in_this_only(
-            mstr::from_utf8(b"<init>").as_ref(),
+            "<init>".as_mstr(),
             descriptor,
             MethodAccessFlags::empty(),
             MethodAccessFlags::STATIC | MethodAccessFlags::ABSTRACT,
@@ -1168,24 +1168,26 @@ impl Object {
 
         // TODO limit array length to i32::MAX somewhere
 
-        let set_field = |name, value: DataValue| -> VmResult<()> {
-            let name = mstr::from_utf8(name);
+        let set_field = |name: &'static str, value: DataValue| -> VmResult<()> {
+            let name = name.to_mstr();
             let datatype = value.data_type();
             let field_id = string_instance
                 .find_field_in_this_only(name.as_ref(), &datatype, FieldSearchType::Instance)
                 .ok_or_else(|| Throwables::Other("java/lang/NoSuchFieldError"))?;
 
-            debug!(
+            trace!(
                 "setting string field {:?} ({:?}) to {:?}",
-                name, field_id, value
+                name,
+                field_id,
+                value
             );
             fields.ensure_set(field_id, value);
             Ok(())
         };
 
-        set_field(b"value", DataValue::Reference(char_array))?;
+        set_field("value", DataValue::Reference(char_array))?;
 
-        set_field(b"count", DataValue::Int(length as i32))?;
+        set_field("count", DataValue::Int(length as i32))?;
 
         Ok(string_instance)
     }

@@ -8,7 +8,7 @@ use crate::classpath::ClassPath;
 use crate::error::{Throwables, VmResult};
 
 use crate::types::{ArrayType, PrimitiveDataType};
-use cafebabe::mutf8::{mstr, MString};
+use cafebabe::mutf8::{mstr, StrExt};
 use cafebabe::{ClassError, MethodAccessFlags};
 use parking_lot::RwLock;
 
@@ -117,6 +117,7 @@ impl ClassLoader {
         // TODO run user classloader first
         // TODO array classes are treated differently
 
+        // let class_name = class_name.as_ref();
         let array_type = ArrayType::from_descriptor(class_name);
 
         // use bootstrap loader for primitives
@@ -241,12 +242,9 @@ impl ClassLoader {
     pub fn init_bootstrap_classes(&self) -> VmResult<()> {
         // TODO define hardcoded preload classes in a better way
 
-        fn load_class(loader: &ClassLoader, name: impl AsRef<[u8]>) -> VmResult<VmRef<Class>> {
+        fn load_class(loader: &ClassLoader, name: &'static str) -> VmResult<VmRef<Class>> {
             loader
-                .load_class(
-                    mstr::from_utf8(name.as_ref()).as_ref(),
-                    WhichLoader::Bootstrap,
-                )
+                .load_class(name.as_mstr(), WhichLoader::Bootstrap)
                 .and_then(|class| {
                     class.ensure_init()?;
                     Ok(class)
@@ -254,14 +252,14 @@ impl ClassLoader {
         }
 
         // our lord and saviour Object first
-        load_class(self, b"java/lang/Object")?;
+        load_class(self, "java/lang/Object")?;
 
         // then primitives
         {
             let mut primitives = Vec::with_capacity(PrimitiveDataType::TYPES.len());
 
             for (prim, name) in &PrimitiveDataType::TYPES {
-                let name = mstr::from_utf8(name.as_bytes());
+                let name = name.to_mstr();
                 let cls = Class::new_primitive_class(name.as_ref(), *prim, self)?;
                 cls.ensure_init()?;
 
@@ -313,8 +311,8 @@ impl ClassLoader {
             for (method_name, method_desc, fn_ptr) in class.native_methods.iter() {
                 let method = cls
                     .find_method_in_this_only(
-                        mstr::from_utf8(method_name.as_bytes()).as_ref(),
-                        mstr::from_utf8(method_desc.as_bytes()).as_ref(),
+                        &method_name.to_mstr(),
+                        &method_desc.to_mstr(),
                         MethodAccessFlags::NATIVE,
                         MethodAccessFlags::ABSTRACT,
                     )
@@ -341,9 +339,9 @@ impl ClassLoader {
         Ok(())
     }
 
-    pub fn get_bootstrap_class(&self, name: &str) -> VmRef<Class> {
+    pub fn get_bootstrap_class(&self, name: &'static str) -> VmRef<Class> {
         // TODO add array lookup with enum constants for common symbols like Object, or perfect hashing
-        let name = mstr::from_utf8(name.as_bytes());
+        let name = name.as_mstr();
         match self.load_state(name.as_ref(), &WhichLoader::Bootstrap) {
             LoadState::Loaded(_, cls) => cls,
             s => panic!("bootstrap class {:?} not loaded (in state {:?})", name, s),
@@ -372,26 +370,21 @@ impl ClassLoader {
 
         // TODO mstr display impl
         let array_cls_name = format!("[L{};", element_type.name().to_utf8());
-        self.load_class(
-            MString::from_utf8(array_cls_name.as_bytes()).as_mstr(),
-            loader,
-        )
+        self.load_class(&array_cls_name.to_mstr(), loader)
     }
 
     pub fn system_classloader(&self) -> VmResult<VmRef<Object>> {
         trace!("getting system classloader");
 
         // get classloader class
-        let classloader_class = self.load_class(
-            mstr::from_mutf8(b"java/lang/ClassLoader"),
-            WhichLoader::Bootstrap,
-        )?;
+        let classloader_class =
+            self.load_class("java/lang/ClassLoader".as_mstr(), WhichLoader::Bootstrap)?;
         classloader_class.ensure_init()?;
 
         // resolve method
         let method = classloader_class.find_callable_method(
-            mstr::from_utf8(b"getSystemClassLoader").as_ref(),
-            mstr::from_mutf8(b"()Ljava/lang/ClassLoader;").as_ref(),
+            "getSystemClassLoader".as_mstr(),
+            "()Ljava/lang/ClassLoader;".as_mstr(),
             MethodAccessFlags::STATIC,
         )?;
 

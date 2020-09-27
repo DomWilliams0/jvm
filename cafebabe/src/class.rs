@@ -3,8 +3,8 @@ use log::*;
 use crate::buffer::Buffer;
 use crate::constant_pool::attribute::Attribute;
 use crate::types::{ClassAccessFlags, ClassVersion, FieldInfo, MethodInfo, RawAttribute};
-use crate::{ClassError, ClassResult, Index, ConstantPool, constant_pool, ClassRefEntry};
-use mutf8::mstr;
+use crate::{constant_pool, ClassError, ClassRefEntry, ClassResult, ConstantPool, Index};
+use mutf8::StrExt;
 
 #[derive(Debug)]
 pub struct ClassFile<'c> {
@@ -137,7 +137,7 @@ impl<'c> ClassFile<'c> {
         self.methods.iter()
     }
     pub fn attribute<A: Attribute>(&self) -> ClassResult<A> {
-        let attr_name = mstr::from_utf8(A::NAME.as_bytes());
+        let attr_name = A::NAME.to_mstr();
         let bytes = self
             .attributes
             .iter()

@@ -20,7 +20,7 @@ use crate::interpreter::insn::opcode::Opcode;
 use crate::interpreter::insn::InstructionBlob;
 use crate::interpreter::{Frame, InterpreterState};
 use crate::thread;
-use cafebabe::mutf8::mstr;
+use cafebabe::mutf8::StrExt;
 use cafebabe::{AccessFlags, ClassAccessFlags, MethodAccessFlags};
 use std::cmp::Ordering;
 use std::fmt::Debug;
@@ -470,8 +470,7 @@ impl Anewarray {
             .class_entry(self.0)
             .ok_or_else(|| InterpreterError::NotClassRef(self.0))?;
 
-        let elem_class =
-            class_loader.load_class(elem_type.name.as_mstr(), frame.class.loader().clone())?;
+        let elem_class = class_loader.load_class(&elem_type.name, frame.class.loader().clone())?;
 
         // pop length
         let length = frame.pop_int()?;
@@ -1111,11 +1110,11 @@ impl Getstatic {
         let class = thread::get()
             .global()
             .class_loader()
-            .load_class(field.class.as_mstr(), frame.class.loader().clone())?;
+            .load_class(&field.class, frame.class.loader().clone())?;
 
         // get field id
         let field_id = class
-            .find_field_recursive(field.name.as_mstr(), &field.desc, FieldSearchType::Static)
+            .find_field_recursive(&field.name, &field.desc, FieldSearchType::Static)
             .ok_or_else(|| InterpreterError::FieldNotFound {
                 name: field.name.clone(),
                 desc: field.desc.clone(),
@@ -1872,10 +1871,10 @@ impl Ldc {
             Entry::String(s) => {
                 // TODO lookup natively interned string instance
 
-                let string_class = thread::get().global().class_loader().load_class(
-                    mstr::from_utf8(b"java/lang/String").as_ref(),
-                    WhichLoader::Bootstrap,
-                )?;
+                let string_class = thread::get()
+                    .global()
+                    .class_loader()
+                    .load_class("java/lang/String".as_mstr(), WhichLoader::Bootstrap)?;
 
                 // ensure initialised
                 if string_class.needs_init() {
@@ -2084,7 +2083,7 @@ impl New {
         let class = thread::get()
             .global()
             .class_loader()
-            .load_class(classref.name.as_mstr(), frame.class.loader().clone())?;
+            .load_class(&classref.name, frame.class.loader().clone())?;
 
         // TODO ensure not abstract, throw InstantiationError
 
@@ -2210,12 +2209,12 @@ impl Putstatic {
         let class = thread::get()
             .global()
             .class_loader()
-            .load_class(field.class.as_mstr(), frame.class.loader().clone())?;
+            .load_class(&field.class, frame.class.loader().clone())?;
 
         // get field id
         // TODO throw IncompatibleClassChangeError
         let field_id = class
-            .find_field_recursive(field.name.as_mstr(), &field.desc, FieldSearchType::Static)
+            .find_field_recursive(&field.name, &field.desc, FieldSearchType::Static)
             .ok_or_else(|| InterpreterError::FieldNotFound {
                 name: field.name.clone(),
                 desc: field.desc.clone(),

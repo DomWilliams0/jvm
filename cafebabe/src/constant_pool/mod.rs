@@ -10,8 +10,8 @@ pub mod attribute;
 mod entry;
 mod item;
 
-pub use item::*;
 pub use entry::*;
+pub use item::*;
 
 pub struct ConstantPool<'c>(Vec<Option<Item<'c>>>);
 
@@ -87,7 +87,7 @@ impl Debug for ConstantPool<'_> {
 #[cfg(test)]
 mod tests {
     use crate::buffer::Buffer;
-    use crate::constant_pool::entry::{MethodRefEntry, ClassRefEntry, Utf8Entry};
+    use crate::constant_pool::entry::{ClassRefEntry, MethodRefEntry, Utf8Entry};
     use crate::constant_pool::item::Item;
     use crate::constant_pool::Tag;
     use crate::ConstantPool;
