@@ -1,4 +1,4 @@
-use crate::alloc::{vmref_alloc_exception, VmRef};
+use crate::alloc::VmRef;
 use log::*;
 
 use crate::error::{Throwable, Throwables};
@@ -8,7 +8,7 @@ use crate::thread;
 
 use crate::class::{FunctionArgs, Method, NativeFunction};
 use crate::interpreter::InterpreterError;
-use crate::types::{DataValue, ReturnType};
+use crate::types::DataValue;
 use std::cell::{RefCell, RefMut};
 
 #[derive(Debug)]
@@ -73,12 +73,12 @@ impl InterpreterState {
     ) -> Result<(), InterpreterError> {
         // check return type matches sig
         // TODO catch this at verification time
-        let this_ret = ReturnType::from(val.as_ref());
+
         let method_ret = self.current_method().unwrap().return_type();
-        if method_ret != &this_ret {
+        if !method_ret.matches(val.as_ref()) {
             return Err(InterpreterError::InvalidReturnValue {
                 expected: method_ret.to_owned(),
-                actual: this_ret,
+                actual: val,
             });
         }
 
@@ -87,19 +87,12 @@ impl InterpreterState {
             return Err(InterpreterError::NoFrame);
         }
 
-        // push return value onto caller's stack
+        // push return value onto caller's stack or set in TLS for e.g. native method
         if let Some(val) = val {
             if let Some(caller) = self.current_frame_mut_checked() {
                 caller.operand_stack.push(val);
             } else {
-                warn!("no caller to return value to ({:?})", val);
-                if self
-                    .current_method()
-                    .map(|m| m.flags().is_native())
-                    .unwrap_or_default()
-                {
-                    unimplemented!("native method called native method wtf");
-                }
+                thread::get().set_return_value(val);
             }
         }
 
@@ -125,9 +118,11 @@ impl InterpreterResult {
 }
 
 impl Interpreter {
-    pub fn execute_frame(&self, frame: Frame) -> Result<(), VmRef<Throwable>> {
+    pub fn execute_frame(&self, frame: Frame) -> Result<Option<DataValue>, VmRef<Throwable>> {
         self.state_mut().push_frame(frame);
-        self.execute_until_return().into_result()
+        self.execute_until_return()
+            .into_result()
+            .map(|_| thread::get().take_return_value())
     }
 
     pub fn execute_until_return(&self) -> InterpreterResult {

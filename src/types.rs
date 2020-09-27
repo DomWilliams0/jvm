@@ -408,6 +408,25 @@ impl<'a> ReturnType<'a> {
             ReturnType::Void => ReturnType::Void,
         }
     }
+
+    pub fn matches(&self, val: Option<&DataValue>) -> bool {
+        match (self, val) {
+            (ReturnType::Void, val) => val.is_none(),
+            (ReturnType::Returns(ret), Some(val)) => {
+                // special case for null
+                if let Some(obj) = val.as_reference() {
+                    if obj.is_null() {
+                        // null is anything?
+                        // TODO proper assignment compatibility check for reference types
+                        return !ret.is_primitive();
+                    }
+                }
+
+                val.data_type() == *ret
+            }
+            _ => false,
+        }
+    }
 }
 
 impl<'a> From<Option<&'a DataValue>> for ReturnType<'static> {

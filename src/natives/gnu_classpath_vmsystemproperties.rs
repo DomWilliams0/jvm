@@ -1,6 +1,6 @@
 use crate::alloc::{vmref_alloc_object, VmRef};
 use crate::class::{FunctionArgs, Object};
-use crate::error::{Throwable, Throwables};
+use crate::error::Throwable;
 use crate::interpreter::Frame;
 use crate::thread;
 use crate::types::DataValue;

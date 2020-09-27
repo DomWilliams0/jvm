@@ -132,6 +132,7 @@ impl Jvm {
         interp
             .execute_frame(frame)
             .map_err(JvmError::ExceptionThrown)
+            .map(|_| /* swallow return value */ ())
     }
 
     pub fn destroy(&mut self) -> JvmResult<()> {

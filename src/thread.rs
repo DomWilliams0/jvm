@@ -10,6 +10,7 @@ use crate::alloc::VmRef;
 use crate::error::Throwable;
 use crate::interpreter::Interpreter;
 use crate::jvm::JvmGlobalState;
+use crate::types::DataValue;
 use std::thread::ThreadId;
 
 /// Each thread has its own in TLS
@@ -18,6 +19,8 @@ pub struct JvmThreadState {
     thread_handle: ThreadId,
     exception: RefCell<Option<VmRef<Throwable /* TODO vmobject */>>>,
     interpreter: RefCell<Interpreter>,
+    /// Return value of last call to interpreter.execute_until_return()
+    return_value: RefCell<Option<DataValue>>,
 }
 
 thread_local! {
@@ -125,6 +128,7 @@ impl JvmThreadState {
             jvm,
             thread_handle: std::thread::current().id(),
             exception: RefCell::new(None),
+            return_value: RefCell::new(None),
         }
     }
 
@@ -134,6 +138,15 @@ impl JvmThreadState {
             debug!("overwrote old exception with new exception: {:?}", old);
         }
         debug!("set exception: {:?}", current.as_ref().unwrap());
+    }
+
+    pub fn set_return_value(&self, val: DataValue) {
+        debug!("set return value: {:?}", val);
+        self.return_value.replace(Some(val));
+    }
+
+    pub fn take_return_value(&self) -> Option<DataValue> {
+        self.return_value.borrow_mut().take()
     }
 
     pub fn exception(&self) -> Option<VmRef<Throwable>> {

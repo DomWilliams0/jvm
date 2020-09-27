@@ -10,7 +10,7 @@ use crate::interpreter::error::InterpreterError;
 
 use log::*;
 
-use crate::class::{Class, FieldSearchType, Object};
+use crate::class::{null, Class, ClassType, FieldSearchType, Object};
 use crate::types::{DataType, DataValue, PrimitiveDataType};
 
 use crate::classloader::WhichLoader;
@@ -418,19 +418,40 @@ fn do_load_primitive(
 
 impl Aaload {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Aaload")
+        let frame = interp.current_frame_mut();
+
+        // pop reference type array and idx
+        let (array, idx) =
+            frame.pop_arrayref_and_idx(|cls| matches!(cls.class_type(), ClassType::Normal))?;
+
+        let value = array.array_get_unchecked(idx);
+        frame.operand_stack.push(value);
+        Ok(PostExecuteAction::Continue)
     }
 }
 
 impl Aastore {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Aastore")
+        let frame = interp.current_frame_mut();
+
+        // pop reference value first
+        let value = frame.pop_reference_value()?;
+
+        // pop reference type array and idx
+        let (array, idx) =
+            frame.pop_arrayref_and_idx(|cls| matches!(cls.class_type(), ClassType::Normal))?;
+
+        // TODO assignment compatibility check
+        array.array_set_unchecked(idx, value);
+        Ok(PostExecuteAction::Continue)
     }
 }
 
 impl AconstNull {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction AconstNull")
+        let frame = interp.current_frame_mut();
+        frame.operand_stack.push(DataValue::Reference(null()));
+        Ok(PostExecuteAction::Continue)
     }
 }
 
@@ -810,7 +831,11 @@ impl Dup2X2 {
 
 impl DupX1 {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction DupX1")
+        let frame = interp.current_frame_mut();
+
+        let val = frame.peek_value()?;
+        frame.operand_stack.insert_at(val, 2);
+        Ok(PostExecuteAction::Continue)
     }
 }
 
@@ -1202,7 +1227,7 @@ impl I2S {
 
 impl Iadd {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Iadd")
+        int_two_op(interp, "+", |a, b| a + b)
     }
 }
 
@@ -1262,13 +1287,13 @@ impl Idiv {
 
 impl IfAcmpeq {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction IfAcmpeq")
+        obj_cmp_two(interp, self.0, "==", |a, b| vmref_eq(a, b))
     }
 }
 
 impl IfAcmpne {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction IfAcmpne")
+        obj_cmp_two(interp, self.0, "!=", |a, b| !vmref_eq(a, b))
     }
 }
 
@@ -1329,6 +1354,31 @@ fn int_cmp_two(
     Ok(action)
 }
 
+/// wat: "!="
+fn obj_cmp_two(
+    interp: &mut InterpreterState,
+    offset: i16,
+    wat: &'static str,
+    cmp: impl FnOnce(&VmRef<Object>, &VmRef<Object>) -> bool,
+) -> ExecuteResult {
+    let frame = interp.current_frame_mut();
+
+    // pop references
+    let (a, b) = frame.pop_2_references()?;
+
+    // do comparison
+    let success = cmp(&a, &b);
+    trace!("cmp reference {} reference => {}", wat, success);
+
+    let action = if success {
+        PostExecuteAction::Jmp(offset as i32)
+    } else {
+        PostExecuteAction::Continue
+    };
+
+    Ok(action)
+}
+
 /// wat: "!= null"
 fn obj_cmp_one(
     interp: &mut InterpreterState,
@@ -1352,6 +1402,49 @@ fn obj_cmp_one(
     };
 
     Ok(action)
+}
+
+fn int_one_op(
+    interp: &mut InterpreterState,
+    wat: &'static str,
+    op: impl FnOnce(i32) -> i32,
+) -> ExecuteResult {
+    let frame = interp.current_frame_mut();
+
+    let val = frame.pop_int()?;
+    let result = op(val);
+
+    trace!(
+        "{op} {val} = {result}",
+        op = wat,
+        val = val,
+        result = result
+    );
+
+    frame.operand_stack.push(DataValue::Int(result));
+    Ok(PostExecuteAction::Continue)
+}
+
+fn int_two_op(
+    interp: &mut InterpreterState,
+    wat: &'static str,
+    op: impl FnOnce(i32, i32) -> i32,
+) -> ExecuteResult {
+    let frame = interp.current_frame_mut();
+
+    let (val1, val2) = frame.pop_2_ints()?;
+    let result = op(val1, val2);
+
+    trace!(
+        "{a} {op} {b} = {result}",
+        a = val1,
+        op = wat,
+        b = val2,
+        result = result
+    );
+
+    frame.operand_stack.push(DataValue::Int(result));
+    Ok(PostExecuteAction::Continue)
 }
 
 impl IfIcmpeq {
@@ -1474,7 +1567,7 @@ impl Imul {
 
 impl Ineg {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Ineg")
+        int_one_op(interp, "-", |a| -a)
     }
 }
 
@@ -1723,7 +1816,23 @@ impl Ior {
 
 impl Irem {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Irem")
+        let frame = interp.current_frame_mut();
+        let (val1, val2) = frame.pop_2_ints()?;
+
+        let result = match val1.checked_div(val2) {
+            Some(div) => val1 - div * val2,
+            None => {
+                return Ok(PostExecuteAction::ThrowException(Throwables::Other(
+                    "java/lang/ArithmeticException",
+                )))
+            }
+        };
+
+        trace!("irem {} % {} => {}", val1, val2, result);
+
+        frame.operand_stack.push(DataValue::Int(result));
+
+        Ok(PostExecuteAction::Continue)
     }
 }
 
@@ -1750,32 +1859,29 @@ impl Ishr {
 
 impl Istore {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Istore")
+        let frame = interp.current_frame_mut();
+        let val = frame.pop_int()?;
+        frame
+            .local_vars
+            .store(self.0 as usize, DataValue::Int(val))?;
+        Ok(PostExecuteAction::Continue)
     }
 }
 
 impl Istore0 {
-    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Istore0")
-    }
+    insn_delegate!(Istore(0));
 }
 
 impl Istore1 {
-    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Istore1")
-    }
+    insn_delegate!(Istore(1));
 }
 
 impl Istore2 {
-    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Istore2")
-    }
+    insn_delegate!(Istore(2));
 }
 
 impl Istore3 {
-    fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Istore3")
-    }
+    insn_delegate!(Istore(3));
 }
 
 impl Isub {
@@ -2132,13 +2238,21 @@ impl Nop {
 
 impl Pop {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Pop")
+        let popped = interp.current_frame_mut().pop_value()?;
+        assert!(!popped.is_wide());
+        Ok(PostExecuteAction::Continue)
     }
 }
 
 impl Pop2 {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Pop2")
+        let frame = interp.current_frame_mut();
+        let popped = frame.pop_value()?;
+        if !popped.is_wide() {
+            let second = frame.pop_value()?;
+            assert!(!second.is_wide());
+        }
+        Ok(PostExecuteAction::Continue)
     }
 }
 

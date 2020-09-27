@@ -1,5 +1,5 @@
 use crate::alloc::VmRef;
-use crate::class::{Class, Method, MethodCode, NativeCode, NativeFunction, Object};
+use crate::class::{Class, ClassType, Method, MethodCode, NativeCode, NativeFunction, Object};
 use crate::interpreter::error::InterpreterError;
 use crate::types::DataValue;
 
@@ -18,6 +18,7 @@ enum StackValue {
 }
 
 pub struct LocalVariables(Vec<StackValue>);
+#[derive(Debug)]
 pub struct OperandStack(Vec<DataValue>);
 pub struct FrameStack(Vec<(Frame, usize)>);
 
@@ -140,6 +141,18 @@ impl OperandStack {
 
     pub fn peek(&self) -> Option<&DataValue> {
         self.0.last()
+    }
+
+    /// idx is n from the end e.g. 1 is before the last element
+    pub fn insert_at(&mut self, val: DataValue, idx: usize) {
+        let idx = self.0.len() - idx;
+        debug!(
+            "inserting {:?} at index {:?}, stack length is now {:?}",
+            val,
+            idx,
+            self.0.len() + 1
+        );
+        self.0.insert(idx, val);
     }
 }
 impl FrameStack {
@@ -321,6 +334,9 @@ impl Debug for Frame {
     }
 }
 
+// TODO generic helper methods for popping up to 3 types from stack
+//  e.g. pop::<i32, f32, i32>()
+
 impl JavaFrame {
     // TODO move these to extension trait on operandstack
     pub fn pop_value(&mut self) -> Result<DataValue, InterpreterError> {
@@ -365,6 +381,30 @@ impl JavaFrame {
             v.into_reference()
                 .map_err(InterpreterError::InvalidOperandForObjectOp)
         })
+    }
+
+    /// "..., value1, value2 →"
+    /// Returns (value1, value2)
+    pub fn pop_2_references(&mut self) -> Result<(VmRef<Object>, VmRef<Object>), InterpreterError> {
+        let (val1, val2) = {
+            let mut objs = self.pop_values(2)?;
+
+            // popped in reverse order
+            let val2 = objs.next().unwrap();
+            let val1 = objs.next().unwrap();
+
+            (val1, val2)
+        };
+
+        let val1 = val1
+            .as_reference()
+            .ok_or_else(|| InterpreterError::InvalidOperandForObjectOp(val1.data_type()))?;
+
+        let val2 = val2
+            .as_reference()
+            .ok_or_else(|| InterpreterError::InvalidOperandForObjectOp(val2.data_type()))?;
+
+        Ok((val1.clone(), val2.clone()))
     }
 
     /// "..., value1, value2 →"
@@ -414,6 +454,51 @@ impl JavaFrame {
 
         Ok((val1, val2))
     }
+
+    pub fn pop_arrayref_and_idx(
+        &mut self,
+        elem_check: impl FnOnce(&VmRef<Class>) -> bool,
+    ) -> Result<(VmRef<Object>, usize), InterpreterError> {
+        let idx = self.pop_int()?;
+        let obj = self.pop_reference()?;
+
+        let obj_cls = obj.class();
+
+        let cls_type = match obj_cls.as_ref() {
+            None => {
+                return Err(InterpreterError::ExceptionRaised(
+                    Throwables::NullPointerException,
+                ))
+            }
+            Some(cls) => cls.class_type(),
+        };
+
+        match cls_type {
+            ClassType::Array(ty) => {
+                if !elem_check(ty) {
+                    error!("array has the wrong element type ({})", ty.name());
+                    return Err(InterpreterError::UnexpectedArrayType);
+                }
+            }
+            ty => return Err(InterpreterError::NotAnArray(ty.to_owned())),
+        };
+
+        // bounds check
+        if idx < 0 || (idx as usize) >= obj.array_unchecked().len() {
+            Err(InterpreterError::ExceptionRaised(Throwables::Other(
+                "java/lang/ArrayIndexOutOfBoundsException",
+            )))
+        } else {
+            Ok((obj, idx as usize))
+        }
+    }
+
+    pub fn peek_value(&mut self) -> Result<DataValue, InterpreterError> {
+        self.operand_stack
+            .peek()
+            .cloned()
+            .ok_or(InterpreterError::NoOperand)
+    }
 }
 
 #[cfg(test)]
@@ -450,5 +535,21 @@ mod tests {
 
         assert_eq!(intvalue(&stack.pop().unwrap()), 1);
         assert!(stack.pop().is_none());
+    }
+
+    #[test]
+    fn operand_insert() {
+        let mut stack = OperandStack::new(3);
+        stack.push(DataValue::Int(1));
+        stack.push(DataValue::Int(2));
+        stack.push(DataValue::Int(3));
+
+        stack.insert_at(DataValue::Int(10), 1);
+        let ints = stack
+            .pop_n(4)
+            .unwrap()
+            .map(|v| v.as_int().unwrap())
+            .collect_vec();
+        assert_eq!(ints, vec![3, 10, 2, 1]);
     }
 }

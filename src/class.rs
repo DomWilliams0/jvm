@@ -1234,6 +1234,7 @@ impl Object {
         VmRef::ptr_eq(&self.class, &NULL.class)
     }
 
+    /// None if null
     pub fn class(&self) -> Option<VmRef<Class>> {
         if self.is_null() {
             None
@@ -1253,11 +1254,29 @@ impl Object {
         }
     }
 
-    fn array(&self) -> Option<MutexGuard<Box<[DataValue]>>> {
+    pub fn array(&self) -> Option<MutexGuard<Box<[DataValue]>>> {
         match &self.storage {
             ObjectStorage::Array(mutex) => Some(mutex.lock()),
             _ => None,
         }
+    }
+
+    pub fn array_unchecked(&self) -> MutexGuard<Box<[DataValue]>> {
+        match &self.storage {
+            ObjectStorage::Array(mutex) => mutex.lock(),
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn array_get_unchecked(&self, idx: usize) -> DataValue {
+        self.array_unchecked().get(idx).unwrap().clone()
+    }
+
+    pub fn array_set_unchecked(&self, idx: usize, val: DataValue) {
+        trace!("set array element {:?}[{}] = {:?}", self, idx, val);
+        let mut array = self.array_unchecked();
+        let elem = array.get_mut(idx).unwrap();
+        *elem = val;
     }
 
     pub fn find_field_in_this_only(

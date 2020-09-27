@@ -87,10 +87,13 @@ pub enum InterpreterError {
     #[error("Class of type {0:?} is not an array")]
     NotAnArray(ClassType),
 
+    #[error("Unexpected array type")]
+    UnexpectedArrayType,
+
     #[error("Expected return type of {expected:?} but got {actual:?}")]
     InvalidReturnValue {
         expected: ReturnType<'static>,
-        actual: ReturnType<'static>,
+        actual: Option<DataValue>,
     },
 
     #[error("Cannot pop from empty frame stack")]

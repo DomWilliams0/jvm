@@ -1,4 +1,4 @@
-# TODOs (125)
+# TODOs (128)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -77,19 +77,21 @@
    * `// TODO backtrace`
  * [src/interpreter/error.rs](src/interpreter/error.rs) (1)
    * `// TODO combine repetetive errors for different data types`
- * [src/interpreter/frame.rs](src/interpreter/frame.rs) (7)
+ * [src/interpreter/frame.rs](src/interpreter/frame.rs) (8)
    * `// TODO is this always the same as method.class() ?`
    * `// TODO validate local var slot in case of wide vars`
    * `// TODO longs and doubles take 2 slots!`
    * `// TODO tests for operand stack and local var array`
    * `// TODO expects()`
    * `// TODO long and double are wide`
+   * `// TODO generic helper methods for popping up to 3 types from stack`
    * `// TODO move these to extension trait on operandstack`
- * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (29)
+ * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (30)
    * `// TODO operand stack pop then verify might be wrong - only pop if its the right type?`
    * `/// TODO might be possible to continue with resolved methods/fields state instead of replay`
    * `// TODO better handling of interpreter error`
    * `// TODO some 2s are signed`
+   * `// TODO assignment compatibility check`
    * `// TODO sign extended?`
    * `// TODO narrow float to int properly`
    * `// TODO is probably wrong`
@@ -145,6 +147,7 @@
    * `// TODO test this once structure is settled`
  * [src/thread.rs](src/thread.rs) (1)
    * `exception: RefCell<Option<VmRef<Throwable /* TODO vmobject */>>>,`
- * [src/types.rs](src/types.rs) (2)
+ * [src/types.rs](src/types.rs) (3)
    * `// TODO more efficient packing of data values`
    * `// TODO narrowing`
+   * `// TODO proper assignment compatibility check for reference types`
