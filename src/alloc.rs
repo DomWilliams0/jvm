@@ -31,9 +31,9 @@ pub fn vmref_alloc_object(f: impl FnOnce() -> VmResult<Object>) -> VmResult<VmRe
     Ok(VmRef::new(f()?))
 }
 
-pub fn vmref_alloc_exception(throwable: Throwables) -> VmResult<VmRef<Throwable>> {
+pub fn vmref_alloc_exception(throwable: Throwables) -> VmRef<Throwable> {
     let class_name = throwable.symbol();
-    Ok(VmRef::new(Throwable { class_name }))
+    VmRef::new(Throwable { class_name })
 }
 
 #[cfg(test)]

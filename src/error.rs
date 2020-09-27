@@ -2,7 +2,7 @@ use std::fmt::{Debug, Formatter};
 
 use thiserror::*;
 
-use crate::alloc::VmRef;
+use crate::alloc::{vmref_alloc_exception, VmRef};
 use crate::thread;
 
 pub type JvmResult<T> = Result<T, JvmError>;
@@ -46,9 +46,7 @@ impl<T> ResultExt<T> for VmResult<T> {
         match self {
             Ok(ok) => Ok(ok),
             Err(e) => {
-                let exc = VmRef::new(Throwable {
-                    class_name: e.symbol(),
-                });
+                let exc: VmRef<Throwable> = e.into();
                 thread::get().set_exception(exc.clone());
 
                 Err(JvmError::ExceptionThrown(exc))
@@ -75,5 +73,11 @@ impl Throwables {
 impl Debug for JvmError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self)
+    }
+}
+
+impl From<Throwables> for VmRef<Throwable> {
+    fn from(exc: Throwables) -> Self {
+        vmref_alloc_exception(exc)
     }
 }

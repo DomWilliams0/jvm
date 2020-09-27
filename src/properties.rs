@@ -5,7 +5,7 @@ use std::iter::FromIterator;
 use crate::alloc::vmref_alloc_object;
 use crate::class::{FunctionArgs, Object};
 use crate::classpath::ClassPath;
-use crate::interpreter::{Frame, InterpreterResult};
+use crate::interpreter::Frame;
 use crate::thread;
 use crate::types::DataValue;
 use cafebabe::mutf8::StrExt;
@@ -125,12 +125,13 @@ pub fn vm_systemproperties_preinit(mut args: FunctionArgs) -> Option<DataValue> 
             method.clone(),
             args.iter().map(|o| DataValue::Reference(o.to_owned())),
         )
-        .expect("can't make frame");
+        .unwrap();
 
-        interpreter.state_mut().push_frame(frame);
-        let ret = interpreter.execute_until_return();
-        // TODO use ret
-        assert!(matches!(ret, InterpreterResult::Success))
+        if let Err(e) = interpreter.execute_frame(frame) {
+            // exception occurred
+            log::error!("failed to set system property: {:?}", e);
+            break;
+        }
     }
 
     None // void

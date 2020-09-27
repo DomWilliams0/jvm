@@ -11,7 +11,6 @@ use crate::interpreter::InterpreterError;
 use crate::types::{DataValue, ReturnType};
 use std::cell::{RefCell, RefMut};
 
-// TODO this is gross
 #[derive(Debug)]
 pub enum InterpreterResult {
     Success,
@@ -108,7 +107,29 @@ impl InterpreterState {
     }
 }
 
+impl InterpreterResult {
+    pub fn is_success(&self) -> bool {
+        matches!(self, InterpreterResult::Success)
+    }
+
+    pub fn into_result(self) -> Result<(), VmRef<Throwable>> {
+        if self.is_success() {
+            Ok(())
+        } else {
+            let exc = thread::get()
+                .exception()
+                .expect("interpreter error should have set an exception");
+            Err(exc)
+        }
+    }
+}
+
 impl Interpreter {
+    pub fn execute_frame(&self, frame: Frame) -> Result<(), VmRef<Throwable>> {
+        self.state_mut().push_frame(frame);
+        self.execute_until_return().into_result()
+    }
+
     pub fn execute_until_return(&self) -> InterpreterResult {
         let mut depth = 1;
 

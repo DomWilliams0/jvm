@@ -12,7 +12,7 @@ use cafebabe::mutf8::{mstr, StrExt};
 use cafebabe::{ClassError, MethodAccessFlags};
 use parking_lot::RwLock;
 
-use crate::interpreter::{Frame, InterpreterResult};
+use crate::interpreter::Frame;
 use crate::properties::vm_systemproperties_preinit;
 use crate::thread;
 use std::cell::RefCell;
@@ -385,16 +385,10 @@ impl ClassLoader {
 
         let thread = thread::get();
         let interpreter = thread.interpreter();
-        let frame = Frame::new_no_args(method).expect("cant make frame");
-
-        // TODO calling a method from native needs to be more ergonomic
-        // TODO interpreter error -> internal vm error throwable
-        interpreter.state_mut().push_frame(frame);
-        if let InterpreterResult::Exception = interpreter.execute_until_return() {
-            let exc = thread.exception().unwrap();
-            error!("error getting system classloader: {:?}", exc);
-            panic!("system classloader");
-        }
+        let frame = Frame::new_no_args(method).unwrap();
+        interpreter
+            .execute_frame(frame)
+            .expect("system classloader");
 
         todo!("return returned instance")
     }

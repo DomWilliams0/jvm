@@ -13,7 +13,7 @@ use crate::types::{DataType, DataValue, MethodSignature, PrimitiveDataType, Retu
 use cafebabe::mutf8::{mstr, StrExt};
 
 use crate::constant_pool::RuntimeConstantPool;
-use crate::interpreter::{Frame, InterpreterError, InterpreterResult};
+use crate::interpreter::{Frame, InterpreterError};
 use crate::monitor::{Monitor, MonitorGuard};
 use crate::storage::{FieldId, FieldStorage, FieldStorageLayout, FieldStorageLayoutBuilder};
 use crate::thread;
@@ -846,23 +846,13 @@ impl Class {
                             let thread = thread::get();
                             let interpreter = thread.interpreter();
                             let result = Frame::new_no_args(m).and_then(|frame| {
-                                interpreter.state_mut().push_frame(frame);
+                                interpreter.execute_frame(frame).map_err(|exc| {
+                                    // TODO wrap exception here and return the proper type
+                                    warn!("exception raised in static constructor: {:?}", exc);
 
-                                match interpreter.execute_until_return() {
-                                    InterpreterResult::Success => Ok(()),
-                                    InterpreterResult::Exception => {
-                                        let exception =
-                                            thread.exception().expect("exception should be set");
-                                        // TODO wrap exception here and return the proper type
-                                        warn!(
-                                            "exception raised in static constructor: {:?}",
-                                            exception
-                                        );
-                                        Err(InterpreterError::ExceptionRaised(
-                                            Throwables::ClassFormatError,
-                                        ))
-                                    }
-                                }
+                                    thread::get().set_exception(exc.into());
+                                    InterpreterError::ExceptionRaised(Throwables::ClassFormatError)
+                                })
                             });
 
                             if let Err(err) = result {

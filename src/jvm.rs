@@ -129,13 +129,9 @@ impl Jvm {
         let frame =
             Frame::new_with_args(main_method, once(DataValue::Reference(args_array))).unwrap();
 
-        interp.state_mut().push_frame(frame);
-        if let InterpreterResult::Exception = interp.execute_until_return() {
-            let exc = thread.exception().unwrap();
-            Err(JvmError::ExceptionThrown(exc))
-        } else {
-            Ok(())
-        }
+        interp
+            .execute_frame(frame)
+            .map_err(JvmError::ExceptionThrown)
     }
 
     pub fn destroy(&mut self) -> JvmResult<()> {
