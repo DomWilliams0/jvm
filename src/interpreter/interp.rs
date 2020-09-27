@@ -1,4 +1,4 @@
-use crate::alloc::VmRef;
+use crate::alloc::{vmref_alloc_exception, VmRef};
 use log::*;
 
 use crate::error::{Throwable, Throwables};
@@ -133,19 +133,17 @@ impl Interpreter {
     pub fn execute_until_return(&self) -> InterpreterResult {
         let mut depth = 1;
 
-        let mk_exception = |throwable: Throwables| {
-            thread::get().set_exception(VmRef::new(Throwable {
-                class_name: throwable.symbol(),
-            }));
-            InterpreterResult::Exception
-        };
-
         while depth != 0 {
             match self.execute() {
                 PostExecuteAction::MethodCall => depth += 1,
                 PostExecuteAction::Return => depth -= 1,
+                PostExecuteAction::ThrowException(exc) => {
+                    thread::get().set_exception(exc.into());
+                    return InterpreterResult::Exception;
+                }
                 PostExecuteAction::Exception(exc) => {
-                    return mk_exception(exc);
+                    thread::get().set_exception(exc);
+                    return InterpreterResult::Exception;
                 }
                 PostExecuteAction::JmpAbsolute(new_pc) => {
                     let mut state = self.state_mut();
@@ -162,7 +160,8 @@ impl Interpreter {
 
                     if let Err(err) = cls.ensure_init() {
                         warn!("class initialisation failed: {:?}", err);
-                        return mk_exception(err);
+                        thread::get().set_exception(err.into());
+                        return InterpreterResult::Exception;
                     }
                 }
 
@@ -196,8 +195,16 @@ impl Interpreter {
             drop(state);
 
             // go native!! best of luck
-            let return_value = match func {
+            let result = match func {
                 NativeFunction::Internal(func) => func(args),
+            };
+
+            let return_value = match result {
+                Err(e) => {
+                    debug!("native method threw exception: {:?}", e);
+                    return PostExecuteAction::Exception(e);
+                }
+                Ok(ret) => ret,
             };
 
             // we made it! go mutable again to push return value onto caller's stack
@@ -205,7 +212,7 @@ impl Interpreter {
                 Err(err) => {
                     error!("interpreter error: {}", err);
                     // TODO better handling of interpreter error
-                    PostExecuteAction::Exception(Throwables::Other("java/lang/InternalError"))
+                    PostExecuteAction::ThrowException(Throwables::Other("java/lang/InternalError"))
                 }
                 Ok(()) => PostExecuteAction::Return,
             };

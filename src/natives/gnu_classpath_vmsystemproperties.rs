@@ -1,12 +1,15 @@
-use crate::alloc::vmref_alloc_object;
+use crate::alloc::{vmref_alloc_object, VmRef};
 use crate::class::{FunctionArgs, Object};
+use crate::error::{Throwable, Throwables};
 use crate::interpreter::Frame;
 use crate::thread;
 use crate::types::DataValue;
 use cafebabe::mutf8::StrExt;
 use cafebabe::MethodAccessFlags;
 
-pub fn vm_systemproperties_preinit(mut args: FunctionArgs) -> Option<DataValue> {
+pub fn vm_systemproperties_preinit(
+    mut args: FunctionArgs,
+) -> Result<Option<DataValue>, VmRef<Throwable>> {
     let props = args.take(0).into_reference().unwrap();
     // TODO actually do preInit
 
@@ -42,9 +45,9 @@ pub fn vm_systemproperties_preinit(mut args: FunctionArgs) -> Option<DataValue> 
         if let Err(e) = interpreter.execute_frame(frame) {
             // exception occurred
             log::error!("failed to set system property: {:?}", e);
-            break;
+            return Err(e);
         }
     }
 
-    None // void
+    Ok(None) // void
 }

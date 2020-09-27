@@ -14,7 +14,7 @@ use crate::class::{Class, FieldSearchType, Object};
 use crate::types::{DataType, DataValue, PrimitiveDataType};
 
 use crate::classloader::WhichLoader;
-use crate::error::Throwables;
+use crate::error::{Throwable, Throwables};
 use crate::interpreter::insn::bytecode::InsnReader;
 use crate::interpreter::insn::opcode::Opcode;
 use crate::interpreter::insn::InstructionBlob;
@@ -30,7 +30,8 @@ use std::fmt::Debug;
 pub enum PostExecuteAction {
     Continue,
     Return,
-    Exception(Throwables),
+    ThrowException(Throwables),
+    Exception(VmRef<Throwable>),
     MethodCall,
     /// Relative offset to the opcode of this instruction
     Jmp(i32),
@@ -60,7 +61,9 @@ macro_rules! insn_common {
                     Err(err) => {
                         error!("interpreter error: {}", err);
                         // TODO better handling of interpreter error
-                        PostExecuteAction::Exception(Throwables::Other("java/lang/InternalError"))
+                        PostExecuteAction::ThrowException(Throwables::Other(
+                            "java/lang/InternalError",
+                        ))
                     }
                 }
             }
@@ -525,7 +528,7 @@ impl Arraylength {
         let obj = frame.pop_reference()?;
 
         if obj.is_null() {
-            return Ok(PostExecuteAction::Exception(
+            return Ok(PostExecuteAction::ThrowException(
                 Throwables::NullPointerException,
             ));
         }
@@ -1071,7 +1074,7 @@ impl Getfield {
         let obj_class = match obj.class() {
             Some(cls) => cls,
             None => {
-                return Ok(PostExecuteAction::Exception(
+                return Ok(PostExecuteAction::ThrowException(
                     Throwables::NullPointerException,
                 ))
             }
@@ -2169,7 +2172,7 @@ impl Putfield {
             let class = if let Some(cls) = object.class() {
                 cls
             } else {
-                return Ok(PostExecuteAction::Exception(
+                return Ok(PostExecuteAction::ThrowException(
                     Throwables::NullPointerException,
                 ));
             };

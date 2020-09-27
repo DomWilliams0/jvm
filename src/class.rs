@@ -8,7 +8,7 @@ use log::*;
 
 use crate::alloc::{vmref_alloc_object, vmref_ptr, InternedString, NativeString, VmRef};
 use crate::classloader::{current_thread, ClassLoader, WhichLoader};
-use crate::error::{Throwables, VmResult};
+use crate::error::{Throwable, Throwables, VmResult};
 use crate::types::{DataType, DataValue, MethodSignature, PrimitiveDataType, ReturnType};
 use cafebabe::mutf8::{mstr, StrExt};
 
@@ -137,7 +137,7 @@ pub enum NativeCode {
     FailedToBind,
 }
 
-pub type NativeInternalFn = fn(FunctionArgs) -> Option<DataValue>;
+pub type NativeInternalFn = fn(FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>>;
 
 pub struct FunctionArgs<'a>(&'a mut [DataValue]);
 
