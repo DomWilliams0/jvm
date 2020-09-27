@@ -1501,6 +1501,8 @@ impl Invokespecial {
             .method_or_interface_entry(self.0)
             .ok_or_else(|| InterpreterError::NotMethodRef(self.0))?;
 
+        trace!("invokespecial entry {:?}", entry);
+
         let (class, method) = {
             // resolve specified class and method
             let resolved_class =
@@ -1602,7 +1604,7 @@ impl Invokespecial {
 
         // pop args and call method
         let arg_count = method.args().len() + 1; // +1 for this
-        let callee_frame = Frame::new_with_caller(class, method, frame, arg_count)?;
+        let callee_frame = Frame::new_with_caller(method, frame, arg_count)?;
         interp.push_frame(callee_frame);
 
         Ok(PostExecuteAction::MethodCall)
@@ -1650,7 +1652,7 @@ impl Invokestatic {
 
         // TODO typecheck args at verification time
         let arg_count = method.args().len();
-        let callee_frame = Frame::new_with_caller(class, method, frame, arg_count)?;
+        let callee_frame = Frame::new_with_caller(method, frame, arg_count)?;
         interp.push_frame(callee_frame);
 
         Ok(PostExecuteAction::MethodCall)
@@ -1700,7 +1702,7 @@ impl Invokevirtual {
 
         // pop args and call method
         let arg_count = method.args().len() + 1; // +1 for this
-        let callee_frame = Frame::new_with_caller(class, method, frame, arg_count)?;
+        let callee_frame = Frame::new_with_caller(method, frame, arg_count)?;
         interp.push_frame(callee_frame);
 
         Ok(PostExecuteAction::MethodCall)

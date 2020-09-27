@@ -294,6 +294,7 @@ impl ClassLoader {
 
         // then the rest
         let classes = [
+            Preload::new("java/lang/String"),
             Preload::new("java/lang/ClassLoader"),
             Preload::with_natives(
                 "gnu/classpath/VMSystemProperties",
@@ -304,7 +305,6 @@ impl ClassLoader {
                 )],
             ),
             Preload::new("[I"),
-            Preload::new("java/lang/String"),
             Preload::new("java/util/HashMap"),
         ];
 
@@ -397,7 +397,7 @@ impl ClassLoader {
 
         let thread = thread::get();
         let interpreter = thread.interpreter();
-        let frame = Frame::new_no_args(method, classloader_class).expect("cant make frame");
+        let frame = Frame::new_no_args(method).expect("cant make frame");
 
         // TODO calling a method from native needs to be more ergonomic
         // TODO interpreter error -> internal vm error throwable

@@ -1,12 +1,14 @@
 use crate::alloc::VmRef;
-use crate::class::{Class, FunctionArgs, Method, MethodCode, NativeCode, NativeFunction, Object};
+use crate::class::{Class, Method, MethodCode, NativeCode, NativeFunction, Object};
 use crate::interpreter::error::InterpreterError;
 use crate::types::DataValue;
 
 use log::*;
 
 use crate::error::Throwables;
+
 use cafebabe::AccessFlags;
+
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
@@ -31,7 +33,8 @@ pub struct NativeFrame {
     pub class: VmRef<Class>,
     pub method: VmRef<Method>,
     pub function: NativeFunction,
-    pub args: Box<[DataValue]>,
+    /// Some on init, None after exec
+    pub args: Option<Box<[DataValue]>>,
 }
 
 pub enum Frame {
@@ -193,9 +196,10 @@ impl StackValue {
 impl Frame {
     pub fn new_with_args(
         method: VmRef<Method>,
-        class: VmRef<Class>,
         mut args: impl DoubleEndedIterator<Item = DataValue>,
     ) -> Result<Self, InterpreterError> {
+        let class = method.class().to_owned();
+
         // TODO impl display on mstr
         match method.code() {
             MethodCode::Abstract => {
@@ -212,7 +216,13 @@ impl Frame {
                     // TODO expects()
                     let this = args.next_back().expect("no this arg");
                     let thisref = this.as_reference().expect("this is not reference");
-                    assert!(!thisref.is_null(), "this is null");
+
+                    if thisref.is_null() {
+                        debug!("`this` is null");
+                        return Err(InterpreterError::ExceptionRaised(
+                            Throwables::NullPointerException,
+                        ));
+                    }
 
                     local_vars.store(0, this)?;
                     1
@@ -262,7 +272,7 @@ impl Frame {
                             class,
                             method: method.clone(),
                             function: *function,
-                            args,
+                            args: Some(args),
                         }))
                     }
                 }
@@ -270,15 +280,11 @@ impl Frame {
         }
     }
 
-    pub fn new_no_args(
-        method: VmRef<Method>,
-        class: VmRef<Class>,
-    ) -> Result<Self, InterpreterError> {
-        Self::new_with_args(method, class, std::iter::empty())
+    pub fn new_no_args(method: VmRef<Method>) -> Result<Self, InterpreterError> {
+        Self::new_with_args(method, std::iter::empty())
     }
 
     pub fn new_with_caller(
-        class: VmRef<Class>,
         method: VmRef<Method>,
         caller: &mut JavaFrame,
         nargs: usize,
@@ -293,7 +299,7 @@ impl Frame {
                     actual: stack_len,
                 })?;
 
-        Self::new_with_args(method, class, args)
+        Self::new_with_args(method, args)
     }
 
     fn class_and_method(&self) -> (&VmRef<Class>, &VmRef<Method>) {
@@ -416,15 +422,6 @@ impl JavaFrame {
             .ok_or_else(|| InterpreterError::InvalidOperandForFloatOp(val2.data_type()))?;
 
         Ok((val1, val2))
-    }
-}
-
-impl NativeFrame {
-    pub fn invoke(&mut self) -> Option<DataValue> {
-        let args = FunctionArgs::from(self.args.as_mut());
-        match self.function {
-            NativeFunction::Internal(func) => func(args),
-        }
     }
 }
 

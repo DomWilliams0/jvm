@@ -1,4 +1,4 @@
-# TODOs (126)
+# TODOs (128)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -116,7 +116,8 @@
    * `// TODO check value is compatible with field desc`
    * `// TODO if final can only be in constructor`
    * `// TODO if class is interface then can only be in constructor`
- * [src/interpreter/interp.rs](src/interpreter/interp.rs) (3)
+ * [src/interpreter/interp.rs](src/interpreter/interp.rs) (4)
+   * `// TODO this is gross`
    * `// TODO catch this at verification time`
    * `// TODO pass these into execute()`
    * `// TODO better handling of interpreter error`
@@ -131,10 +132,11 @@
    * `// TODO populate String[] args`
    * `// TODO wait for threads to die, unintialise TLS, assert this is the last ref to global state`
    * `// TODO standard jvm args`
- * [src/properties.rs](src/properties.rs) (3)
+ * [src/properties.rs](src/properties.rs) (4)
    * `// TODO remaining static ones`
    * `// TODO dynamic ones e.g. user.home`
    * `// TODO actually do preInit`
+   * `// TODO use ret`
  * [src/storage.rs](src/storage.rs) (5)
    * `// TODO field storage should be inline in VmRef<Object>`
    * `// TODO compact field storage i.e. not using DataValue enum`

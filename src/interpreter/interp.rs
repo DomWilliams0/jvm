@@ -6,11 +6,13 @@ use crate::interpreter::frame::{Frame, FrameStack, JavaFrame};
 use crate::interpreter::insn::{get_insn, InstructionBlob, PostExecuteAction};
 use crate::thread;
 
-use crate::class::Method;
+use crate::class::{FunctionArgs, Method, NativeFunction};
 use crate::interpreter::InterpreterError;
 use crate::types::{DataValue, ReturnType};
 use std::cell::{RefCell, RefMut};
 
+// TODO this is gross
+#[derive(Debug)]
 pub enum InterpreterResult {
     Success,
     Exception,
@@ -167,8 +169,22 @@ impl Interpreter {
                 native.class.name(),
                 native.method.name()
             );
-            let return_value = native.invoke();
-            return match state.return_value_to_caller(return_value) {
+
+            // dismantle frame
+            let func = native.function;
+            let mut args = native.args.take().unwrap(); // this happens once only the upon call
+            let args = FunctionArgs::from(args.as_mut());
+
+            // drop mutable ref to interpreter to go native - this might recursively call this interpreter method
+            drop(state);
+
+            // go native!! best of luck
+            let return_value = match func {
+                NativeFunction::Internal(func) => func(args),
+            };
+
+            // we made it! go mutable again to push return value onto caller's stack
+            return match self.state_mut().return_value_to_caller(return_value) {
                 Err(err) => {
                     error!("interpreter error: {}", err);
                     // TODO better handling of interpreter error
@@ -189,7 +205,12 @@ impl Interpreter {
             *pc = new_pc;
 
             // lookup execute function
-            trace!("{}: executing {:?}", old_pc, opcode);
+            trace!(
+                "{}: executing {:?} ({:?})",
+                old_pc,
+                opcode,
+                state.frames.top().unwrap()
+            );
             let exec_fn = thread.global().insn_lookup().resolve(opcode);
             let result = exec_fn(&insn_blob, &mut *state);
 

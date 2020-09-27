@@ -30,6 +30,7 @@ pub struct JvmGlobalState {
     classloader: ClassLoader,
     insn_lookup: InstructionLookupTable,
     jit: JitClient,
+    properties: SystemProperties,
 }
 
 #[derive(Default, Debug)]
@@ -71,6 +72,7 @@ impl Jvm {
             classloader,
             insn_lookup: InstructionLookupTable::new(),
             jit: jit_client,
+            properties: args.properties,
         });
 
         let jvm = Jvm {
@@ -124,12 +126,8 @@ impl Jvm {
 
         // execute it!!
         let interp = thread.interpreter();
-        let frame = Frame::new_with_args(
-            main_method,
-            main_class,
-            once(DataValue::Reference(args_array)),
-        )
-        .unwrap();
+        let frame =
+            Frame::new_with_args(main_method, once(DataValue::Reference(args_array))).unwrap();
 
         interp.state_mut().push_frame(frame);
         if let InterpreterResult::Exception = interp.execute_until_return() {
@@ -197,5 +195,9 @@ impl JvmGlobalState {
 
     pub(crate) fn jit(&self) -> &JitClient {
         &self.jit
+    }
+
+    pub(crate) fn properties(&self) -> &SystemProperties {
+        &self.properties
     }
 }

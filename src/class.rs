@@ -150,6 +150,8 @@ pub struct Method {
     name: NativeString,
     desc: NativeString,
     flags: MethodAccessFlags,
+    /// Always initialised during linking
+    class: MaybeUninit<VmRef<Class>>,
 
     // TODO arrayvec
     args: Vec<DataType<'static>>,
@@ -333,6 +335,7 @@ impl Class {
                     name: method.name.to_owned(),
                     desc: method.descriptor.to_owned(),
                     flags: method.access_flags,
+                    class: MaybeUninit::zeroed(), // populated at the end
                     args,
                     return_type: signature.return_type().to_owned(),
                     code,
@@ -415,7 +418,7 @@ impl Class {
 
         let access = loaded.access_flags();
 
-        Ok(Self::new(
+        let class = Self::new(
             name,
             ClassType::Normal,
             source_file,
@@ -429,7 +432,20 @@ impl Class {
             instance_fields_layout,
             static_fields_layout,
             static_fields_values,
-        ))
+        );
+
+        // fix up method class refs
+        // safety: this is probably mostly safe, this is the only reference to the class but we need to
+        // clone the Arc for each method, so it has to be immutable
+        unsafe {
+            let class_mut = &mut *(Arc::as_ptr(&class) as *mut Class);
+            class_mut.methods.iter_mut().for_each(|m| {
+                let m = Arc::get_mut(m).unwrap();
+                m.class = MaybeUninit::new(class.clone());
+            })
+        }
+
+        Ok(class)
     }
 
     pub fn new_array_class(
@@ -829,7 +845,7 @@ impl Class {
 
                             let thread = thread::get();
                             let interpreter = thread.interpreter();
-                            let result = Frame::new_no_args(m, self.clone()).and_then(|frame| {
+                            let result = Frame::new_no_args(m).and_then(|frame| {
                                 interpreter.state_mut().push_frame(frame);
 
                                 match interpreter.execute_until_return() {
@@ -1052,6 +1068,16 @@ impl Class {
     }
 }
 
+impl Drop for Method {
+    fn drop(&mut self) {
+        // safety: always initialised in Class::link, and needs to be manually dropped
+        unsafe {
+            let class_ptr = self.class.as_mut_ptr();
+            class_ptr.drop_in_place()
+        }
+    }
+}
+
 impl MethodLookupResult {
     fn ok(self) -> Option<VmRef<Method>> {
         if let MethodLookupResult::Found(m) = self {
@@ -1271,6 +1297,11 @@ impl Method {
 
     pub fn is_instance_initializer(&self) -> bool {
         self.name().as_bytes() == b"<init>"
+    }
+
+    pub fn class(&self) -> &VmRef<Class> {
+        // safety: always initialised in Class::link
+        unsafe { &*self.class.as_ptr() }
     }
 }
 
