@@ -1731,6 +1731,7 @@ impl Ireturn {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
         let frame = interp.current_frame_mut();
         let val = frame.pop_int()?;
+        // TODO may need to convert int to byte/short etc first
         do_return_value(interp, DataValue::Int(val))
     }
 }

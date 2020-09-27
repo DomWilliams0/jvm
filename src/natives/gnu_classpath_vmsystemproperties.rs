@@ -35,7 +35,8 @@ pub fn vm_systemproperties_preinit(
         let val = vmref_alloc_object(|| Object::new_string(&val.to_mstr())).expect("bad value");
 
         // make frame for method call
-        let args = [props.clone(), key, val];
+        //                           2    1      0 (this)
+        let args = [val, key, props.clone()];
         let frame = Frame::new_with_args(
             method.clone(),
             args.iter().map(|o| DataValue::Reference(o.to_owned())),
