@@ -1586,11 +1586,7 @@ impl Invokespecial {
                 unreachable!("method not found")
             };
             let method = lookup_actual_method();
-            trace!(
-                "invokespecial resolved method to {:?}.{:?}",
-                class.name(),
-                method
-            );
+            trace!("invokespecial resolved method to {}", method);
 
             // TODO ensure method is not static, IncompatibleClassChangeError
             assert!(!method.flags().is_static());
@@ -1692,12 +1688,7 @@ impl Invokevirtual {
         // TODO ensure method is not static, IncompatibleClassChangeError
         assert!(!method.flags().is_static());
 
-        trace!(
-            "invokevirtual {:?}.{:?} ({:?})",
-            class.name(),
-            method.name(),
-            method.descriptor()
-        );
+        trace!("invokevirtual {}", method,);
 
         // pop args and call method
         let arg_count = method.args().len() + 1; // +1 for this

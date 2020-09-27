@@ -22,6 +22,7 @@ pub struct OperandStack(Vec<DataValue>);
 pub struct FrameStack(Vec<(Frame, usize)>);
 
 pub struct JavaFrame {
+    // TODO is this always the same as method.class() ?
     pub class: VmRef<Class>,
     pub method: VmRef<Method>,
     pub local_vars: LocalVariables,
@@ -200,10 +201,9 @@ impl Frame {
     ) -> Result<Self, InterpreterError> {
         let class = method.class().to_owned();
 
-        // TODO impl display on mstr
         match method.code() {
             MethodCode::Abstract => {
-                warn!("method {:?}:{:?} is abstract", class.name(), method.name());
+                warn!("method {} is abstract", method);
                 Err(InterpreterError::ExceptionRaised(Throwables::Other(
                     "java/lang/AbstractMethodError",
                 )))
@@ -247,18 +247,10 @@ impl Frame {
                 let state = &*native.lock();
                 match state {
                     NativeCode::Unbound => {
-                        unreachable!(
-                            "native method {:?}.{:?} has not been bound",
-                            class.name(),
-                            method.name()
-                        );
+                        unreachable!("native method {} has not been bound", method,);
                     }
                     NativeCode::FailedToBind => {
-                        warn!(
-                            "native method {:?}.{:?} could not be bound",
-                            class.name(),
-                            method.name()
-                        );
+                        warn!("native method {} could not be bound", method);
                         Err(InterpreterError::ExceptionRaised(Throwables::Other(
                             "java/lang/UnsatisfiedLinkError",
                         )))
@@ -316,17 +308,10 @@ impl Frame {
 
 impl Debug for Frame {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let (cls, method) = self.class_and_method();
+        let (_, method) = self.class_and_method();
         let suffix = if self.is_java() { "" } else { " (native)" };
 
-        // TODO impl Display for mstr
-        write!(
-            f,
-            "{}.{}{}",
-            cls.name().to_utf8(),
-            method.name().to_utf8(),
-            suffix
-        )
+        write!(f, "{}{}", method, suffix)
     }
 }
 

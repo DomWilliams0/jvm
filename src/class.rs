@@ -21,7 +21,7 @@ use crate::thread;
 use itertools::Itertools;
 use parking_lot::{Mutex, MutexGuard};
 use std::cell::UnsafeCell;
-use std::fmt::{Debug, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 
 use std::borrow::Cow;
 use std::sync::Arc;
@@ -1047,8 +1047,7 @@ impl Class {
             _ => return Ok(()),
         };
 
-        // TODO method.as_full_name() impls Debug to make this easier
-        debug!("binding native method {:?}.{:?}", self.name, method.name);
+        debug!("binding native method {}", method);
 
         todo!("resolve mangled native method")
     }
@@ -1059,7 +1058,7 @@ impl Class {
             if let NativeCode::Unbound = *guard {
                 // *guard = NativeCode::Bound(CompiledCode::new(CodeType::Trampoline(fn_ptr)));
                 *guard = NativeCode::Bound(NativeFunction::Internal(function));
-                debug!("bound {:?}.{:?} to {:?}", self.name, method.name, *guard);
+                debug!("bound {} to {:?}", method, *guard);
                 return true;
             }
         }
@@ -1304,6 +1303,18 @@ impl Method {
     pub fn class(&self) -> &VmRef<Class> {
         // safety: always initialised in Class::link
         unsafe { &*self.class.as_ptr() }
+    }
+}
+
+impl Display for Method {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}.{}::{}",
+            self.class().name(),
+            self.name(),
+            self.descriptor()
+        )
     }
 }
 

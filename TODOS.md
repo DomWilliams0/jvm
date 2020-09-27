@@ -1,4 +1,4 @@
-# TODOs (128)
+# TODOs (125)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -24,7 +24,7 @@
    * `// TODO actually intern strings`
    * `// TODO methods on VmRef newtype`
    * `// TODO oom error`
- * [src/class.rs](src/class.rs) (26)
+ * [src/class.rs](src/class.rs) (25)
    * `// TODO store dimensions`
    * `/// TODO weak reference for cyclic?`
    * `// TODO arrays should live on the GC java heap`
@@ -47,11 +47,10 @@
    * `// TODO wrap exception here and return the proper type`
    * `// TODO proper exception type here`
    * `// TODO specific exception type e.g. ExceptionInInitializerError`
-   * `// TODO method.as_full_name() impls Debug to make this easier`
    * `// TODO just allocate an object instead of this unsafeness`
    * `// TODO limit array length to i32::MAX somewhere`
    * `// TODO not quite correct toString`
- * [src/classloader.rs](src/classloader.rs) (15)
+ * [src/classloader.rs](src/classloader.rs) (14)
    * `// TODO types for str to differentiate java/lang/Object, java.lang.Object and descrptors e.g. Ljava/lang/Object;`
    * `// TODO register class "package" with loader (https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-5.html#jvms-5.3)`
    * `// TODO actually instantiate exceptions`
@@ -63,7 +62,6 @@
    * `let bytes = std::fs::read(path).expect("io error"); // TODO java.lang.IOError`
    * `// TODO define hardcoded preload classes in a better way`
    * `// TODO add array lookup with enum constants for common symbols like Object, or perfect hashing`
-   * `// TODO mstr display impl`
    * `// TODO calling a method from native needs to be more ergonomic`
    * `// TODO interpreter error -> internal vm error throwable`
    * `// TODO newtype VmRef should handle equality`
@@ -79,13 +77,12 @@
    * `// TODO backtrace`
  * [src/interpreter/error.rs](src/interpreter/error.rs) (1)
    * `// TODO combine repetetive errors for different data types`
- * [src/interpreter/frame.rs](src/interpreter/frame.rs) (7)
+ * [src/interpreter/frame.rs](src/interpreter/frame.rs) (6)
+   * `// TODO is this always the same as method.class() ?`
    * `// TODO validate local var slot in case of wide vars`
    * `// TODO longs and doubles take 2 slots!`
    * `// TODO tests for operand stack and local var array`
-   * `// TODO impl display on mstr`
    * `// TODO expects()`
-   * `// TODO impl Display for mstr`
    * `// TODO move these to extension trait on operandstack`
  * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (28)
    * `// TODO operand stack pop then verify might be wrong - only pop if its the right type?`

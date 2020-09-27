@@ -318,18 +318,14 @@ impl ClassLoader {
                     )
                     .unwrap_or_else(|| {
                         panic!(
-                            "cant find native method {:?}.{:?} ({:?}) to bind",
+                            "cant find native method {}.{} ({:?}) to bind",
                             class.class, method_name, method_desc
                         )
                     });
 
                 // mark method as bound
                 let bound = cls.bind_internal_method(&method, *fn_ptr);
-                assert!(
-                    bound,
-                    "failed to bind native method {:?}.{:?}",
-                    class.class, method_name
-                );
+                assert!(bound, "failed to bind native method {}", method);
 
                 // queue trampoline compilation
                 // jit.queue_trampoline(method, fn_ptr);
@@ -368,8 +364,7 @@ impl ClassLoader {
     ) -> VmResult<VmRef<Class>> {
         debug_assert!(matches!(element_type.class_type(), ClassType::Normal));
 
-        // TODO mstr display impl
-        let array_cls_name = format!("[L{};", element_type.name().to_utf8());
+        let array_cls_name = format!("[L{};", element_type.name());
         self.load_class(&array_cls_name.to_mstr(), loader)
     }
 

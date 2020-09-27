@@ -164,11 +164,7 @@ impl Interpreter {
         let mut state = self.state_mut();
 
         if let Some(native) = state.frames.top_native_mut() {
-            trace!(
-                "invoking native method {:?}.{:?}",
-                native.class.name(),
-                native.method.name()
-            );
+            trace!("invoking native method {}", native.method,);
 
             // dismantle frame
             let func = native.function;
