@@ -9,9 +9,10 @@ use crate::constant_pool::Entry;
 use crate::interpreter::error::InterpreterError;
 
 use log::*;
+use num_enum::TryFromPrimitive;
 
 use crate::class::{null, Class, ClassType, FieldSearchType, Object};
-use crate::types::{DataType, DataValue, PrimitiveDataType};
+use crate::types::{DataType, DataValue, NewarrayType, PrimitiveDataType};
 
 use crate::classloader::WhichLoader;
 use crate::error::{Throwable, Throwables};
@@ -502,6 +503,11 @@ impl Anewarray {
 
         // pop length
         let length = frame.pop_int()?;
+        if length < 0 {
+            return Ok(PostExecuteAction::ThrowException(Throwables::Other(
+                "java/lang/NegativeArraySizeException",
+            )));
+        }
 
         // resolve array class
         let array_cls =
@@ -629,7 +635,19 @@ impl Bipush {
 
 impl Caload {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Caload")
+        let frame = interp.current_frame_mut();
+
+        // pop reference type array and idx
+        let (array, idx) = frame.pop_arrayref_and_idx(|cls| {
+            matches!(
+                cls.class_type(),
+                ClassType::Primitive(PrimitiveDataType::Char)
+            )
+        })?;
+
+        let value = array.array_get_unchecked(idx);
+        frame.operand_stack.push(value);
+        Ok(PostExecuteAction::Continue)
     }
 }
 
@@ -641,7 +659,38 @@ impl Castore {
 
 impl Checkcast {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Checkcast")
+        let frame = interp.current_frame_mut();
+
+        let obj = frame.peek_value()?;
+        match obj.into_reference() {
+            Ok(obj) => {
+                if let Some(cls_to_check) = obj.class() {
+                    let class_ref = frame
+                        .class
+                        .constant_pool()
+                        .class_entry(self.0)
+                        .ok_or_else(|| InterpreterError::NotClassRef(self.0))?;
+
+                    let cls = thread::get().global().class_loader().load_class_caused_by(
+                        &class_ref.name,
+                        frame.class.loader().clone(),
+                        frame.class.name(),
+                    )?;
+
+                    if cls_to_check.is_instance_of(&cls) {
+                        Ok(PostExecuteAction::Continue)
+                    } else {
+                        Ok(PostExecuteAction::ThrowException(Throwables::Other(
+                            "java/lang/ClassCastException",
+                        )))
+                    }
+                } else {
+                    // nop if null
+                    Ok(PostExecuteAction::Continue)
+                }
+            }
+            Err(ty) => Err(InterpreterError::InvalidOperandForObjectOp(ty)),
+        }
     }
 }
 
@@ -1187,7 +1236,17 @@ impl I2B {
 
 impl I2C {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction I2C")
+        let frame = interp.current_frame_mut();
+
+        // pop int
+        let int = frame.pop_int()?;
+
+        // truncate to char
+        let char = int as u16;
+
+        // extend back to int
+        frame.operand_stack.push(DataValue::Int(char as i32));
+        Ok(PostExecuteAction::Continue)
     }
 }
 
@@ -1227,7 +1286,7 @@ impl I2S {
 
 impl Iadd {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        int_two_op(interp, "+", |a, b| a + b)
+        int_two_op(interp, "+", |a, b| a.wrapping_add(b))
     }
 }
 
@@ -1275,7 +1334,9 @@ impl Iconst5 {
 
 impl IconstM1 {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction IconstM1")
+        let val = DataValue::Int(-1);
+        interp.current_frame_mut().operand_stack.push(val);
+        Ok(PostExecuteAction::Continue)
     }
 }
 
@@ -1533,7 +1594,23 @@ impl Ifnull {
 
 impl Iinc {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Iinc")
+        let frame = interp.current_frame_mut();
+
+        let Iinc(idx, constant) = self;
+
+        let val = frame.local_vars.load(*idx as usize).and_then(|val| {
+            val.as_int()
+                .ok_or_else(|| InterpreterError::InvalidOperandForIntOp(val.data_type()))
+        })?;
+
+        let new_val = val + (*constant as i8) as i32;
+        trace!("iinc {} to {}", val, new_val);
+
+        frame
+            .local_vars
+            .store(*idx as usize, DataValue::Int(new_val))?;
+
+        Ok(PostExecuteAction::Continue)
     }
 }
 
@@ -1561,7 +1638,7 @@ impl Iload3 {
 
 impl Imul {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Imul")
+        int_two_op(interp, "*", |a, b| a.wrapping_mul(b))
     }
 }
 
@@ -1573,7 +1650,41 @@ impl Ineg {
 
 impl Instanceof {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Instanceof")
+        let frame = interp.current_frame_mut();
+
+        let obj = frame.pop_value()?;
+        let result = match obj.into_reference().map(|obj| obj.class()) {
+            Ok(None) => {
+                // null
+                0
+            }
+            Ok(Some(cls_to_check)) => {
+                let class_ref = frame
+                    .class
+                    .constant_pool()
+                    .class_entry(self.0)
+                    .ok_or_else(|| InterpreterError::NotClassRef(self.0))?;
+
+                let cls = thread::get().global().class_loader().load_class_caused_by(
+                    &class_ref.name,
+                    frame.class.loader().clone(),
+                    frame.class.name(),
+                )?;
+
+                let result = cls_to_check.is_instance_of(&cls);
+                trace!(
+                    "{} instanceof {} => {}",
+                    cls_to_check.name(),
+                    cls.name(),
+                    result
+                );
+                result as i32
+            }
+            Err(ty) => return Err(InterpreterError::InvalidOperandForObjectOp(ty)),
+        };
+
+        frame.operand_stack.push(DataValue::Int(result));
+        Ok(PostExecuteAction::Continue)
     }
 }
 
@@ -1910,7 +2021,7 @@ impl Istore3 {
 
 impl Isub {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Isub")
+        int_two_op(interp, "-", |a, b| a.wrapping_sub(b))
     }
 }
 
@@ -2250,7 +2361,36 @@ impl New {
 
 impl Newarray {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Newarray")
+        let frame = interp.current_frame_mut();
+
+        // parse array type
+        let elem_ty = NewarrayType::try_from_primitive(self.0)
+            .map_err(|_| InterpreterError::InvalidArrayType(self.0))?;
+
+        // get length
+        let length = frame.pop_int()?;
+        if length < 0 {
+            return Ok(PostExecuteAction::ThrowException(Throwables::Other(
+                "java/lang/NegativeArraySizeException",
+            )));
+        }
+
+        // resolve array class
+        let array_cls = thread::get()
+            .global()
+            .class_loader()
+            .get_primitive_array(elem_ty.into());
+
+        // allocate array
+        let array_instance =
+            vmref_alloc_object(|| Ok(Object::new_array(array_cls, length as usize)))?;
+
+        // push to stack
+        frame
+            .operand_stack
+            .push(DataValue::Reference(array_instance));
+
+        Ok(PostExecuteAction::Continue)
     }
 }
 
@@ -2335,6 +2475,12 @@ impl Putfield {
         // TODO if final can only be in constructor
 
         // set field
+        trace!(
+            "putfield {:?}.{} = {:?}",
+            object,
+            field.name.as_mstr(),
+            value
+        );
         fields.ensure_set(field_id, value);
 
         Ok(PostExecuteAction::Continue)

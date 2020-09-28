@@ -6,7 +6,7 @@ use cafebabe::{
 use lazy_static::lazy_static;
 use log::*;
 
-use crate::alloc::{vmref_alloc_object, vmref_ptr, InternedString, NativeString, VmRef};
+use crate::alloc::{vmref_alloc_object, vmref_eq, vmref_ptr, InternedString, NativeString, VmRef};
 use crate::classloader::{current_thread, ClassLoader, WhichLoader};
 use crate::error::{Throwable, Throwables, VmResult};
 use crate::types::{DataType, DataValue, MethodSignature, PrimitiveDataType, ReturnType};
@@ -92,6 +92,10 @@ pub struct Object {
     storage: ObjectStorage,
     // TODO mutex only needed in edge case, try with atomic op first
     hashcode: Mutex<Option<NonZeroI32>>,
+}
+
+pub struct ObjectFieldPrinter<'a> {
+    obj: &'a Object,
 }
 
 lazy_static! {
@@ -783,6 +787,66 @@ impl Class {
         })
     }
 
+    pub fn is_instance_of(self: &VmRef<Class>, other: &VmRef<Class>) -> bool {
+        match self.class_type() {
+            ClassType::Normal => {
+                debug_assert!(!self.is_interface());
+                if other.is_interface() {
+                    self.implements(other)
+                } else {
+                    self.extends(other)
+                }
+            }
+            ClassType::Array(_) => {
+                /*If S is an array type SC[], that is, an array of components of type SC, then:
+                    If T is a class type, then T must be Object.
+                    If T is an interface type, then T must be one of the interfaces implemented by arrays (JLS §4.10.3).
+                    If T is an array type TC[], that is, an array of components of type TC, then one of the following must be true:
+                        TC and SC are the same primitive type.
+                        TC and SC are reference types, and type SC can be cast to TC by these run-time rules.
+                */
+                todo!("instanceof for arrays") // TODO
+            }
+
+            ClassType::Primitive(_) => unreachable!(),
+        }
+    }
+
+    fn implements(self: &VmRef<Class>, iface: &VmRef<Class>) -> bool {
+        vmref_eq(self, iface)
+            || self
+                .interfaces
+                .iter()
+                .any(|implemented_iface| vmref_eq(implemented_iface, iface))
+    }
+
+    pub fn extends(self: &VmRef<Class>, cls: &VmRef<Class>) -> bool {
+        let mut current = Some(self);
+        while let Some(this_cls) = current {
+            if vmref_eq(this_cls, cls) {
+                return true;
+            }
+
+            current = this_cls.super_class();
+        }
+
+        false
+    }
+
+    /// Gross
+    pub fn extends_by_name(self: &VmRef<Class>, cls: &mstr) -> bool {
+        let mut current = Some(self);
+        while let Some(this_cls) = current {
+            if this_cls.name() == cls {
+                return true;
+            }
+
+            current = this_cls.super_class();
+        }
+
+        false
+    }
+
     pub fn name(&self) -> &mstr {
         &self.name
     }
@@ -1171,6 +1235,12 @@ impl ClassType {
     pub fn is_array(&self) -> bool {
         matches!(self, Self::Array(_))
     }
+    pub fn array_class(&self) -> Option<&VmRef<Class>> {
+        match self {
+            Self::Array(cls) => Some(cls),
+            _ => None,
+        }
+    }
 }
 
 impl Object {
@@ -1312,7 +1382,9 @@ impl Object {
     }
 
     pub fn array_get_unchecked(&self, idx: usize) -> DataValue {
-        self.array_unchecked().get(idx).unwrap().clone()
+        let val = self.array_unchecked().get(idx).unwrap().clone();
+        trace!("get array element {:?}[{}] = {:?}", self, idx, val);
+        val
     }
 
     pub fn array_set_unchecked(&self, idx: usize, val: DataValue) {
@@ -1375,8 +1447,57 @@ impl Object {
             }
         }
     }
+
+    pub fn print_fields(&self) -> ObjectFieldPrinter {
+        ObjectFieldPrinter { obj: self }
+    }
 }
 
+impl Debug for ObjectFieldPrinter<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let cls = match self.obj.class() {
+            None => return write!(f, "(null)"),
+            Some(cls) => cls,
+        };
+
+        write!(f, "Fields for {:?}: ", self.obj)?;
+
+        let field_storage = match self.obj.fields() {
+            None => return write!(f, "None"),
+            Some(fields) => fields,
+        };
+
+        let layout = &cls.instance_fields_layout;
+
+        let mut cls_idx = 0;
+        let mut result = Ok(());
+        cls.field_resolution_order(|fields| {
+            for (i, field) in fields.iter().filter(|f| !f.flags.is_static()).enumerate() {
+                // TODO statics too
+
+                let field_id = layout.get_id(cls_idx, i).unwrap();
+                let val = field_storage.ensure_get(field_id);
+
+                result = write!(
+                    f,
+                    "\n * {} ({:?} {:?}) => {:?}",
+                    field.name.as_mstr(),
+                    field.desc,
+                    field.flags,
+                    val
+                );
+                if result.is_err() {
+                    return SuperIteration::Stop;
+                }
+            }
+
+            cls_idx += 1;
+            SuperIteration::KeepGoing
+        });
+
+        result
+    }
+}
 impl Debug for Object {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if self.is_null() {
@@ -1393,17 +1514,19 @@ impl Debug for Object {
                     &DataType::Reference(Cow::Borrowed("[C".as_mstr())),
                     FieldSearchType::Instance,
                 ) {
-                    let chars = chars.array_unchecked();
-                    let chars = chars
-                        .iter()
-                        .map(|val| match val {
-                            DataValue::Char(c) => *c,
-                            _ => unreachable!(),
-                        })
-                        .collect_vec();
+                    if !chars.is_null() {
+                        let chars = chars.array_unchecked();
+                        let chars = chars
+                            .iter()
+                            .map(|val| match val {
+                                DataValue::Char(c) => *c,
+                                _ => unreachable!(),
+                            })
+                            .collect_vec();
 
-                    let tmp_str = String::from_utf16(&chars).expect("bad utf16");
-                    write!(f, " ({:?})", tmp_str)?;
+                        let tmp_str = String::from_utf16(&chars).expect("bad utf16");
+                        write!(f, " ({:?})", tmp_str)?;
+                    }
                 } else {
                     unreachable!("bad string class")
                 }

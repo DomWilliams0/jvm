@@ -243,7 +243,7 @@ impl Frame {
                         ));
                     }
 
-                    trace!("`this` is {:?}", this);
+                    trace!("`this`: {:?}", thisref.print_fields());
                     local_vars.store(0, this)?;
                     1
                 } else {
@@ -491,6 +491,11 @@ impl JavaFrame {
 
         // bounds check
         if idx < 0 || (idx as usize) >= obj.array_unchecked().len() {
+            trace!(
+                "array index {:?} out of bounds (len={:?})",
+                idx,
+                obj.array_unchecked().len()
+            );
             Err(InterpreterError::ExceptionRaised(Throwables::Other(
                 "java/lang/ArrayIndexOutOfBoundsException",
             )))

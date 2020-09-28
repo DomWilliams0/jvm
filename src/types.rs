@@ -4,6 +4,7 @@ use crate::alloc::{vmref_eq, VmRef};
 use crate::class::Object;
 use cafebabe::mutf8::mstr;
 
+use num_enum::TryFromPrimitive;
 use std::borrow::Cow;
 use std::convert::TryInto;
 
@@ -72,6 +73,19 @@ pub struct MethodSignatureIter<'a, 'b> {
     sig: &'b mut MethodSignature<'a>,
     state: SignatureState,
     cursor: usize,
+}
+
+#[derive(TryFromPrimitive)]
+#[repr(u8)]
+pub enum NewarrayType {
+    Boolean = 4,
+    Char = 5,
+    Float = 6,
+    Double = 7,
+    Byte = 8,
+    Short = 9,
+    Int = 10,
+    Long = 11,
 }
 
 impl<'a> DataType<'a> {
@@ -270,7 +284,22 @@ impl DataValue {
                 .or_else(|| self.narrow_primitive_to(*field_prim)),
 
             // reference types
-            // (DataType::Reference(ReferenceDataType::Class(o)))
+            (DataType::Reference(cls_tgt), DataType::Reference(_)) => {
+                let self_obj = self.as_reference().unwrap(); // just checked
+
+                // allow cast to superclass
+                if let Some(self_cls) = self_obj.class() {
+                    // TODO worth resolving class ptr for cheap ptr checks rather than strings?
+                    if self_cls.extends_by_name(&cls_tgt) {
+                        return Some(Cow::Borrowed(self));
+                    } else {
+                        None
+                    }
+                } else {
+                    // this is null, just return null back again?
+                    return Some(Cow::Borrowed(self));
+                }
+            }
             _ => return None,
         };
 
@@ -644,13 +673,27 @@ impl<'a, 'b> MethodSignatureIter<'a, 'b> {
     }
 }
 
+impl From<NewarrayType> for PrimitiveDataType {
+    fn from(ty: NewarrayType) -> Self {
+        match ty {
+            NewarrayType::Boolean => PrimitiveDataType::Boolean,
+            NewarrayType::Char => PrimitiveDataType::Char,
+            NewarrayType::Float => PrimitiveDataType::Float,
+            NewarrayType::Double => PrimitiveDataType::Double,
+            NewarrayType::Byte => PrimitiveDataType::Byte,
+            NewarrayType::Short => PrimitiveDataType::Short,
+            NewarrayType::Int => PrimitiveDataType::Int,
+            NewarrayType::Long => PrimitiveDataType::Long,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::types::{
         ArrayType, DataType, DataValue, MethodSignature, PrimitiveDataType, ReturnType,
     };
     use cafebabe::mutf8::StrExt;
-    use std::borrow::Cow;
 
     fn check(input: &'static str, expected: Option<DataType>) {
         assert_eq!(DataType::from_descriptor(input.as_mstr()), expected)

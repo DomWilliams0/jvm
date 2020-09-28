@@ -332,10 +332,25 @@ impl ClassLoader {
             ),
             Preload::with_natives(
                 "java/lang/VMSystem",
+                &[
+                    (
+                        "identityHashCode",
+                        "(Ljava/lang/Object;)I",
+                        java_lang_vmsystem::vm_identity_hashcode,
+                    ),
+                    (
+                        "arraycopy",
+                        "(Ljava/lang/Object;ILjava/lang/Object;II)V",
+                        java_lang_vmsystem::vm_array_copy,
+                    ),
+                ],
+            ),
+            Preload::with_natives(
+                "java/lang/VMThrowable",
                 &[(
-                    "identityHashCode",
-                    "(Ljava/lang/Object;)I",
-                    java_lang_vmsystem::vm_identity_hashcode,
+                    "fillInStackTrace",
+                    "(Ljava/lang/Throwable;)Ljava/lang/VMThrowable;",
+                    java_lang_vmthrowable::vm_fill_in_stack_trace,
                 )],
             ),
             Preload::new("java/lang/System"),

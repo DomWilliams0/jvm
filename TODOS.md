@@ -1,4 +1,4 @@
-# TODOs (131)
+# TODOs (136)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -24,7 +24,7 @@
    * `// TODO actually intern strings`
    * `// TODO methods on VmRef newtype`
    * `// TODO oom error`
- * [src/class.rs](src/class.rs) (27)
+ * [src/class.rs](src/class.rs) (28)
    * `// TODO store dimensions`
    * `/// TODO weak reference for cyclic?`
    * `// TODO arrays should live on the GC java heap`
@@ -44,6 +44,7 @@
    * `// TODO set obj->vmdata field to vm_class`
    * `// TODO ensure there is only 1`
    * `// TODO also this check, wtf does it mean:`
+   * `todo!("instanceof for arrays") // TODO`
    * `// TODO initialise final static fields from ConstantValue attrs`
    * `// TODO wrap exception here and return the proper type`
    * `// TODO proper exception type here`
@@ -136,8 +137,12 @@
    * `// TODO standard jvm args`
  * [src/natives/gnu_classpath_vmsystemproperties.rs](src/natives/gnu_classpath_vmsystemproperties.rs) (1)
    * `// TODO actually do preInit`
- * [src/natives/java_lang_vmsystem.rs](src/natives/java_lang_vmsystem.rs) (1)
+ * [src/natives/java_lang_vmsystem.rs](src/natives/java_lang_vmsystem.rs) (3)
    * `// TODO dont unwrap`
+   * `// TODO check elements really are assignable`
+   * `// TODO remove bounds check here, we just checked it explicitly`
+ * [src/natives/java_lang_vmthrowable.rs](src/natives/java_lang_vmthrowable.rs) (1)
+   * `// TODO implement fillInStackTrace`
  * [src/properties.rs](src/properties.rs) (2)
    * `// TODO remaining static ones`
    * `// TODO dynamic ones e.g. user.home`
@@ -149,8 +154,9 @@
    * `// TODO test this once structure is settled`
  * [src/thread.rs](src/thread.rs) (1)
    * `exception: RefCell<Option<VmRef<Throwable /* TODO vmobject */>>>,`
- * [src/types.rs](src/types.rs) (4)
+ * [src/types.rs](src/types.rs) (5)
    * `// TODO more efficient packing of data values`
+   * `// TODO worth resolving class ptr for cheap ptr checks rather than strings?`
    * `// TODO does boolean conversions count as widening`
    * `// TODO is int->bool technically narrowing and should it be included here?`
    * `// TODO actually check values of converted primitives`

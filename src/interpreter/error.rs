@@ -90,6 +90,9 @@ pub enum InterpreterError {
     #[error("Unexpected array type")]
     UnexpectedArrayType,
 
+    #[error("Invalid array element type {0}")]
+    InvalidArrayType(u8),
+
     #[error("Expected return type of {expected:?} but got {actual:?}")]
     InvalidReturnValue {
         expected: ReturnType<'static>,
