@@ -13,14 +13,15 @@ pub(crate) struct InsnReader<'a> {
 pub struct InstructionBlob([u8; Self::MAX_INSN_SIZE]);
 
 impl InstructionBlob {
-    const MAX_INSN_SIZE: usize = 2;
+    const MAX_INSN_SIZE: usize = 4;
 
     fn fill<I>(&mut self, insn: &I) {
         let insn_size = std::mem::size_of::<I>();
         debug_assert!(
             insn_size <= Self::MAX_INSN_SIZE,
-            "raise max instruction size to {}",
-            insn_size
+            "raise max instruction size to {} for {}",
+            insn_size,
+            std::any::type_name::<I>()
         );
 
         let src = insn as *const I as *const u8;
@@ -35,8 +36,9 @@ impl InstructionBlob {
         let insn_size = std::mem::size_of::<I>();
         debug_assert!(
             insn_size <= Self::MAX_INSN_SIZE,
-            "raise max instruction size to {}",
-            insn_size
+            "raise max instruction size to {} for {}",
+            insn_size,
+            std::any::type_name::<I>()
         );
 
         &*(self.0.as_ref() as *const [u8] as *const I)

@@ -229,6 +229,7 @@ impl ClassLoader {
         loader: WhichLoader,
         cause: &mstr,
     ) -> VmResult<VmRef<Class>> {
+        // TODO get thread interpreter and current class automatically
         self.do_load_class(class_name, loader, Some(cause))
     }
 
@@ -351,6 +352,14 @@ impl ClassLoader {
                     "fillInStackTrace",
                     "(Ljava/lang/Throwable;)Ljava/lang/VMThrowable;",
                     java_lang_vmthrowable::vm_fill_in_stack_trace,
+                )],
+            ),
+            Preload::with_natives(
+                "java/lang/VMObject",
+                &[(
+                    "clone",
+                    "(Ljava/lang/Cloneable;)Ljava/lang/Object;",
+                    java_lang_vmobject::vm_clone,
                 )],
             ),
             Preload::new("java/lang/System"),

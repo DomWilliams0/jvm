@@ -155,6 +155,13 @@ impl RuntimeConstantPool {
         })
     }
 
+    pub fn interface_entry(&self, idx: u16) -> Option<&MethodRef> {
+        self.entry(idx).and_then(|e| match e {
+            Entry::InterfaceMethodRef(m) => Some(m),
+            _ => None,
+        })
+    }
+
     pub fn field_entry(&self, idx: u16) -> Option<&FieldRef> {
         self.entry(idx).and_then(|e| match e {
             Entry::FieldRef(f) => Some(f),

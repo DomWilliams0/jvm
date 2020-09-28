@@ -1,6 +1,5 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::iter::FromIterator;
 
 use crate::classpath::ClassPath;
 
@@ -12,18 +11,28 @@ pub struct SystemProperty(Cow<'static, str>);
 
 impl Default for SystemProperties {
     fn default() -> Self {
-        let defaults = [
-            ("java.vm.name", "UntitledJvm"),
-            ("java.vm.vendor", "Dom Williams"),
-            // TODO remaining static ones
-            // TODO dynamic ones e.g. user.home
-        ];
+        let tmpdir = std::env::temp_dir()
+            .to_str()
+            .expect("bad unicode in temp dir")
+            .to_owned();
 
-        SystemProperties(HashMap::from_iter(
-            defaults
-                .iter()
-                .map(|(key, val)| (*key, SystemProperty::from(*val))),
-        ))
+        // TODO make this nicer
+        let mut map = HashMap::with_capacity(64);
+
+        macro_rules! prop {
+            ($key:expr, $val:expr) => {
+                map.insert($key, SystemProperty::from($val));
+            };
+        }
+
+        prop!("java.vm.name", "UntitledJvm");
+        prop!("java.vm.vendor", "Dom Williams");
+        prop!("java.io.tmpdir", tmpdir);
+
+        // TODO remaining static ones
+        // TODO dynamic ones e.g. user.home
+
+        SystemProperties(map)
     }
 }
 

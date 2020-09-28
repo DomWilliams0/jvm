@@ -1,3 +1,4 @@
+pub mod java_lang_vmobject;
 pub mod java_lang_vmsystem;
 pub mod java_lang_vmthrowable;
 

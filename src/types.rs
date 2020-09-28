@@ -4,6 +4,7 @@ use crate::alloc::{vmref_eq, VmRef};
 use crate::class::Object;
 use cafebabe::mutf8::mstr;
 
+use crate::thread;
 use num_enum::TryFromPrimitive;
 use std::borrow::Cow;
 use std::convert::TryInto;
@@ -288,17 +289,24 @@ impl DataValue {
                 let self_obj = self.as_reference().unwrap(); // just checked
 
                 // allow cast to superclass
-                if let Some(self_cls) = self_obj.class() {
-                    // TODO worth resolving class ptr for cheap ptr checks rather than strings?
-                    if self_cls.extends_by_name(&cls_tgt) {
-                        return Some(Cow::Borrowed(self));
-                    } else {
-                        None
-                    }
+                return if let Some(self_cls) = self_obj.class() {
+                    // resolve dst class object
+                    thread::get()
+                        .global()
+                        .class_loader()
+                        .load_class(&cls_tgt, self_cls.loader().clone())
+                        .ok()
+                        .and_then(|cls_tgt| {
+                            if self_cls.is_instance_of(&cls_tgt) {
+                                Some(Cow::Borrowed(self))
+                            } else {
+                                None
+                            }
+                        })
                 } else {
                     // this is null, just return null back again?
-                    return Some(Cow::Borrowed(self));
-                }
+                    Some(Cow::Borrowed(self))
+                };
             }
             _ => return None,
         };

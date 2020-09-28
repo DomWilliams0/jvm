@@ -28,6 +28,9 @@ pub enum InterpreterError {
     #[error("Constant pool entry {0} is not present or a method ref")]
     NotMethodRef(u16),
 
+    #[error("Constant pool entry {0} is not present or an interface method ref")]
+    NotInterfaceRef(u16),
+
     #[error("Constant pool entry {0} is not present or a field ref")]
     NotFieldRef(u16),
 

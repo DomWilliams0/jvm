@@ -79,7 +79,7 @@ pub enum ClassState {
 
 struct LockedClassState(UnsafeCell<ClassState>);
 
-enum ObjectStorage {
+pub enum ObjectStorage {
     Fields(FieldStorage),
     // TODO arrays should live on the GC java heap
     // TODO arrays should be specialised and not hold massive DataValues
@@ -652,23 +652,27 @@ impl Class {
 
     /// Looks in self, super classes and super interfaces
     pub fn find_method_recursive_in_superclasses(
-        cls: &VmRef<Class>,
+        &self,
         name: &mstr,
         desc: &mstr,
         flags: MethodAccessFlags,
         antiflags: MethodAccessFlags,
     ) -> Option<VmRef<Method>> {
-        let mut current = Some(cls);
-        while let Some(cls) = current {
-            if let Some(method) = cls.find_method_in_this_only(name, desc, flags, antiflags) {
-                return Some(method);
-            }
+        // check self
+        debug!("check {:?} for {}", self.name(), name);
+        if let Some(method) = self.find_method_in_this_only(name, desc, flags, antiflags) {
+            return Some(method);
+        }
 
-            current = cls.super_class.as_ref();
+        // recurse on super
+        if let Some(method) = self.super_class().and_then(|super_cls| {
+            super_cls.find_method_recursive_in_superclasses(name, desc, flags, antiflags)
+        }) {
+            return Some(method);
         }
 
         // then superifaces if not yet found
-        cls.find_maximally_specific_method(name, desc, flags, antiflags)
+        self.find_maximally_specific_method(name, desc, flags, antiflags)
     }
     /// Looks in superinterfaces only
     pub fn find_maximally_specific_method(
@@ -1069,7 +1073,10 @@ impl Class {
 
         // super first
         if let Some(super_class) = self.super_class.clone() {
-            keep_going = Self::__with_supers_recurse(&super_class, f);
+            keep_going = f(&super_class);
+            if matches!(keep_going, SuperIteration::KeepGoing) {
+                keep_going = Self::__with_supers_recurse(&super_class, f);
+            }
         }
 
         // then recurse on direct superinterfaces
@@ -1269,7 +1276,7 @@ impl Object {
         }
     }
 
-    fn with_storage(class: VmRef<Class>, storage: ObjectStorage) -> Self {
+    pub fn with_storage(class: VmRef<Class>, storage: ObjectStorage) -> Self {
         Object {
             class,
             monitor: Monitor::new(),
@@ -1353,7 +1360,6 @@ impl Object {
 
         Ok(string_instance)
     }
-
     pub fn is_null(&self) -> bool {
         VmRef::ptr_eq(&self.class, &NULL.class)
     }
@@ -1442,6 +1448,10 @@ impl Object {
         matches!(self.storage, ObjectStorage::Array(_))
     }
 
+    pub fn storage(&self) -> &ObjectStorage {
+        &self.storage
+    }
+
     /// Calculates and stores on first call
     pub fn identity_hashcode(self: &VmRef<Self>) -> i32 {
         let mut guard = self.hashcode.lock();
@@ -1515,7 +1525,8 @@ impl Debug for Object {
             write!(f, "null")
         } else {
             // TODO not quite correct toString
-            let ptr = vmref_ptr(&self.class);
+            // let ptr = vmref_ptr(&self.class);
+            let ptr = self as *const _ as u64;
             write!(f, "{}@{:#x}", self.class.name.to_utf8(), ptr)?;
 
             // even less correct but helpful for debugging
@@ -1548,6 +1559,15 @@ impl Debug for Object {
     }
 }
 
+impl Clone for ObjectStorage {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Fields(fields) => Self::Fields(fields.clone()),
+            Self::Array(array) => Self::Array(Mutex::new(array.lock().clone())),
+        }
+    }
+}
+
 impl Method {
     pub fn code(&self) -> &MethodCode {
         &self.code
@@ -1575,6 +1595,10 @@ impl Method {
 
     pub fn is_instance_initializer(&self) -> bool {
         self.name().as_bytes() == b"<init>"
+    }
+
+    pub fn is_class_initializer(&self) -> bool {
+        self.name().as_bytes() == b"<clinit>"
     }
 
     pub fn class(&self) -> &VmRef<Class> {

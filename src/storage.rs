@@ -118,6 +118,13 @@ impl FieldStorage {
     }
 }
 
+impl Clone for FieldStorage {
+    fn clone(&self) -> Self {
+        let data_clone = self.0.read().clone();
+        FieldStorage(RwLock::new(data_clone))
+    }
+}
+
 // TODO test this once structure is settled
 /*#[cfg(test)]
 mod tests {

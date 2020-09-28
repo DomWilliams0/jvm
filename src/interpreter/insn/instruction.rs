@@ -607,6 +607,10 @@ impl Astore3 {
 
 impl Athrow {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
+        let frame = interp.current_frame_mut();
+        let exc = frame.pop_reference()?;
+        debug!("throw {:?}", exc.print_fields());
+
         todo!("instruction Athrow")
     }
 }
@@ -677,6 +681,7 @@ impl Checkcast {
                         frame.class.name(),
                     )?;
 
+                    trace!("checkcast {:?} is {:?}", cls_to_check.name(), cls.name());
                     if cls_to_check.is_instance_of(&cls) {
                         Ok(PostExecuteAction::Continue)
                     } else {
@@ -1694,9 +1699,86 @@ impl Invokedynamic {
     }
 }
 
+// TODO invokeinterface throws a lot more exceptions
+// TODO NoSuchMethod error
+
 impl Invokeinterface {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Invokeinterface")
+        let frame = interp.current_frame_mut();
+        let thread = thread::get();
+        let class_loader = thread.global().class_loader();
+
+        let entry = frame
+            .class
+            .constant_pool()
+            .interface_entry(self.0)
+            .ok_or_else(|| InterpreterError::NotInterfaceRef(self.0))?;
+
+        // resolve class and method
+        let class = class_loader.load_class_caused_by(
+            &entry.class,
+            frame.class.loader().clone(),
+            frame.class.name(),
+        )?;
+
+        let resolved_method = class
+            .find_method_in_this_only(
+                &entry.name,
+                &entry.desc,
+                MethodAccessFlags::empty(),
+                MethodAccessFlags::empty(), // resolved method can be abstract
+            )
+            .ok_or_else(|| InterpreterError::MethodNotFound {
+                class: entry.class.clone(),
+                name: entry.name.clone(),
+                desc: entry.desc.clone(),
+            })?;
+
+        // TODO ensure method is not static, IncompatibleClassChangeError
+        assert!(!resolved_method.flags().is_static());
+        // TODO verify this
+        assert!(
+            !resolved_method.is_instance_initializer() && !resolved_method.is_class_initializer()
+        );
+
+        // now select method (5.4.6)
+        let selected_method = {
+            if resolved_method.flags().contains(MethodAccessFlags::PRIVATE) {
+                // chosen if private
+                resolved_method
+            } else {
+                // get `this` object
+                let this_obj = frame
+                    .operand_stack
+                    .peek_at(resolved_method.args().len())
+                    .and_then(|val| val.as_reference())
+                    .expect("invalid arg len?");
+
+                if let Some(this_cls) = this_obj.class() {
+                    let fml = resolved_method.name().to_utf8();
+                    Class::find_overriding_method(this_cls, &resolved_method)
+                        .unwrap_or(resolved_method)
+                } else {
+                    // if obj is null this will be caught when creating the frame
+                    resolved_method
+                }
+            }
+        };
+
+        // TODO ensure not abstract
+        assert!(!selected_method
+            .flags()
+            .contains(MethodAccessFlags::ABSTRACT));
+
+        trace!("invokeinterface {}", selected_method);
+
+        // pop args and call method
+        let arg_count = selected_method.args().len() + 1; // +1 for this
+        debug_assert_eq!(arg_count, self.1 as usize, "wrong redundant count");
+        let callee_frame = Frame::new_with_caller(selected_method, frame, arg_count)?;
+        interp.push_frame(callee_frame);
+
+        Ok(PostExecuteAction::MethodCall)
     }
 }
 
@@ -1894,7 +1976,7 @@ impl Invokevirtual {
             &entry.name,
             &entry.desc,
             MethodAccessFlags::empty(),
-            MethodAccessFlags::ABSTRACT,
+            MethodAccessFlags::empty(), // resolved method can be abstract
         )
         .ok_or_else(|| InterpreterError::MethodNotFound {
             class: entry.class.clone(),

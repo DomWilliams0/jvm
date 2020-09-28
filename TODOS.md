@@ -1,4 +1,4 @@
-# TODOs (137)
+# TODOs (142)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -53,7 +53,7 @@
    * `// TODO limit array length to i32::MAX somewhere`
    * `// TODO statics too`
    * `// TODO not quite correct toString`
- * [src/classloader.rs](src/classloader.rs) (12)
+ * [src/classloader.rs](src/classloader.rs) (13)
    * `// TODO types for str to differentiate java/lang/Object, java.lang.Object and descrptors e.g. Ljava/lang/Object;`
    * `// TODO register class "package" with loader (https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-5.html#jvms-5.3)`
    * `// TODO actually instantiate exceptions`
@@ -62,6 +62,7 @@
    * `// TODO array classes are treated differently`
    * `// TODO wait for other thread to finish loading`
    * `// TODO record that this loader is an initiating loader`
+   * `// TODO get thread interpreter and current class automatically`
    * `let bytes = std::fs::read(path).expect("io error"); // TODO java.lang.IOError`
    * `// TODO define hardcoded preload classes in a better way`
    * `// TODO add array lookup with enum constants for common symbols like Object, or perfect hashing`
@@ -89,7 +90,7 @@
    * `// TODO long and double are wide`
    * `// TODO generic helper methods for popping up to 3 types from stack`
    * `// TODO move these to extension trait on operandstack`
- * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (30)
+ * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (35)
    * `// TODO operand stack pop then verify might be wrong - only pop if its the right type?`
    * `/// TODO might be possible to continue with resolved methods/fields state instead of replay`
    * `// TODO better handling of interpreter error`
@@ -99,6 +100,11 @@
    * `// TODO narrow float to int properly`
    * `// TODO is probably wrong`
    * `// TODO "converted to the float result using IEEE 754 round to nearest mode"`
+   * `// TODO invokeinterface throws a lot more exceptions`
+   * `// TODO NoSuchMethod error`
+   * `// TODO ensure method is not static, IncompatibleClassChangeError`
+   * `// TODO verify this`
+   * `// TODO ensure not abstract`
    * `// TODO return error here`
    * `// TODO ensure method is not static, IncompatibleClassChangeError`
    * `// TODO native method`
@@ -155,9 +161,8 @@
    * `// TODO test this once structure is settled`
  * [src/thread.rs](src/thread.rs) (1)
    * `exception: RefCell<Option<VmRef<Throwable /* TODO vmobject */>>>,`
- * [src/types.rs](src/types.rs) (5)
+ * [src/types.rs](src/types.rs) (4)
    * `// TODO more efficient packing of data values`
-   * `// TODO worth resolving class ptr for cheap ptr checks rather than strings?`
    * `// TODO does boolean conversions count as widening`
    * `// TODO is int->bool technically narrowing and should it be included here?`
    * `// TODO actually check values of converted primitives`
