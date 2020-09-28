@@ -1,4 +1,4 @@
-# TODOs (136)
+# TODOs (137)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -143,7 +143,8 @@
    * `// TODO remove bounds check here, we just checked it explicitly`
  * [src/natives/java_lang_vmthrowable.rs](src/natives/java_lang_vmthrowable.rs) (1)
    * `// TODO implement fillInStackTrace`
- * [src/properties.rs](src/properties.rs) (2)
+ * [src/properties.rs](src/properties.rs) (3)
+   * `// TODO make this nicer`
    * `// TODO remaining static ones`
    * `// TODO dynamic ones e.g. user.home`
  * [src/storage.rs](src/storage.rs) (5)

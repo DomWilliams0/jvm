@@ -791,10 +791,21 @@ impl Class {
         match self.class_type() {
             ClassType::Normal => {
                 debug_assert!(!self.is_interface());
-                if other.is_interface() {
-                    self.implements(other)
+
+                if vmref_eq(self, other) {
+                    // check self first
+                    true
                 } else {
-                    self.extends(other)
+                    let mut found = false;
+                    self.with_supers(|super_cls| {
+                        if vmref_eq(super_cls, other) {
+                            found = true;
+                            SuperIteration::Stop
+                        } else {
+                            SuperIteration::KeepGoing
+                        }
+                    });
+                    found
                 }
             }
             ClassType::Array(_) => {
@@ -812,27 +823,27 @@ impl Class {
         }
     }
 
-    fn implements(self: &VmRef<Class>, iface: &VmRef<Class>) -> bool {
-        vmref_eq(self, iface)
-            || self
-                .interfaces
-                .iter()
-                .any(|implemented_iface| vmref_eq(implemented_iface, iface))
-    }
-
-    pub fn extends(self: &VmRef<Class>, cls: &VmRef<Class>) -> bool {
-        let mut current = Some(self);
-        while let Some(this_cls) = current {
-            if vmref_eq(this_cls, cls) {
-                return true;
-            }
-
-            current = this_cls.super_class();
+    /*    fn implements(self: &VmRef<Class>, iface: &VmRef<Class>) -> bool {
+            vmref_eq(self, iface)
+                || self
+                    .interfaces
+                    .iter()
+                    .any(|implemented_iface| vmref_eq(implemented_iface, iface))
         }
 
-        false
-    }
+        pub fn extends(self: &VmRef<Class>, cls: &VmRef<Class>) -> bool {
+            let mut current = Some(self);
+            while let Some(this_cls) = current {
+                if vmref_eq(this_cls, cls) {
+                    return true;
+                }
 
+                current = this_cls.super_class();
+            }
+
+            false
+        }
+    */
     /// Gross
     pub fn extends_by_name(self: &VmRef<Class>, cls: &mstr) -> bool {
         let mut current = Some(self);
