@@ -1,4 +1,4 @@
-# TODOs (129)
+# TODOs (131)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -24,7 +24,7 @@
    * `// TODO actually intern strings`
    * `// TODO methods on VmRef newtype`
    * `// TODO oom error`
- * [src/class.rs](src/class.rs) (25)
+ * [src/class.rs](src/class.rs) (27)
    * `// TODO store dimensions`
    * `/// TODO weak reference for cyclic?`
    * `// TODO arrays should live on the GC java heap`
@@ -43,12 +43,14 @@
    * `// update ptr - TODO use Arc::get_unchecked_mut when it is stable`
    * `// TODO set obj->vmdata field to vm_class`
    * `// TODO ensure there is only 1`
+   * `// TODO also this check, wtf does it mean:`
    * `// TODO initialise final static fields from ConstantValue attrs`
    * `// TODO wrap exception here and return the proper type`
    * `// TODO proper exception type here`
    * `// TODO specific exception type e.g. ExceptionInInitializerError`
    * `// TODO just allocate an object instead of this unsafeness`
    * `// TODO limit array length to i32::MAX somewhere`
+   * `// TODO statics too`
    * `// TODO not quite correct toString`
  * [src/classloader.rs](src/classloader.rs) (12)
    * `// TODO types for str to differentiate java/lang/Object, java.lang.Object and descrptors e.g. Ljava/lang/Object;`

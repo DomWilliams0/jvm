@@ -1778,7 +1778,7 @@ impl Invokevirtual {
             frame.class.name(),
         )?;
 
-        let method = Class::find_method_recursive_in_superclasses(
+        let resolved_method = Class::find_method_recursive_in_superclasses(
             &class,
             &entry.name,
             &entry.desc,
@@ -1795,13 +1795,37 @@ impl Invokevirtual {
         debug_assert!(!class.needs_init());
 
         // TODO ensure method is not static, IncompatibleClassChangeError
-        assert!(!method.flags().is_static());
+        assert!(!resolved_method.flags().is_static());
 
-        trace!("invokevirtual {}", method,);
+        // now select method (5.4.6)
+        let selected_method = {
+            if resolved_method.flags().contains(MethodAccessFlags::PRIVATE) {
+                // chosen if private
+                resolved_method
+            } else {
+                // get `this` object
+                let this_obj = frame
+                    .operand_stack
+                    .peek_at(resolved_method.args().len())
+                    .and_then(|val| val.as_reference())
+                    .expect("invalid arg len?");
+
+                if let Some(this_cls) = this_obj.class() {
+                    let fml = resolved_method.name().to_utf8();
+                    Class::find_overriding_method(this_cls, &resolved_method)
+                        .unwrap_or(resolved_method)
+                } else {
+                    // if obj is null this will be caught when creating the frame
+                    resolved_method
+                }
+            }
+        };
+
+        trace!("invokevirtual {}", selected_method);
 
         // pop args and call method
-        let arg_count = method.args().len() + 1; // +1 for this
-        let callee_frame = Frame::new_with_caller(method, frame, arg_count)?;
+        let arg_count = selected_method.args().len() + 1; // +1 for this
+        let callee_frame = Frame::new_with_caller(selected_method, frame, arg_count)?;
         interp.push_frame(callee_frame);
 
         Ok(PostExecuteAction::MethodCall)

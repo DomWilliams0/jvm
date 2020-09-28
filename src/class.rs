@@ -691,6 +691,49 @@ impl Class {
         found
     }
 
+    pub fn find_overriding_method(self: VmRef<Class>, method: &Method) -> Option<VmRef<Method>> {
+        let can_override = |m: &Method| {
+            let flags = m.flags;
+            // TODO also this check, wtf does it mean:
+            // mA is marked neither ACC_PUBLIC nor ACC_PROTECTED nor ACC_PRIVATE, and either (a)
+            // the declaration of mA appears in the same run-time package as the declaration of mC,
+            // or (b) if mA is declared in a class A and mC is declared in a class C, then there
+            // exists a method mB declared in a class B such that C is a subclass of B and B is a
+            // subclass of A and mC can override mB and mB can override mA.
+            !flags.contains(MethodAccessFlags::PRIVATE)
+                && !flags.contains(MethodAccessFlags::ABSTRACT)
+                && flags.intersects(MethodAccessFlags::PUBLIC | MethodAccessFlags::PROTECTED)
+                && m.name() == method.name()
+                && m.descriptor() == method.descriptor()
+        };
+
+        // resolve in this class first
+        if let Some(found) = self.find_method_in_this_only(
+            method.name(),
+            method.descriptor(),
+            MethodAccessFlags::empty(),
+            MethodAccessFlags::ABSTRACT,
+        ) {
+            return Some(found);
+        }
+
+        // recurse to find overridable
+        let mut ret = None;
+
+        self.with_supers(|cls| {
+            for method in &cls.methods {
+                if can_override(&method) {
+                    ret = Some(method.to_owned());
+                    return SuperIteration::Stop;
+                }
+            }
+
+            SuperIteration::KeepGoing
+        });
+
+        ret
+    }
+
     fn find_field_index_with(
         fields: &[Field],
         name: &mstr,
@@ -1341,7 +1384,32 @@ impl Debug for Object {
         } else {
             // TODO not quite correct toString
             let ptr = vmref_ptr(&self.class);
-            write!(f, "{}@{:#x}", self.class.name.to_utf8(), ptr)
+            write!(f, "{}@{:#x}", self.class.name.to_utf8(), ptr)?;
+
+            // even less correct but helpful for debugging
+            if self.class.name().as_bytes() == b"java/lang/String" {
+                if let Some(DataValue::Reference(chars)) = self.find_field(
+                    "value".as_mstr(),
+                    &DataType::Reference(Cow::Borrowed("[C".as_mstr())),
+                    FieldSearchType::Instance,
+                ) {
+                    let chars = chars.array_unchecked();
+                    let chars = chars
+                        .iter()
+                        .map(|val| match val {
+                            DataValue::Char(c) => *c,
+                            _ => unreachable!(),
+                        })
+                        .collect_vec();
+
+                    let tmp_str = String::from_utf16(&chars).expect("bad utf16");
+                    write!(f, " ({:?})", tmp_str)?;
+                } else {
+                    unreachable!("bad string class")
+                }
+            }
+
+            Ok(())
         }
     }
 }

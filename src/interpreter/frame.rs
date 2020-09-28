@@ -143,6 +143,12 @@ impl OperandStack {
         self.0.last()
     }
 
+    /// idx is n from the last element e.g. 0 is the last
+    pub fn peek_at(&self, idx: usize) -> Option<&DataValue> {
+        let idx = self.0.len() - 1 - idx;
+        self.0.get(idx)
+    }
+
     /// idx is n from the end e.g. 1 is before the last element
     pub fn insert_at(&mut self, val: DataValue, idx: usize) {
         let idx = self.0.len() - idx;
