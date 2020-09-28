@@ -1,6 +1,6 @@
 use crate::class::null;
 
-use crate::alloc::VmRef;
+use crate::alloc::{vmref_eq, VmRef};
 use crate::class::Object;
 use cafebabe::mutf8::mstr;
 
@@ -141,6 +141,10 @@ impl<'a> DataType<'a> {
         matches!(self, DataType::Primitive(_))
     }
 
+    pub fn is_reference(&self) -> bool {
+        matches!(self, DataType::Reference(_))
+    }
+
     pub fn to_owned(&self) -> DataType<'static> {
         match self {
             DataType::Reference(r) => {
@@ -181,10 +185,11 @@ impl DataValue {
     }
 
     pub fn as_int(&self) -> Option<i32> {
-        match self {
-            DataValue::Int(i) => Some(*i),
-            _ => None,
-        }
+        self.assign_to(&DataType::Primitive(PrimitiveDataType::Int))
+            .map(|val| match *val {
+                DataValue::Int(i) => i,
+                _ => unreachable!(),
+            })
     }
 
     pub fn as_float(&self) -> Option<f32> {
@@ -260,12 +265,9 @@ impl DataValue {
 
         let result = match (field_type, my_type) {
             // primitives
-            (DataType::Primitive(field_prim), DataType::Primitive(_)) => {
-                self.widen_primitive_to(*field_prim).or_else(|| {
-                    // TODO narrowing
-                    None
-                })
-            }
+            (DataType::Primitive(field_prim), DataType::Primitive(_)) => self
+                .widen_primitive_to(*field_prim)
+                .or_else(|| self.narrow_primitive_to(*field_prim)),
 
             // reference types
             // (DataType::Reference(ReferenceDataType::Class(o)))
@@ -277,7 +279,6 @@ impl DataValue {
 
     pub fn widen_primitive_to(&self, target: PrimitiveDataType) -> Option<DataValue> {
         Some(match (target, self) {
-            // widening
             (PrimitiveDataType::Short, DataValue::Byte(val)) => DataValue::from(*val as i16),
 
             (PrimitiveDataType::Int, DataValue::Byte(val)) => DataValue::from(*val as i32),
@@ -302,8 +303,68 @@ impl DataValue {
             (PrimitiveDataType::Double, DataValue::Long(val)) => DataValue::from(*val as f64),
             (PrimitiveDataType::Double, DataValue::Float(val)) => DataValue::from(*val as f64),
 
+            // TODO does boolean conversions count as widening
+            (PrimitiveDataType::Int, DataValue::Boolean(val)) => DataValue::Int(*val as i32),
+
             _ => return None,
         })
+    }
+
+    pub fn narrow_primitive_to(&self, target: PrimitiveDataType) -> Option<DataValue> {
+        Some(match (target, self) {
+            (PrimitiveDataType::Byte, DataValue::Short(val)) => DataValue::from(*val as i8),
+            (PrimitiveDataType::Byte, DataValue::Char(val)) => DataValue::from(*val as i8),
+            (PrimitiveDataType::Byte, DataValue::Int(val)) => DataValue::from(*val as i8),
+            (PrimitiveDataType::Byte, DataValue::Long(val)) => DataValue::from(*val as i8),
+            (PrimitiveDataType::Byte, DataValue::Float(val)) => DataValue::from(*val as i8),
+            (PrimitiveDataType::Byte, DataValue::Double(val)) => DataValue::from(*val as i8),
+
+            (PrimitiveDataType::Char, DataValue::Short(val)) => DataValue::from(*val as u16),
+            (PrimitiveDataType::Char, DataValue::Int(val)) => DataValue::from(*val as u16),
+            (PrimitiveDataType::Char, DataValue::Long(val)) => DataValue::from(*val as u16),
+            (PrimitiveDataType::Char, DataValue::Float(val)) => DataValue::from(*val as u16),
+            (PrimitiveDataType::Char, DataValue::Double(val)) => DataValue::from(*val as u16),
+
+            (PrimitiveDataType::Short, DataValue::Char(val)) => DataValue::from(*val as i16),
+            (PrimitiveDataType::Short, DataValue::Int(val)) => DataValue::from(*val as i16),
+            (PrimitiveDataType::Short, DataValue::Long(val)) => DataValue::from(*val as i16),
+            (PrimitiveDataType::Short, DataValue::Float(val)) => DataValue::from(*val as i16),
+            (PrimitiveDataType::Short, DataValue::Double(val)) => DataValue::from(*val as i16),
+
+            (PrimitiveDataType::Int, DataValue::Long(val)) => DataValue::from(*val as i32),
+            (PrimitiveDataType::Int, DataValue::Float(val)) => DataValue::from(*val as i32),
+            (PrimitiveDataType::Int, DataValue::Double(val)) => DataValue::from(*val as i32),
+
+            (PrimitiveDataType::Long, DataValue::Float(val)) => DataValue::from(*val as i64),
+            (PrimitiveDataType::Long, DataValue::Double(val)) => DataValue::from(*val as i64),
+
+            (PrimitiveDataType::Float, DataValue::Double(val)) => DataValue::from(*val as f32),
+
+            // TODO is int->bool technically narrowing and should it be included here?
+            (PrimitiveDataType::Boolean, DataValue::Int(val)) => {
+                DataValue::Boolean((*val & 0x1) != 0)
+            }
+
+            _ => return None,
+        })
+    }
+}
+
+impl PartialEq for DataValue {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (DataValue::Boolean(a), DataValue::Boolean(b)) => a == b,
+            (DataValue::ReturnAddress(a), DataValue::ReturnAddress(b)) => a == b,
+            (DataValue::Byte(a), DataValue::Byte(b)) => a == b,
+            (DataValue::Short(a), DataValue::Short(b)) => a == b,
+            (DataValue::Int(a), DataValue::Int(b)) => a == b,
+            (DataValue::Long(a), DataValue::Long(b)) => a == b,
+            (DataValue::Char(a), DataValue::Char(b)) => a == b,
+            (DataValue::Float(a), DataValue::Float(b)) => a == b,
+            (DataValue::Double(a), DataValue::Double(b)) => a == b,
+            (DataValue::Reference(a), DataValue::Reference(b)) => vmref_eq(a, b),
+            _ => false,
+        }
     }
 }
 
@@ -409,22 +470,32 @@ impl<'a> ReturnType<'a> {
         }
     }
 
-    pub fn matches(&self, val: Option<&DataValue>) -> bool {
-        match (self, val) {
-            (ReturnType::Void, val) => val.is_none(),
-            (ReturnType::Returns(ret), Some(val)) => {
+    pub fn convert_value(
+        &self,
+        ret_val: Option<DataValue>,
+    ) -> Result<Option<DataValue>, Option<DataValue>> {
+        match (self, &ret_val) {
+            (ReturnType::Void, None) => Ok(None),
+            (ReturnType::Void, Some(_)) => Err(ret_val),
+            (ReturnType::Returns(ret_type), Some(val)) => {
                 // special case for null
                 if let Some(obj) = val.as_reference() {
                     if obj.is_null() {
-                        // null is anything?
-                        // TODO proper assignment compatibility check for reference types
-                        return !ret.is_primitive();
+                        return if ret_type.is_reference() {
+                            // null is any reference type
+                            Ok(ret_val)
+                        } else {
+                            Err(ret_val)
+                        };
                     }
                 }
 
-                val.data_type() == *ret
+                match val.assign_to(ret_type) {
+                    Some(val) => Ok(Some(val.into_owned())),
+                    None => Err(ret_val),
+                }
             }
-            _ => false,
+            _ => Err(ret_val),
         }
     }
 }
@@ -579,6 +650,7 @@ mod tests {
         ArrayType, DataType, DataValue, MethodSignature, PrimitiveDataType, ReturnType,
     };
     use cafebabe::mutf8::StrExt;
+    use std::borrow::Cow;
 
     fn check(input: &'static str, expected: Option<DataType>) {
         assert_eq!(DataType::from_descriptor(input.as_mstr()), expected)
@@ -715,7 +787,26 @@ mod tests {
             Some(int.data_type())
         );
 
-        // but not narrowing
-        assert!(short.assign_to(&byte.data_type()).is_none());
+        // narrow primitive
+        // TODO actually check values of converted primitives
+        assert!(short.assign_to(&byte.data_type()).is_some());
+        assert!(int.assign_to(&short.data_type()).is_some());
+        assert!(long.assign_to(&int.data_type()).is_some());
+
+        // int to bool
+        assert_eq!(
+            DataValue::Int(1)
+                .assign_to(&boolean.data_type())
+                .unwrap()
+                .into_owned(),
+            DataValue::Boolean(true)
+        );
+        assert_eq!(
+            DataValue::Int(0)
+                .assign_to(&boolean.data_type())
+                .unwrap()
+                .into_owned(),
+            DataValue::Boolean(false)
+        );
     }
 }

@@ -1,4 +1,4 @@
-# TODOs (128)
+# TODOs (129)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -147,7 +147,8 @@
    * `// TODO test this once structure is settled`
  * [src/thread.rs](src/thread.rs) (1)
    * `exception: RefCell<Option<VmRef<Throwable /* TODO vmobject */>>>,`
- * [src/types.rs](src/types.rs) (3)
+ * [src/types.rs](src/types.rs) (4)
    * `// TODO more efficient packing of data values`
-   * `// TODO narrowing`
-   * `// TODO proper assignment compatibility check for reference types`
+   * `// TODO does boolean conversions count as widening`
+   * `// TODO is int->bool technically narrowing and should it be included here?`
+   * `// TODO actually check values of converted primitives`

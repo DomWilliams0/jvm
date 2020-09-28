@@ -69,18 +69,32 @@ impl InterpreterState {
 
     pub fn return_value_to_caller(
         &mut self,
-        val: Option<DataValue>,
+        ret_val: Option<DataValue>,
     ) -> Result<(), InterpreterError> {
         // check return type matches sig
         // TODO catch this at verification time
 
-        let method_ret = self.current_method().unwrap().return_type();
-        if !method_ret.matches(val.as_ref()) {
-            return Err(InterpreterError::InvalidReturnValue {
-                expected: method_ret.to_owned(),
-                actual: val,
-            });
-        }
+        let ret_val = {
+            let method_ret = self.current_method().unwrap().return_type();
+
+            let ret_val_orig = ret_val.clone(); // for logging only
+            let new_val = method_ret.convert_value(ret_val).map_err(|val| {
+                InterpreterError::InvalidReturnValue {
+                    expected: method_ret.to_owned(),
+                    actual: val,
+                }
+            })?;
+
+            if new_val != ret_val_orig {
+                trace!(
+                    "converted return value {:?} to {:?} due to return type {:?}",
+                    ret_val_orig,
+                    new_val,
+                    method_ret
+                );
+            }
+            new_val
+        };
 
         // pop frame
         if !self.pop_frame() {
@@ -88,7 +102,7 @@ impl InterpreterState {
         }
 
         // push return value onto caller's stack or set in TLS for e.g. native method
-        if let Some(val) = val {
+        if let Some(val) = ret_val {
             if let Some(caller) = self.current_frame_mut_checked() {
                 caller.operand_stack.push(val);
             } else {
