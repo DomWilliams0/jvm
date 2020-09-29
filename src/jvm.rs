@@ -1,12 +1,16 @@
+use std::iter::once;
 use std::sync::Arc;
 
-use log::*;
-
 use clap::{App, AppSettings, Arg};
+use log::*;
 use thiserror::*;
 
+use cafebabe::mutf8::StrExt;
+use cafebabe::MethodAccessFlags;
+
+use crate::bootstrap;
 use crate::class::null;
-use crate::classloader::{ClassLoader, WhichLoader};
+use crate::class::{ClassLoader, WhichLoader};
 use crate::classpath::ClassPath;
 use crate::error::ResultExt;
 use crate::interpreter::{Frame, InstructionLookupTable};
@@ -15,9 +19,6 @@ use crate::properties::SystemProperties;
 use crate::thread::JvmThreadState;
 use crate::types::DataValue;
 use crate::{thread, JvmError, JvmResult};
-use cafebabe::mutf8::StrExt;
-use cafebabe::MethodAccessFlags;
-use std::iter::once;
 
 pub struct Jvm {
     args: JvmArgsPersist,
@@ -85,12 +86,10 @@ impl Jvm {
         thread::initialise(Arc::new(JvmThreadState::new(global)));
 
         // load system classes
-        if let Err(e) = jvm.state.classloader.init_bootstrap_classes().throw() {
+        if let Err(e) = bootstrap::init_bootstrap_classes(&jvm.state.classloader).throw() {
             error!("failed to initialise bootstrap classes: {}", e);
             return Err(e);
         }
-
-        // TODO set all properties in gnu/classpath/VMSystemProperties.preinit
 
         Ok(jvm)
     }

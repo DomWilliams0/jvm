@@ -1,23 +1,23 @@
+use std::cell::RefCell;
 use std::sync::Arc;
+use std::thread::ThreadId;
 
 use log::*;
+use parking_lot::RwLock;
+use strum_macros::EnumDiscriminants;
 
-use crate::alloc::{vmref_ptr, InternedString, VmRef};
-use crate::class::{Class, ClassType, NativeInternalFn, Object};
-use crate::classpath::ClassPath;
-use crate::error::{Throwables, VmResult};
-
-use crate::types::{ArrayType, PrimitiveDataType};
 use cafebabe::mutf8::{mstr, StrExt};
 use cafebabe::{ClassError, MethodAccessFlags};
-use parking_lot::RwLock;
 
+use crate::alloc::{vmref_ptr, InternedString, VmRef};
+use crate::class::class::Class;
+use crate::class::object::Object;
+use crate::class::ClassType;
+use crate::classpath::ClassPath;
+use crate::error::{Throwables, VmResult};
 use crate::interpreter::Frame;
-use crate::natives::*;
 use crate::thread;
-use std::cell::RefCell;
-use std::thread::ThreadId;
-use strum_macros::EnumDiscriminants;
+use crate::types::{ArrayType, PrimitiveDataType};
 
 pub struct ClassLoader {
     classes: RwLock<Vec<(InternedString, WhichLoader, LoadState)>>,
@@ -268,148 +268,11 @@ impl ClassLoader {
         Ok(bytes)
     }
 
-    pub fn init_bootstrap_classes(&self) -> VmResult<()> {
-        // TODO define hardcoded preload classes in a better way
+    pub(crate) fn init_primitives(&self, classes: Box<[VmRef<Class>]>) {
+        let mut prims = self.primitives.borrow_mut();
+        debug_assert!(prims.is_none(), "primitives should initialised only once");
 
-        fn load_class(loader: &ClassLoader, name: &'static str) -> VmResult<VmRef<Class>> {
-            loader
-                .load_class(name.as_mstr(), WhichLoader::Bootstrap)
-                .and_then(|class| {
-                    class.ensure_init()?;
-                    Ok(class)
-                })
-        }
-
-        // our lord and saviour Object first
-        load_class(self, "java/lang/Object")?;
-
-        // then primitives
-        {
-            let mut primitives = Vec::with_capacity(PrimitiveDataType::TYPES.len());
-
-            for (prim, name) in &PrimitiveDataType::TYPES {
-                let name = name.to_mstr();
-                let cls = Class::new_primitive_class(name.as_ref(), *prim, self)?;
-                cls.ensure_init()?;
-
-                primitives.push(cls);
-            }
-
-            self.primitives.replace(Some(primitives.into_boxed_slice()));
-        }
-
-        struct Preload {
-            class: &'static str,
-            native_methods: &'static [(&'static str, &'static str, NativeInternalFn)],
-        }
-
-        impl Preload {
-            fn new(name: &'static str) -> Self {
-                Self::with_natives(name, &[])
-            }
-
-            fn with_natives(
-                name: &'static str,
-                natives: &'static [(&'static str, &'static str, NativeInternalFn)],
-            ) -> Self {
-                Preload {
-                    class: name,
-                    native_methods: natives,
-                }
-            }
-        }
-
-        // then the rest
-        let classes = [
-            Preload::new("java/lang/String"),
-            Preload::new("java/lang/ClassLoader"),
-            Preload::with_natives(
-                "gnu/classpath/VMSystemProperties",
-                &[(
-                    "preInit",
-                    "(Ljava/util/Properties;)V",
-                    gnu_classpath_vmsystemproperties::vm_systemproperties_preinit,
-                )],
-            ),
-            Preload::with_natives(
-                "java/lang/VMSystem",
-                &[
-                    (
-                        "identityHashCode",
-                        "(Ljava/lang/Object;)I",
-                        java_lang_vmsystem::vm_identity_hashcode,
-                    ),
-                    (
-                        "arraycopy",
-                        "(Ljava/lang/Object;ILjava/lang/Object;II)V",
-                        java_lang_vmsystem::vm_array_copy,
-                    ),
-                ],
-            ),
-            Preload::with_natives(
-                "java/lang/VMThrowable",
-                &[(
-                    "fillInStackTrace",
-                    "(Ljava/lang/Throwable;)Ljava/lang/VMThrowable;",
-                    java_lang_vmthrowable::vm_fill_in_stack_trace,
-                )],
-            ),
-            Preload::with_natives(
-                "java/lang/VMObject",
-                &[(
-                    "clone",
-                    "(Ljava/lang/Cloneable;)Ljava/lang/Object;",
-                    java_lang_vmobject::vm_clone,
-                )],
-            ),
-            Preload::new("[Ljava/lang/Class;"),
-            Preload::with_natives(
-                "gnu/classpath/VMStackWalker",
-                &[
-                    (
-                        "getClassContext",
-                        "()[Ljava/lang/Class;",
-                        gnu_classpath_vmstackwalker::vm_get_class_context,
-                    ),
-                    (
-                        "getClassLoader",
-                        "(Ljava/lang/Class;)Ljava/lang/ClassLoader;",
-                        gnu_classpath_vmstackwalker::vm_get_classloader,
-                    ),
-                ],
-            ),
-            Preload::new("java/lang/System"),
-            Preload::new("[I"),
-            Preload::new("java/util/HashMap"),
-        ];
-
-        for class in classes.iter() {
-            let cls = load_class(self, class.class)?;
-            for (method_name, method_desc, fn_ptr) in class.native_methods.iter() {
-                let method = cls
-                    .find_method_in_this_only(
-                        &method_name.to_mstr(),
-                        &method_desc.to_mstr(),
-                        MethodAccessFlags::NATIVE,
-                        MethodAccessFlags::ABSTRACT,
-                    )
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "cant find native method {}.{} ({:?}) to bind",
-                            class.class, method_name, method_desc
-                        )
-                    });
-
-                // mark method as bound
-                let bound = cls.bind_internal_method(&method, *fn_ptr);
-                assert!(bound, "failed to bind native method {}", method);
-
-                // queue trampoline compilation
-                // jit.queue_trampoline(method, fn_ptr);
-            }
-        }
-
-        Ok(())
+        *prims = Some(classes);
     }
 
     pub fn get_bootstrap_class(&self, name: &'static str) -> VmRef<Class> {
@@ -418,6 +281,32 @@ impl ClassLoader {
         match self.load_state(name.as_ref(), &WhichLoader::Bootstrap) {
             LoadState::Loaded(_, cls) => cls,
             s => panic!("bootstrap class {:?} not loaded (in state {:?})", name, s),
+        }
+    }
+
+    pub(crate) fn populate_class_vmdata(&self, cls: &mut VmRef<Class>) {
+        if let Some(class_cls) = self.get_bootstrap_class_checked("java/lang/Class") {
+            // instantiate java/lang/Class
+
+            let class_obj = VmRef::new(Object::new(class_cls.clone()));
+            debug_assert_eq!(
+                class_obj.class().unwrap().name(),
+                "java/lang/Class".as_mstr()
+            );
+
+            cls.init_class_object(class_obj);
+
+        // TODO set obj->vmdata field to vm_class
+        } else {
+            todo!("no java/lang/Class")
+        }
+    }
+
+    fn get_bootstrap_class_checked(&self, name: &'static str) -> Option<VmRef<Class>> {
+        let name = name.as_mstr();
+        match self.load_state(name.as_ref(), &WhichLoader::Bootstrap) {
+            LoadState::Loaded(_, cls) => Some(cls),
+            _ => None,
         }
     }
 
@@ -468,6 +357,13 @@ impl ClassLoader {
             .expect("system classloader");
 
         todo!("return returned instance")
+    }
+
+    /// Is java/lang/Class loaded
+    pub fn is_class_class_available(&self) -> bool {
+        // TODO cache this
+        self.get_bootstrap_class_checked("java/lang/Class")
+            .is_some()
     }
 }
 

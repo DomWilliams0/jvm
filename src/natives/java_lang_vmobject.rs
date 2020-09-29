@@ -1,5 +1,5 @@
 use crate::alloc::{vmref_alloc_object, VmRef};
-use crate::class::{FunctionArgs, Object, ObjectStorage};
+use crate::class::{FunctionArgs, Object};
 use crate::error::{Throwable, Throwables};
 use crate::types::DataValue;
 

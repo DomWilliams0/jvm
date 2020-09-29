@@ -3,28 +3,27 @@
 
 #![allow(unused_variables)]
 
-use crate::alloc::{vmref_alloc_object, vmref_eq, VmRef};
-use crate::constant_pool::Entry;
-
-use crate::interpreter::error::InterpreterError;
+use std::cmp::Ordering;
+use std::fmt::Debug;
 
 use log::*;
 use num_enum::TryFromPrimitive;
 
-use crate::class::{null, Class, ClassType, FieldSearchType, Object};
-use crate::types::{DataType, DataValue, NewarrayType, PrimitiveDataType};
+use cafebabe::mutf8::StrExt;
+use cafebabe::{AccessFlags, ClassAccessFlags, MethodAccessFlags};
 
-use crate::classloader::WhichLoader;
+use crate::alloc::{vmref_alloc_object, vmref_eq, VmRef};
+use crate::class::WhichLoader;
+use crate::class::{null, Class, ClassType, FieldSearchType, Object};
+use crate::constant_pool::Entry;
 use crate::error::{Throwable, Throwables};
+use crate::interpreter::error::InterpreterError;
 use crate::interpreter::insn::bytecode::InsnReader;
 use crate::interpreter::insn::opcode::Opcode;
 use crate::interpreter::insn::InstructionBlob;
 use crate::interpreter::{Frame, InterpreterState};
 use crate::thread;
-use cafebabe::mutf8::StrExt;
-use cafebabe::{AccessFlags, ClassAccessFlags, MethodAccessFlags};
-use std::cmp::Ordering;
-use std::fmt::Debug;
+use crate::types::{DataType, DataValue, NewarrayType, PrimitiveDataType};
 
 // TODO operand stack pop then verify might be wrong - only pop if its the right type?
 

@@ -24,12 +24,9 @@
    * `// TODO actually intern strings`
    * `// TODO methods on VmRef newtype`
    * `// TODO oom error`
- * [src/class.rs](src/class.rs) (28)
+ * [src/class/class.rs](src/class/class.rs) (21)
+   * `/// TODO weak reference for cyclic reference?`
    * `// TODO store dimensions`
-   * `/// TODO weak reference for cyclic?`
-   * `// TODO arrays should live on the GC java heap`
-   * `// TODO arrays should be specialised and not hold massive DataValues`
-   * `// TODO mutex only needed in edge case, try with atomic op first`
    * `// TODO JNI style C function`
    * `// TODO arrayvec`
    * `// TODO get classloader reference from tls instead of parameter`
@@ -40,8 +37,8 @@
    * `// TODO are static fields treated and resolved the same as instance fields?`
    * `// TODO do verification first to throw ClassFormatErrors, then this should not throw any classformaterrors`
    * `// TODO Every array type implements the interfaces Cloneable and java.io.Serializable.`
-   * `// update ptr - TODO use Arc::get_unchecked_mut when it is stable`
-   * `// TODO set obj->vmdata field to vm_class`
+   * `// // update ptr - TODO use Arc::get_unchecked_mut when it is stable`
+   * `// // TODO set obj->vmdata field to vm_class`
    * `// TODO ensure there is only 1`
    * `// TODO also this check, wtf does it mean:`
    * `todo!("instanceof for arrays") // TODO`
@@ -49,11 +46,7 @@
    * `// TODO wrap exception here and return the proper type`
    * `// TODO proper exception type here`
    * `// TODO specific exception type e.g. ExceptionInInitializerError`
-   * `// TODO just allocate an object instead of this unsafeness`
-   * `// TODO limit array length to i32::MAX somewhere`
-   * `// TODO statics too`
-   * `// TODO not quite correct toString`
- * [src/classloader.rs](src/classloader.rs) (13)
+ * [src/class/loader.rs](src/class/loader.rs) (14)
    * `// TODO types for str to differentiate java/lang/Object, java.lang.Object and descrptors e.g. Ljava/lang/Object;`
    * `// TODO register class "package" with loader (https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-5.html#jvms-5.3)`
    * `// TODO actually instantiate exceptions`
@@ -64,9 +57,18 @@
    * `// TODO record that this loader is an initiating loader`
    * `// TODO get thread interpreter and current class automatically`
    * `let bytes = std::fs::read(path).expect("io error"); // TODO java.lang.IOError`
-   * `// TODO define hardcoded preload classes in a better way`
    * `// TODO add array lookup with enum constants for common symbols like Object, or perfect hashing`
+   * `// TODO set obj->vmdata field to vm_class`
+   * `// TODO cache this`
    * `// TODO newtype VmRef should handle equality`
+ * [src/class/object.rs](src/class/object.rs) (7)
+   * `// TODO arrays should live on the GC java heap`
+   * `// TODO arrays should be specialised and not hold massive DataValues`
+   * `// TODO mutex only needed in edge case, try with atomic op first`
+   * `// TODO just allocate an object instead of this unsafeness`
+   * `// TODO limit array length to i32::MAX somewhere`
+   * `// TODO statics too`
+   * `// TODO not quite correct toString`
  * [src/classpath.rs](src/classpath.rs) (1)
    * `// TODO enum for path type, zip/jar or directory`
  * [src/constant_pool.rs](src/constant_pool.rs) (3)
@@ -137,9 +139,8 @@
    * `// TODO actually compile`
    * `// TODO return result`
    * `CompileState::NotCompiled => unreachable!("not queued"), // TODO queue here?`
- * [src/jvm.rs](src/jvm.rs) (5)
+ * [src/jvm.rs](src/jvm.rs) (4)
    * `// TODO "catch" any exception during init, and log it properly with stacktrace etc`
-   * `// TODO set all properties in gnu/classpath/VMSystemProperties.preinit`
    * `// TODO populate String[] args`
    * `// TODO wait for threads to die, unintialise TLS, assert this is the last ref to global state`
    * `// TODO standard jvm args`

@@ -1,40 +1,28 @@
-use std::mem::MaybeUninit;
-
-use cafebabe::{
-    attribute, AccessFlags, ClassAccessFlags, ClassError, FieldAccessFlags, MethodAccessFlags,
-};
-use lazy_static::lazy_static;
-use log::*;
-
-use crate::alloc::{vmref_alloc_object, vmref_eq, vmref_ptr, InternedString, NativeString, VmRef};
-use crate::classloader::{current_thread, ClassLoader, WhichLoader};
-use crate::error::{Throwable, Throwables, VmResult};
-use crate::types::{DataType, DataValue, MethodSignature, PrimitiveDataType, ReturnType};
-use cafebabe::mutf8::{mstr, StrExt};
-
-use crate::constant_pool::RuntimeConstantPool;
-use crate::interpreter::{Frame, InterpreterError};
-use crate::monitor::{Monitor, MonitorGuard};
-use crate::storage::{FieldId, FieldStorage, FieldStorageLayout, FieldStorageLayoutBuilder};
-use crate::thread;
-
-use itertools::{repeat_n, Itertools};
-use parking_lot::{Mutex, MutexGuard};
 use std::cell::UnsafeCell;
 use std::fmt::{Debug, Display, Formatter};
-
-use std::borrow::Cow;
-use std::num::NonZeroI32;
+use std::mem::MaybeUninit;
 use std::sync::Arc;
 use std::thread::ThreadId;
 
-#[derive(Debug, Clone)]
-pub enum ClassType {
-    // TODO store dimensions
-    Array(VmRef<Class>),
-    Primitive(PrimitiveDataType),
-    Normal,
-}
+use itertools::Itertools;
+use log::*;
+use parking_lot::Mutex;
+
+use cafebabe::mutf8::{mstr, StrExt};
+use cafebabe::{
+    attribute, AccessFlags, ClassAccessFlags, ClassError, FieldAccessFlags, MethodAccessFlags,
+};
+
+use crate::alloc::{vmref_eq, InternedString, NativeString, VmRef};
+use crate::class::loader::current_thread;
+use crate::class::object::Object;
+use crate::class::{ClassLoader, WhichLoader};
+use crate::constant_pool::RuntimeConstantPool;
+use crate::error::{Throwable, Throwables, VmResult};
+use crate::interpreter::{Frame, InterpreterError};
+use crate::storage::{FieldId, FieldStorage, FieldStorageLayout, FieldStorageLayoutBuilder};
+use crate::thread;
+use crate::types::{DataType, DataValue, MethodSignature, PrimitiveDataType, ReturnType};
 
 #[derive(Debug)]
 pub struct Class {
@@ -46,8 +34,8 @@ pub struct Class {
 
     access_flags: ClassAccessFlags,
 
-    /// java/lang/Class instance
-    /// TODO weak reference for cyclic?
+    /// java/lang/Class instance, initialised before any class is initialised
+    /// TODO weak reference for cyclic reference?
     class_object: MaybeUninit<VmRef<Object>>,
 
     /// Only None for java/lang/Object
@@ -65,6 +53,14 @@ pub struct Class {
     instance_fields_layout: FieldStorageLayout,
 }
 
+#[derive(Debug, Clone)]
+pub enum ClassType {
+    // TODO store dimensions
+    Array(VmRef<Class>),
+    Primitive(PrimitiveDataType),
+    Normal,
+}
+
 #[derive(Debug, Copy, Clone)]
 pub enum ClassState {
     /// verified and prepared but not initialized
@@ -78,34 +74,6 @@ pub enum ClassState {
 }
 
 struct LockedClassState(UnsafeCell<ClassState>);
-
-pub enum ObjectStorage {
-    Fields(FieldStorage),
-    // TODO arrays should live on the GC java heap
-    // TODO arrays should be specialised and not hold massive DataValues
-    Array(Mutex<Box<[DataValue]>>),
-}
-
-pub struct Object {
-    class: VmRef<Class>,
-    monitor: Monitor,
-    storage: ObjectStorage,
-    // TODO mutex only needed in edge case, try with atomic op first
-    hashcode: Mutex<Option<NonZeroI32>>,
-}
-
-pub struct ObjectFieldPrinter<'a> {
-    obj: &'a Object,
-}
-
-lazy_static! {
-    static ref NULL: VmRef<Object> = VmRef::new(Object::new_null());
-}
-
-/// Null object singleton
-pub fn null() -> VmRef<Object> {
-    NULL.clone()
-}
 
 #[derive(Debug)]
 pub struct Field {
@@ -174,7 +142,7 @@ pub enum MethodLookupResult {
     NotFound,
 }
 
-enum SuperIteration {
+pub enum SuperIteration {
     KeepGoing,
     Stop,
 }
@@ -428,6 +396,7 @@ impl Class {
         let access = loaded.access_flags();
 
         let class = Self::new(
+            classloader,
             name,
             ClassType::Normal,
             source_file,
@@ -481,6 +450,7 @@ impl Class {
         };
 
         let cls = Self::new(
+            classloader,
             name.to_owned(),
             ClassType::Array(elem_cls),
             None,
@@ -509,6 +479,7 @@ impl Class {
             ClassAccessFlags::PUBLIC | ClassAccessFlags::ABSTRACT | ClassAccessFlags::FINAL;
 
         let cls = Self::new(
+            classloader,
             name.to_owned(),
             ClassType::Primitive(primitive),
             None,
@@ -529,6 +500,7 @@ impl Class {
 
     #[allow(clippy::too_many_arguments)]
     fn new(
+        classloader: &ClassLoader,
         name: InternedString,
         class_type: ClassType,
         source_file: Option<NativeString>,
@@ -545,7 +517,7 @@ impl Class {
     ) -> VmRef<Class> {
         debug_assert!(super_class.is_none() == (name.as_bytes() == b"java/lang/Object"));
 
-        let vm_class = VmRef::new(Self {
+        let mut vm_class = VmRef::new(Self {
             name,
             class_type,
             access_flags,
@@ -563,17 +535,20 @@ impl Class {
             fields,
         });
 
-        // alloc java/lang/Class
-        let obj = VmRef::new(Object::new(vm_class.clone()));
-
-        // update ptr - TODO use Arc::get_unchecked_mut when it is stable
-        unsafe {
-            let ptr = vm_class.class_object.as_ptr();
-            let ptr = ptr as *mut VmRef<Object>;
-            ptr.write(obj);
-        }
-
-        // TODO set obj->vmdata field to vm_class
+        // alloc java/lang/Class if possible
+        classloader.populate_class_vmdata(&mut vm_class);
+        //
+        // let class_obj = VmRef::new(Object::new(vm_class.clone()));
+        // debug_assert_eq!(class_obj.class.name(), "java/lang/Class".as_mstr());
+        //
+        // // update ptr - TODO use Arc::get_unchecked_mut when it is stable
+        // unsafe {
+        //     let ptr = vm_class.class_object.as_ptr();
+        //     let ptr = ptr as *mut VmRef<Object>;
+        //     ptr.write(class_obj);
+        // }
+        //
+        // // TODO set obj->vmdata field to vm_class
 
         vm_class
     }
@@ -753,7 +728,7 @@ impl Class {
             .position(|f| f.desc == *desc && f.name.as_mstr() == name)
     }
 
-    fn find_field_index(
+    pub(in crate::class) fn find_field_index(
         &self,
         name: &mstr,
         desc: &DataType,
@@ -885,6 +860,11 @@ impl Class {
         let ptr = self.class_object.as_ptr();
         // safety: initialised unconditionally in link()
         unsafe { &*ptr }
+    }
+
+    pub(in crate::class) fn init_class_object(self: &mut VmRef<Class>, cls_object: VmRef<Object>) {
+        let self_mut = Arc::get_mut(self).expect("not only reference");
+        self_mut.class_object = MaybeUninit::new(cls_object);
     }
 
     /// Class object monitor must be held!!
@@ -1124,7 +1104,10 @@ impl Class {
         keep_going
     }
 
-    fn field_resolution_order(&self, mut f: impl FnMut(&[Field]) -> SuperIteration) {
+    pub(in crate::class) fn field_resolution_order(
+        &self,
+        mut f: impl FnMut(&[Field]) -> SuperIteration,
+    ) {
         Self::__field_resolution_order_recurse(
             &self.fields,
             &self.interfaces,
@@ -1196,6 +1179,10 @@ impl Class {
         self.access_flags
     }
 
+    pub fn instance_fields_layout(&self) -> &FieldStorageLayout {
+        &self.instance_fields_layout
+    }
+
     pub fn ensure_method_bound(&self, method: &Method) -> Result<(), InterpreterError> {
         let _guard = match &method.code {
             MethodCode::Native(native) => {
@@ -1225,350 +1212,6 @@ impl Class {
         }
 
         false
-    }
-}
-
-impl Drop for Method {
-    fn drop(&mut self) {
-        // safety: always initialised in Class::link, and needs to be manually dropped
-        unsafe {
-            let class_ptr = self.class.as_mut_ptr();
-            class_ptr.drop_in_place()
-        }
-    }
-}
-
-impl MethodLookupResult {
-    fn ok(self) -> Option<VmRef<Method>> {
-        if let MethodLookupResult::Found(m) = self {
-            Some(m)
-        } else {
-            None
-        }
-    }
-}
-
-impl ClassType {
-    pub fn is_array(&self) -> bool {
-        matches!(self, Self::Array(_))
-    }
-    pub fn array_class(&self) -> Option<&VmRef<Class>> {
-        match self {
-            Self::Array(cls) => Some(cls),
-            _ => None,
-        }
-    }
-}
-
-impl Object {
-    /// Only use this to create the sentinel NULL value
-    fn new_null() -> Self {
-        // TODO just allocate an object instead of this unsafeness
-        let null_class = MaybeUninit::zeroed();
-        let null_class = unsafe { null_class.assume_init() };
-        let storage = ObjectStorage::Fields(FieldStorage::empty());
-        Object {
-            class: null_class,
-            monitor: Monitor::new(),
-            storage,
-            hashcode: Mutex::new(None),
-        }
-    }
-
-    pub fn with_storage(class: VmRef<Class>, storage: ObjectStorage) -> Self {
-        Object {
-            class,
-            monitor: Monitor::new(),
-            storage,
-            hashcode: Mutex::new(None),
-        }
-    }
-
-    pub(crate) fn new(class: VmRef<Class>) -> Self {
-        let fields = class.instance_fields_layout.new_storage();
-        Self::with_storage(class, ObjectStorage::Fields(fields))
-    }
-    pub(crate) fn new_array(array_cls: VmRef<Class>, len: usize) -> Self {
-        let elem_cls = match &array_cls.class_type {
-            ClassType::Array(elem) => elem,
-            _ => unreachable!(),
-        };
-
-        let elem_type = match elem_cls.class_type {
-            ClassType::Primitive(prim) => DataType::Primitive(prim),
-            ClassType::Normal => DataType::Reference(Cow::Owned(elem_cls.name.to_owned())),
-            ClassType::Array(_) => unreachable!(),
-        };
-
-        Self::new_array_with_elements(array_cls, repeat_n(elem_type.default_value(), len))
-    }
-
-    pub(crate) fn new_array_with_elements(
-        array_cls: VmRef<Class>,
-        elems: impl ExactSizeIterator<Item = DataValue>,
-    ) -> Self {
-        debug_assert!(matches!(array_cls.class_type, ClassType::Array(_)));
-
-        let data: Box<[DataValue]> = elems.collect();
-        Self::with_storage(array_cls, ObjectStorage::Array(Mutex::new(data)))
-    }
-
-    pub(crate) fn new_string(contents: &mstr) -> VmResult<Object> {
-        // encode for java/lang/String
-        let utf16 = contents.to_utf8().encode_utf16().collect_vec();
-
-        let tls = thread::get();
-        let classloader = tls.global().class_loader();
-
-        // alloc string instance
-        let string_class = classloader.get_bootstrap_class("java/lang/String");
-        let string_instance = Object::new(string_class);
-        let fields = string_instance.fields().unwrap();
-
-        // alloc char array
-        let char_array_cls = classloader.get_primitive_array(PrimitiveDataType::Char);
-        let char_array = vmref_alloc_object(|| Ok(Object::new_array(char_array_cls, utf16.len())))?;
-        let length = utf16.len();
-
-        // populate char array
-        {
-            let mut array_contents = char_array.array().unwrap();
-            let slice = &mut array_contents[0..utf16.len()];
-            for (i, char) in utf16.into_iter().enumerate() {
-                slice[i] = DataValue::Char(char);
-            }
-        }
-
-        // TODO limit array length to i32::MAX somewhere
-
-        let set_field = |name: &'static str, value: DataValue| -> VmResult<()> {
-            let name = name.to_mstr();
-            let datatype = value.data_type();
-            let field_id = string_instance
-                .find_field_in_this_only(name.as_ref(), &datatype, FieldSearchType::Instance)
-                .ok_or_else(|| Throwables::Other("java/lang/NoSuchFieldError"))?;
-
-            trace!(
-                "setting string field {:?} ({:?}) to {:?}",
-                name,
-                field_id,
-                value
-            );
-            fields.ensure_set(field_id, value);
-            Ok(())
-        };
-
-        set_field("value", DataValue::Reference(char_array))?;
-
-        set_field("count", DataValue::Int(length as i32))?;
-
-        Ok(string_instance)
-    }
-    pub fn is_null(&self) -> bool {
-        VmRef::ptr_eq(&self.class, &NULL.class)
-    }
-
-    /// None if null
-    pub fn class(&self) -> Option<VmRef<Class>> {
-        if self.is_null() {
-            None
-        } else {
-            Some(self.class.clone())
-        }
-    }
-
-    pub fn enter_monitor(&self) -> MonitorGuard {
-        self.monitor.enter()
-    }
-
-    pub fn fields(&self) -> Option<&FieldStorage> {
-        match &self.storage {
-            ObjectStorage::Fields(f) => Some(f),
-            _ => None,
-        }
-    }
-
-    pub fn array(&self) -> Option<MutexGuard<Box<[DataValue]>>> {
-        match &self.storage {
-            ObjectStorage::Array(mutex) => Some(mutex.lock()),
-            _ => None,
-        }
-    }
-
-    pub fn array_unchecked(&self) -> MutexGuard<Box<[DataValue]>> {
-        match &self.storage {
-            ObjectStorage::Array(mutex) => mutex.lock(),
-            _ => unreachable!(),
-        }
-    }
-
-    pub fn array_get_unchecked(&self, idx: usize) -> DataValue {
-        let val = self.array_unchecked().get(idx).unwrap().clone();
-        trace!("get array element {:?}[{}] = {:?}", self, idx, val);
-        val
-    }
-
-    pub fn array_set_unchecked(&self, idx: usize, val: DataValue) {
-        trace!("set array element {:?}[{}] = {:?}", self, idx, val);
-        let mut array = self.array_unchecked();
-        let elem = array.get_mut(idx).unwrap();
-        *elem = val;
-    }
-
-    pub fn find_field_in_this_only(
-        &self,
-        name: &mstr,
-        desc: &DataType,
-        search: FieldSearchType,
-    ) -> Option<FieldId> {
-        let field_index = self.class.find_field_index(name, desc, search)?;
-        self.class.instance_fields_layout.get_self_id(field_index)
-    }
-
-    pub fn find_field(
-        &self,
-        name: &mstr,
-        desc: &DataType,
-        search: FieldSearchType,
-    ) -> Option<DataValue> {
-        let field_id = self.class.find_field_recursive(name, desc, search)?;
-        Some(self.field(field_id))
-    }
-
-    pub fn field(&self, field_id: FieldId) -> DataValue {
-        debug_assert!(!self.is_null(), "object is null");
-        let fields = self.fields().expect("object has no field storage");
-
-        fields
-            .try_get(field_id)
-            .unwrap_or_else(|| panic!("bad field {:?}", field_id))
-    }
-
-    pub fn array_length(&self) -> Option<i32> {
-        self.array().map(|arr| arr.len() as i32)
-    }
-
-    pub fn is_array(&self) -> bool {
-        matches!(self.storage, ObjectStorage::Array(_))
-    }
-
-    pub fn storage(&self) -> &ObjectStorage {
-        &self.storage
-    }
-
-    /// Calculates and stores on first call
-    pub fn identity_hashcode(self: &VmRef<Self>) -> i32 {
-        let mut guard = self.hashcode.lock();
-        match *guard {
-            Some(hash) => hash.get(),
-            None => {
-                let ptr = vmref_ptr(self);
-                let hash = (ptr & 0xffffffff) as i32;
-                *guard = unsafe {
-                    debug_assert_ne!(hash, 0, "lmao null pointer what");
-                    Some(NonZeroI32::new_unchecked(hash))
-                };
-                hash
-            }
-        }
-    }
-
-    pub fn print_fields(&self) -> ObjectFieldPrinter {
-        ObjectFieldPrinter { obj: self }
-    }
-}
-
-impl Debug for ObjectFieldPrinter<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let cls = match self.obj.class() {
-            None => return write!(f, "(null)"),
-            Some(cls) => cls,
-        };
-
-        write!(f, "Fields for {:?}: ", self.obj)?;
-
-        let field_storage = match self.obj.fields() {
-            None => return write!(f, "None"),
-            Some(fields) => fields,
-        };
-
-        let layout = &cls.instance_fields_layout;
-
-        let mut cls_idx = 0;
-        let mut result = Ok(());
-        cls.field_resolution_order(|fields| {
-            for (i, field) in fields.iter().filter(|f| !f.flags.is_static()).enumerate() {
-                // TODO statics too
-
-                let field_id = layout.get_id(cls_idx, i).unwrap();
-                let val = field_storage.ensure_get(field_id);
-
-                result = write!(
-                    f,
-                    "\n * {} ({:?} {:?}) => {:?}",
-                    field.name.as_mstr(),
-                    field.desc,
-                    field.flags,
-                    val
-                );
-                if result.is_err() {
-                    return SuperIteration::Stop;
-                }
-            }
-
-            cls_idx += 1;
-            SuperIteration::KeepGoing
-        });
-
-        result
-    }
-}
-impl Debug for Object {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if self.is_null() {
-            write!(f, "null")
-        } else {
-            // TODO not quite correct toString
-            // let ptr = vmref_ptr(&self.class);
-            let ptr = self as *const _ as u64;
-            write!(f, "{}@{:#x}", self.class.name.to_utf8(), ptr)?;
-
-            // even less correct but helpful for debugging
-            if self.class.name().as_bytes() == b"java/lang/String" {
-                if let Some(DataValue::Reference(chars)) = self.find_field(
-                    "value".as_mstr(),
-                    &DataType::Reference(Cow::Borrowed("[C".as_mstr())),
-                    FieldSearchType::Instance,
-                ) {
-                    if !chars.is_null() {
-                        let chars = chars.array_unchecked();
-                        let chars = chars
-                            .iter()
-                            .map(|val| match val {
-                                DataValue::Char(c) => *c,
-                                _ => unreachable!(),
-                            })
-                            .collect_vec();
-
-                        let tmp_str = String::from_utf16(&chars).expect("bad utf16");
-                        write!(f, " ({:?})", tmp_str)?;
-                    }
-                } else {
-                    unreachable!("bad string class")
-                }
-            }
-
-            Ok(())
-        }
-    }
-}
-
-impl Clone for ObjectStorage {
-    fn clone(&self) -> Self {
-        match self {
-            Self::Fields(fields) => Self::Fields(fields.clone()),
-            Self::Array(array) => Self::Array(Mutex::new(array.lock().clone())),
-        }
     }
 }
 
@@ -1623,18 +1266,47 @@ impl Display for Method {
     }
 }
 
-impl Default for LockedClassState {
-    fn default() -> Self {
-        LockedClassState(UnsafeCell::new(ClassState::Uninitialised))
+impl Drop for Method {
+    fn drop(&mut self) {
+        // safety: always initialised in Class::link, and needs to be manually dropped
+        unsafe {
+            let class_ptr = self.class.as_mut_ptr();
+            class_ptr.drop_in_place()
+        }
     }
 }
 
-/// Will only be accessed when the class monitor is held
-unsafe impl Sync for LockedClassState {}
+impl Field {
+    pub fn name(&self) -> &mstr {
+        &self.name
+    }
+    pub fn desc(&self) -> &DataType<'static> {
+        &self.desc
+    }
+    pub fn flags(&self) -> FieldAccessFlags {
+        self.flags
+    }
+}
 
-impl Debug for LockedClassState {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "LockedClassState")
+impl MethodLookupResult {
+    fn ok(self) -> Option<VmRef<Method>> {
+        if let MethodLookupResult::Found(m) = self {
+            Some(m)
+        } else {
+            None
+        }
+    }
+}
+
+impl ClassType {
+    pub fn is_array(&self) -> bool {
+        matches!(self, Self::Array(_))
+    }
+    pub fn array_class(&self) -> Option<&VmRef<Class>> {
+        match self {
+            Self::Array(cls) => Some(cls),
+            _ => None,
+        }
     }
 }
 
@@ -1664,5 +1336,20 @@ impl<'a> FunctionArgs<'a> {
     pub fn take(&mut self, idx: usize) -> DataValue {
         let val = self.0.get_mut(idx).unwrap(); // verified
         std::mem::replace(val, DataValue::Boolean(false))
+    }
+}
+
+impl Default for LockedClassState {
+    fn default() -> Self {
+        LockedClassState(UnsafeCell::new(ClassState::Uninitialised))
+    }
+}
+
+/// Will only be accessed when the class monitor is held
+unsafe impl Sync for LockedClassState {}
+
+impl Debug for LockedClassState {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "LockedClassState")
     }
 }
