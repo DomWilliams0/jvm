@@ -201,6 +201,11 @@ impl FrameStack {
     pub fn top(&self) -> Option<&Frame> {
         self.0.last().map(|(frame, _)| frame)
     }
+
+    /// Top down, first is the current method
+    pub fn iter(&self) -> impl Iterator<Item = &Frame> + '_ {
+        self.0.iter().rev().map(|(frame, _)| frame)
+    }
 }
 
 impl StackValue {
@@ -319,7 +324,7 @@ impl Frame {
         Self::new_with_args(method, args)
     }
 
-    fn class_and_method(&self) -> (&VmRef<Class>, &VmRef<Method>) {
+    pub fn class_and_method(&self) -> (&VmRef<Class>, &VmRef<Method>) {
         match self {
             Frame::Java(frame) => (&frame.class, &frame.method),
             Frame::Native(frame) => (&frame.class, &frame.method),

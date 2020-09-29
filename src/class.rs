@@ -18,7 +18,7 @@ use crate::monitor::{Monitor, MonitorGuard};
 use crate::storage::{FieldId, FieldStorage, FieldStorageLayout, FieldStorageLayoutBuilder};
 use crate::thread;
 
-use itertools::Itertools;
+use itertools::{repeat_n, Itertools};
 use parking_lot::{Mutex, MutexGuard};
 use std::cell::UnsafeCell;
 use std::fmt::{Debug, Display, Formatter};
@@ -659,7 +659,6 @@ impl Class {
         antiflags: MethodAccessFlags,
     ) -> Option<VmRef<Method>> {
         // check self
-        debug!("check {:?} for {}", self.name(), name);
         if let Some(method) = self.find_method_in_this_only(name, desc, flags, antiflags) {
             return Some(method);
         }
@@ -882,7 +881,7 @@ impl Class {
         &self.class_type
     }
 
-    fn class_object(&self) -> &VmRef<Object> {
+    pub fn class_object(&self) -> &VmRef<Object> {
         let ptr = self.class_object.as_ptr();
         // safety: initialised unconditionally in link()
         unsafe { &*ptr }
@@ -1289,7 +1288,6 @@ impl Object {
         let fields = class.instance_fields_layout.new_storage();
         Self::with_storage(class, ObjectStorage::Fields(fields))
     }
-
     pub(crate) fn new_array(array_cls: VmRef<Class>, len: usize) -> Self {
         let elem_cls = match &array_cls.class_type {
             ClassType::Array(elem) => elem,
@@ -1302,11 +1300,17 @@ impl Object {
             ClassType::Array(_) => unreachable!(),
         };
 
-        let data = vec![elem_type.default_value(); len];
-        Self::with_storage(
-            array_cls,
-            ObjectStorage::Array(Mutex::new(data.into_boxed_slice())),
-        )
+        Self::new_array_with_elements(array_cls, repeat_n(elem_type.default_value(), len))
+    }
+
+    pub(crate) fn new_array_with_elements(
+        array_cls: VmRef<Class>,
+        elems: impl ExactSizeIterator<Item = DataValue>,
+    ) -> Self {
+        debug_assert!(matches!(array_cls.class_type, ClassType::Array(_)));
+
+        let data: Box<[DataValue]> = elems.collect();
+        Self::with_storage(array_cls, ObjectStorage::Array(Mutex::new(data)))
     }
 
     pub(crate) fn new_string(contents: &mstr) -> VmResult<Object> {

@@ -362,6 +362,22 @@ impl ClassLoader {
                     java_lang_vmobject::vm_clone,
                 )],
             ),
+            Preload::new("[Ljava/lang/Class;"),
+            Preload::with_natives(
+                "gnu/classpath/VMStackWalker",
+                &[
+                    (
+                        "getClassContext",
+                        "()[Ljava/lang/Class;",
+                        gnu_classpath_vmstackwalker::vm_get_class_context,
+                    ),
+                    (
+                        "getClassLoader",
+                        "(Ljava/lang/Class;)Ljava/lang/ClassLoader;",
+                        gnu_classpath_vmstackwalker::vm_get_classloader,
+                    ),
+                ],
+            ),
             Preload::new("java/lang/System"),
             Preload::new("[I"),
             Preload::new("java/util/HashMap"),

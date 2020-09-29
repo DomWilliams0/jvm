@@ -10,6 +10,7 @@ use crate::class::{FunctionArgs, Method, NativeFunction};
 use crate::interpreter::InterpreterError;
 use crate::types::DataValue;
 use std::cell::{RefCell, RefMut};
+use std::fmt::{Debug, Formatter};
 
 #[derive(Debug)]
 pub enum InterpreterResult {
@@ -24,6 +25,8 @@ pub struct InterpreterState {
 pub struct Interpreter {
     state: RefCell<InterpreterState>,
 }
+
+pub struct InterpFrameStackPrinter<'a>(&'a FrameStack);
 
 impl InterpreterState {
     pub fn push_frame(&mut self, frame: Frame) {
@@ -112,6 +115,20 @@ impl InterpreterState {
 
         Ok(())
     }
+
+    pub fn print_frame_stack(&self) -> InterpFrameStackPrinter {
+        InterpFrameStackPrinter(&self.frames)
+    }
+}
+
+impl Debug for InterpFrameStackPrinter<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Frame stack (depth={}):", self.0.depth())?;
+        for (i, frame) in self.0.iter().enumerate() {
+            write!(f, "\n * {})\t{:?}", i, frame)?;
+        }
+        Ok(())
+    }
 }
 
 impl InterpreterResult {
@@ -143,6 +160,7 @@ impl Interpreter {
         let mut depth = 1;
 
         while depth != 0 {
+            trace!("{:?}", self.state.borrow().print_frame_stack());
             match self.execute() {
                 PostExecuteAction::MethodCall => depth += 1,
                 PostExecuteAction::Return => depth -= 1,
@@ -280,6 +298,20 @@ impl Interpreter {
 
     pub fn state_mut(&self) -> RefMut<InterpreterState> {
         self.state.borrow_mut()
+    }
+
+    pub fn with_current_frame<R>(&self, f: impl FnOnce(&Frame) -> R) -> R {
+        let state = self.state.borrow();
+        let frame = state.frames.top().expect("must be called from a method");
+        f(frame)
+    }
+
+    /// Called in top down order, first is current frame
+    pub fn with_frames(&self, mut f: impl FnMut(&Frame)) {
+        let state = self.state.borrow();
+        for frame in state.frames.iter() {
+            f(frame);
+        }
     }
 }
 
