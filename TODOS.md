@@ -1,4 +1,4 @@
-# TODOs (145)
+# TODOs (148)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -143,6 +143,8 @@
    * `// TODO populate String[] args`
    * `// TODO wait for threads to die, unintialise TLS, assert this is the last ref to global state`
    * `// TODO standard jvm args`
+ * [src/lib.rs](src/lib.rs) (1)
+   * `// TODO actually choose versions`
  * [src/natives/gnu_classpath_vmstackwalker.rs](src/natives/gnu_classpath_vmstackwalker.rs) (2)
    * `// TODO native impls for other VMStackWalker methods`
    * `// TODO get vmdata field`
@@ -154,10 +156,12 @@
    * `// TODO remove bounds check here, we just checked it explicitly`
  * [src/natives/java_lang_vmthrowable.rs](src/natives/java_lang_vmthrowable.rs) (1)
    * `// TODO implement fillInStackTrace`
- * [src/properties.rs](src/properties.rs) (3)
-   * `// TODO make this nicer`
-   * `// TODO remaining static ones`
-   * `// TODO dynamic ones e.g. user.home`
+ * [src/properties.rs](src/properties.rs) (5)
+   * `// TODO these properties are not all correct`
+   * `prop!("java.home", dirs::data_dir()); // TODO`
+   * `prop!("java.specification.version", "TODO"); // TODO get from Configuration class?`
+   * `prop!("java.library.path", "."); // TODO`
+   * `prop!("java.ext.dirs", "."); // TODO`
  * [src/storage.rs](src/storage.rs) (5)
    * `// TODO field storage should be inline in VmRef<Object>`
    * `// TODO compact field storage i.e. not using DataValue enum`

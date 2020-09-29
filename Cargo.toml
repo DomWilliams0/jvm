@@ -18,6 +18,8 @@ num_enum = "^0.5"
 strum = "^0.19"
 strum_macros = "^0.19"
 clap = "^2.33"
+whoami = "^0.9"
+dirs = "^3.0"
 
 [features]
 default = []

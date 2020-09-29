@@ -2,6 +2,8 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 
 use crate::classpath::ClassPath;
+use crate::{CLASS_VERSION, JAVA_SPEC_VERSION, JAVA_VERSION, JAVA_VM_SPEC_VERSION};
+use std::path::PathBuf;
 
 #[derive(Debug)]
 pub struct SystemProperties(HashMap<&'static str, SystemProperty>);
@@ -11,12 +13,6 @@ pub struct SystemProperty(Cow<'static, str>);
 
 impl Default for SystemProperties {
     fn default() -> Self {
-        let tmpdir = std::env::temp_dir()
-            .to_str()
-            .expect("bad unicode in temp dir")
-            .to_owned();
-
-        // TODO make this nicer
         let mut map = HashMap::with_capacity(64);
 
         macro_rules! prop {
@@ -25,12 +21,37 @@ impl Default for SystemProperties {
             };
         }
 
+        // TODO these properties are not all correct
+        prop!("java.version", JAVA_VERSION);
+        prop!("java.vendor", "GNU Classpath");
+        prop!("java.vendor.url", "https://www.gnu.org/software/classpath/");
+        prop!("java.home", dirs::data_dir()); // TODO
+        prop!("java.vm.specification.version", JAVA_VM_SPEC_VERSION);
+        prop!("java.vm.specification.vendor", "Oracle America, Inc");
+        prop!(
+            "java.vm.specification.name",
+            "The Java® Virtual Machine Specification"
+        );
+        prop!("java.vm.version", env!("CARGO_PKG_VERSION"));
+        prop!("java.vm.vendor", env!("CARGO_PKG_AUTHORS"));
         prop!("java.vm.name", "UntitledJvm");
-        prop!("java.vm.vendor", "Dom Williams");
-        prop!("java.io.tmpdir", tmpdir);
-
-        // TODO remaining static ones
-        // TODO dynamic ones e.g. user.home
+        prop!("java.specification.version", "TODO"); // TODO get from Configuration class?
+        prop!("java.specification.vendor", JAVA_SPEC_VERSION);
+        prop!("java.specification.name", "Oracle America, Inc");
+        prop!("java.class.version", CLASS_VERSION);
+        prop!("java.library.path", "."); // TODO
+        prop!("java.io.tmpdir", std::env::temp_dir());
+        prop!("java.compiler", "N/A");
+        prop!("java.ext.dirs", "."); // TODO
+        prop!("os.name", std::env::consts::OS);
+        prop!("os.arch", std::env::consts::ARCH);
+        prop!("os.version", whoami::distro());
+        prop!("file.separator", std::path::MAIN_SEPARATOR.to_string());
+        prop!("path.separator", ":");
+        prop!("line.separator", if cfg!(windows) { "\r\n" } else { "\n" });
+        prop!("user.name", whoami::username());
+        prop!("user.home", dirs::home_dir());
+        prop!("user.dir", std::env::current_dir().ok());
 
         SystemProperties(map)
     }
@@ -66,32 +87,17 @@ impl From<String> for SystemProperty {
     }
 }
 
-// required:
-// java.version
-// java.vendor
-// java.vendor.url
-// java.home
-// java.vm.specification.version
-// java.vm.specification.vendor
-// java.vm.specification.name
-// java.vm.version
-// java.vm.vendor
-// java.vm.name
-// java.specification.version
-// java.specification.vendor
-// java.specification.name
-// java.class.version
-// java.class.path
-// java.library.path
-// java.io.tmpdir
-// java.compiler
-// java.ext.dirs
-// os.name
-// os.arch
-// os.version
-// file.separator
-// path.separator
-// line.separator
-// user.name
-// user.home
-// user.dir
+impl From<PathBuf> for SystemProperty {
+    fn from(p: PathBuf) -> Self {
+        Self(match p.to_string_lossy() {
+            Cow::Borrowed(p) => Cow::Owned(p.to_owned()),
+            Cow::Owned(p) => Cow::Owned(p),
+        })
+    }
+}
+
+impl From<Option<PathBuf>> for SystemProperty {
+    fn from(p: Option<PathBuf>) -> Self {
+        p.unwrap_or_else(|| PathBuf::new()).into()
+    }
+}
