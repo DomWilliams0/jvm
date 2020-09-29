@@ -90,13 +90,13 @@ impl InterpreterState {
 
             if new_val != ret_val_orig {
                 trace!(
-                    "converted return value {:?} to {:?} due to return type {:?}",
+                    "allowing return value {:?} for return type {:?}",
                     ret_val_orig,
-                    new_val,
                     method_ret
                 );
             }
-            new_val
+
+            ret_val_orig
         };
 
         // pop frame
