@@ -2382,13 +2382,19 @@ impl Lxor {
 
 impl Monitorenter {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Monitorenter")
+        // TODO monitorenter
+        let obj = interp.current_frame_mut().pop_reference()?;
+        trace!("monitorenter for {:?}", obj);
+        Ok(PostExecuteAction::Continue)
     }
 }
 
 impl Monitorexit {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Monitorexit")
+        // TODO monitorexit
+        let obj = interp.current_frame_mut().pop_reference()?;
+        trace!("monitorexit for {:?}", obj);
+        Ok(PostExecuteAction::Continue)
     }
 }
 

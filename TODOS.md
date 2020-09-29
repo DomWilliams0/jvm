@@ -1,4 +1,4 @@
-# TODOs (142)
+# TODOs (144)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -90,7 +90,7 @@
    * `// TODO long and double are wide`
    * `// TODO generic helper methods for popping up to 3 types from stack`
    * `// TODO move these to extension trait on operandstack`
- * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (35)
+ * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (37)
    * `// TODO operand stack pop then verify might be wrong - only pop if its the right type?`
    * `/// TODO might be possible to continue with resolved methods/fields state instead of replay`
    * `// TODO better handling of interpreter error`
@@ -117,6 +117,8 @@
    * `// TODO int constant`
    * `// TODO deny long and double`
    * `// TODO class symbolic reference`
+   * `// TODO monitorenter`
+   * `// TODO monitorexit`
    * `// TODO ensure not abstract, throw InstantiationError`
    * `// TODO verify not array class`
    * `// TODO throw IncompatibleClassChangeError`
