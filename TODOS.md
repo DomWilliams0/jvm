@@ -1,4 +1,4 @@
-# TODOs (146)
+# TODOs (145)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -37,16 +37,16 @@
    * `// TODO are static fields treated and resolved the same as instance fields?`
    * `// TODO do verification first to throw ClassFormatErrors, then this should not throw any classformaterrors`
    * `// TODO Every array type implements the interfaces Cloneable and java.io.Serializable.`
-   * `// // update ptr - TODO use Arc::get_unchecked_mut when it is stable`
-   * `// // TODO set obj->vmdata field to vm_class`
    * `// TODO ensure there is only 1`
    * `// TODO also this check, wtf does it mean:`
    * `todo!("instanceof for arrays") // TODO`
+   * `// TODO this is always the same`
+   * `// TODO use Arc::get_mut_unchecked instead`
    * `// TODO initialise final static fields from ConstantValue attrs`
    * `// TODO wrap exception here and return the proper type`
    * `// TODO proper exception type here`
    * `// TODO specific exception type e.g. ExceptionInInitializerError`
- * [src/class/loader.rs](src/class/loader.rs) (14)
+ * [src/class/loader.rs](src/class/loader.rs) (13)
    * `// TODO types for str to differentiate java/lang/Object, java.lang.Object and descrptors e.g. Ljava/lang/Object;`
    * `// TODO register class "package" with loader (https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-5.html#jvms-5.3)`
    * `// TODO actually instantiate exceptions`
@@ -58,7 +58,6 @@
    * `// TODO get thread interpreter and current class automatically`
    * `let bytes = std::fs::read(path).expect("io error"); // TODO java.lang.IOError`
    * `// TODO add array lookup with enum constants for common symbols like Object, or perfect hashing`
-   * `// TODO set obj->vmdata field to vm_class`
    * `// TODO cache this`
    * `// TODO newtype VmRef should handle equality`
  * [src/class/object.rs](src/class/object.rs) (7)

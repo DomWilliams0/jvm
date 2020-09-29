@@ -30,9 +30,12 @@ impl Preload {
 }
 
 pub fn init_bootstrap_classes(classloader: &ClassLoader) -> VmResult<()> {
-    // our lord and saviour Object first
+    // our lord and saviours first
     Preload::new("java/lang/Object").load(classloader)?;
     Preload::new("java/lang/Class").load(classloader)?;
+
+    // now that Class is loaded, fix up missing class_object ptrs in all loaded classes so far
+    classloader.fix_up_class_objects();
 
     init_primitives(classloader)?;
 

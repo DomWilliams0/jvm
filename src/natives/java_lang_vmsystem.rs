@@ -43,7 +43,6 @@ pub fn vm_array_copy(mut args: FunctionArgs) -> Result<Option<DataValue>, VmRef<
         .class()
         .zip(dst.class())
         .ok_or(Throwables::NullPointerException)?;
-    log::debug!("ty {:?}", src_cls);
 
     // array check
     let (src_ty, dst_ty) = src_cls

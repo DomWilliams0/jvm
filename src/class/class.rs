@@ -13,7 +13,7 @@ use cafebabe::{
     attribute, AccessFlags, ClassAccessFlags, ClassError, FieldAccessFlags, MethodAccessFlags,
 };
 
-use crate::alloc::{vmref_eq, InternedString, NativeString, VmRef};
+use crate::alloc::{vmref_eq, vmref_is_null, InternedString, NativeString, VmRef};
 use crate::class::loader::current_thread;
 use crate::class::object::Object;
 use crate::class::{ClassLoader, WhichLoader};
@@ -24,7 +24,6 @@ use crate::storage::{FieldId, FieldStorage, FieldStorageLayout, FieldStorageLayo
 use crate::thread;
 use crate::types::{DataType, DataValue, MethodSignature, PrimitiveDataType, ReturnType};
 
-#[derive(Debug)]
 pub struct Class {
     name: InternedString,
     class_type: ClassType,
@@ -34,9 +33,10 @@ pub struct Class {
 
     access_flags: ClassAccessFlags,
 
-    /// java/lang/Class instance, initialised before any class is initialised
+    /// java/lang/Class instance, initially NULL (!!!) because java/lang/Class hasn't been loaded,
+    /// but is updated before any class is initialised and it is needed
     /// TODO weak reference for cyclic reference?
-    class_object: MaybeUninit<VmRef<Object>>,
+    class_object: VmRef<Object>,
 
     /// Only None for java/lang/Object
     super_class: Option<VmRef<Class>>,
@@ -524,7 +524,7 @@ impl Class {
             source_file,
             state: LockedClassState::default(),
             loader,
-            class_object: MaybeUninit::zeroed(),
+            class_object: unsafe { VmRef::from_raw(std::ptr::null()) },
             super_class,
             interfaces,
             methods,
@@ -537,19 +537,6 @@ impl Class {
 
         // alloc java/lang/Class if possible
         classloader.populate_class_vmdata(&mut vm_class);
-        //
-        // let class_obj = VmRef::new(Object::new(vm_class.clone()));
-        // debug_assert_eq!(class_obj.class.name(), "java/lang/Class".as_mstr());
-        //
-        // // update ptr - TODO use Arc::get_unchecked_mut when it is stable
-        // unsafe {
-        //     let ptr = vm_class.class_object.as_ptr();
-        //     let ptr = ptr as *mut VmRef<Object>;
-        //     ptr.write(class_obj);
-        // }
-        //
-        // // TODO set obj->vmdata field to vm_class
-
         vm_class
     }
 
@@ -857,14 +844,45 @@ impl Class {
     }
 
     pub fn class_object(&self) -> &VmRef<Object> {
-        let ptr = self.class_object.as_ptr();
-        // safety: initialised unconditionally in link()
-        unsafe { &*ptr }
+        // safety: java/lang/Class is loaded and this is populated before any class is initialised
+        debug_assert!(!vmref_is_null(&self.class_object));
+        &self.class_object
     }
 
-    pub(in crate::class) fn init_class_object(self: &mut VmRef<Class>, cls_object: VmRef<Object>) {
-        let self_mut = Arc::get_mut(self).expect("not only reference");
-        self_mut.class_object = MaybeUninit::new(cls_object);
+    /// class_cls: java/lang/Class class to be instantiated
+    pub(in crate::class) fn init_class_object(self: &mut VmRef<Class>, class_cls: VmRef<Class>) {
+        let vmdata_fieldid = {
+            // TODO this is always the same
+            let field_idx = class_cls
+                .find_field_index(
+                    "vmdata".as_mstr(),
+                    &DataType::Reference("java/lang/Object".to_mstr()),
+                    FieldSearchType::Instance,
+                )
+                .expect("java/lang/Class should have vmdata field");
+            class_cls
+                .instance_fields_layout()
+                .get_self_id(field_idx)
+                .unwrap()
+        };
+
+        // allocate class instance
+        let cls_object = VmRef::new(Object::new(class_cls));
+
+        // point class_object field to class instance
+        // TODO use Arc::get_mut_unchecked instead
+        let self_mut = unsafe { &mut *(Arc::as_ptr(self) as *const _ as *mut Class) };
+        debug_assert!(vmref_is_null(&self_mut.class_object));
+        let dummy = std::mem::replace(&mut self_mut.class_object, cls_object);
+        std::mem::forget(dummy); // dont run the destructor of the null pointer
+
+        // set vmdata field to this
+        let fields = self
+            .class_object
+            .fields()
+            .expect("class should have fields");
+
+        fields.ensure_set(vmdata_fieldid, DataValue::VmDataClass(self.clone()));
     }
 
     /// Class object monitor must be held!!
@@ -1212,6 +1230,12 @@ impl Class {
         }
 
         false
+    }
+}
+
+impl Debug for Class {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Class({})", self.name())
     }
 }
 

@@ -284,21 +284,27 @@ impl ClassLoader {
         }
     }
 
-    pub(crate) fn populate_class_vmdata(&self, cls: &mut VmRef<Class>) {
+    pub(in crate::class) fn populate_class_vmdata(&self, cls: &mut VmRef<Class>) {
         if let Some(class_cls) = self.get_bootstrap_class_checked("java/lang/Class") {
-            // instantiate java/lang/Class
+            cls.init_class_object(class_cls);
+        }
 
-            let class_obj = VmRef::new(Object::new(class_cls.clone()));
-            debug_assert_eq!(
-                class_obj.class().unwrap().name(),
-                "java/lang/Class".as_mstr()
-            );
+        // otherwise leave as null pointer and fix up later
+    }
 
-            cls.init_class_object(class_obj);
+    pub(crate) fn fix_up_class_objects(&self) {
+        let class_cls = self.get_bootstrap_class("java/lang/Class");
 
-        // TODO set obj->vmdata field to vm_class
-        } else {
-            todo!("no java/lang/Class")
+        let mut guard = self.classes.write();
+        for (_, loader, state) in guard.iter_mut() {
+            debug_assert!(matches!(*loader, WhichLoader::Bootstrap));
+
+            match state {
+                LoadState::Loaded(_, cls) => {
+                    cls.init_class_object(class_cls.clone());
+                }
+                _ => unreachable!(),
+            }
         }
     }
 

@@ -15,7 +15,7 @@ pub type InternedString = MString;
 
 // TODO methods on VmRef newtype
 pub fn vmref_is_null(vmref: &VmRef<Object>) -> bool {
-    vmref.is_null()
+    vmref_ptr(vmref) == 0 || vmref.is_null()
 }
 
 pub fn vmref_ptr<O>(vmref: &VmRef<O>) -> u64 {

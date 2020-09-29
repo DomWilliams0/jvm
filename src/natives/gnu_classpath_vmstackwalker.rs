@@ -24,8 +24,6 @@ pub fn vm_get_class_context(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<
         classes.push(cls.class_object().to_owned());
     });
 
-    log::debug!("woo {:#?}", classes);
-
     // create array
     let array_class = thread
         .global()
@@ -43,6 +41,7 @@ pub fn vm_get_classloader(mut args: FunctionArgs) -> Result<Option<DataValue>, V
 
     // TODO get vmdata field
     log::debug!("GET VMDATA FROM {:?}", class_obj);
+    log::debug!("{:?}", class_obj.print_fields());
 
     todo!()
 }

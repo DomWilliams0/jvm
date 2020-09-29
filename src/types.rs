@@ -1,8 +1,8 @@
-use crate::class::null;
+use crate::class::{null, Class};
 
 use crate::alloc::{vmref_eq, VmRef};
 use crate::class::Object;
-use cafebabe::mutf8::mstr;
+use cafebabe::mutf8::{mstr, StrExt};
 
 use crate::thread;
 use num_enum::TryFromPrimitive;
@@ -44,6 +44,9 @@ pub enum DataValue {
     Double(f64),
     /// class types, array types, and interface types
     Reference(VmRef<Object>),
+
+    /// java/lang/Class.vmdata
+    VmDataClass(VmRef<Class>),
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -195,6 +198,9 @@ impl DataValue {
             DataValue::Reference(o) => {
                 let cls = o.class().expect("null");
                 DataType::Reference(Cow::Owned(cls.name().to_owned()))
+            }
+            DataValue::VmDataClass(_) => {
+                DataType::Reference(Cow::Borrowed("java/lang/Class".as_mstr()))
             }
         }
     }
