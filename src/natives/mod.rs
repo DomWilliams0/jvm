@@ -10,7 +10,8 @@ pub mod java_lang_object;
 pub mod java_lang_system;
 pub mod java_security_accesscontroller;
 
-pub mod gnu_classpath_vmstackwalker;
+pub mod sun_misc_unsafe;
+pub mod sun_reflect_reflection;
 
 pub fn vm_nop_void(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     log::warn!("calling nop native method!");

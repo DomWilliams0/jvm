@@ -306,11 +306,13 @@ impl Interpreter {
         f(frame)
     }
 
-    /// Called in top down order, first is current frame
-    pub fn with_frames(&self, mut f: impl FnMut(&Frame)) {
+    /// Called in top down order, first is current frame. Return false to stop early
+    pub fn with_frames(&self, mut f: impl FnMut(&Frame) -> bool) {
         let state = self.state.borrow();
         for frame in state.frames.iter() {
-            f(frame);
+            if !f(frame) {
+                break;
+            }
         }
     }
 }

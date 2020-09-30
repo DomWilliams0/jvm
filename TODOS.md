@@ -1,4 +1,4 @@
-# TODOs (153)
+# TODOs (156)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -145,9 +145,6 @@
    * `// TODO standard jvm args`
  * [src/lib.rs](src/lib.rs) (1)
    * `// TODO actually choose versions`
- * [src/natives/gnu_classpath_vmstackwalker.rs](src/natives/gnu_classpath_vmstackwalker.rs) (2)
-   * `// TODO native impls for other VMStackWalker methods`
-   * `// TODO get vmdata field`
  * [src/natives/java_lang_class.rs](src/natives/java_lang_class.rs) (2)
    * `// TODO actually register natives`
    * `// TODO get actual assertion status`
@@ -161,8 +158,14 @@
    * `// TODO check elements really are assignable`
    * `// TODO remove bounds check here, we just checked it explicitly`
    * `// TODO actually do preInit`
- * [src/natives/java_security_accesscontroller.rs](src/natives/java_security_accesscontroller.rs) (1)
+ * [src/natives/java_security_accesscontroller.rs](src/natives/java_security_accesscontroller.rs) (4)
    * `// TODO privileged execution?`
+   * `// TODO propagate unchecked exception`
+   * `// TODO privileged execution?`
+   * `// TODO propagate unchecked exception, raise another exception if it raises a checked exception`
+ * [src/natives/sun_misc_unsafe.rs](src/natives/sun_misc_unsafe.rs) (2)
+   * `// TODO Report the offset of the first element in the storage allocation of a given array class.`
+   * `// TODO Report the scale factor for addressing elements in the storage`
  * [src/properties.rs](src/properties.rs) (5)
    * `// TODO these properties are not all correct`
    * `prop!("java.home", dirs::data_dir()); // TODO`

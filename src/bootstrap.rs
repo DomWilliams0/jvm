@@ -98,60 +98,6 @@ pub fn init_bootstrap_classes(classloader: &ClassLoader) -> VmResult<()> {
                 ),
             ],
         ),
-        // Preload::with_natives(
-        //     "gnu/classpath/VMSystemProperties",
-        //     &[(
-        //         "preInit",
-        //         "(Ljava/util/Properties;)V",
-        //         gnu_classpath_vmsystemproperties::vm_systemproperties_preinit,
-        //     )],
-        // ),
-        // Preload::with_natives(
-        //     "java/lang/VMSystem",
-        //     &[
-        //         (
-        //             "identityHashCode",
-        //             "(Ljava/lang/Object;)I",
-        //             java_lang_vmsystem::vm_identity_hashcode,
-        //         ),
-        //         (
-        //             "arraycopy",
-        //             "(Ljava/lang/Object;ILjava/lang/Object;II)V",
-        //             java_lang_vmsystem::vm_array_copy,
-        //         ),
-        //     ],
-        // ),
-        // Preload::with_natives(
-        //     "java/lang/VMThrowable",
-        //     &[(
-        //         "fillInStackTrace",
-        //         "(Ljava/lang/Throwable;)Ljava/lang/VMThrowable;",
-        //         java_lang_vmthrowable::vm_fill_in_stack_trace,
-        //     )],
-        // ),
-        // Preload::with_natives(
-        //     "java/lang/VMObject",
-        //     &[(
-        //         "clone",
-        //         "(Ljava/lang/Cloneable;)Ljava/lang/Object;",
-        //         java_lang_vmobject::vm_clone,
-        //     )],
-        // ),
-        // Preload::with_natives(
-        //     "gnu/classpath/VMStackWalker",
-        //     &[
-        //         (
-        //             "getClassContext",
-        //             "()[Ljava/lang/Class;",
-        //             gnu_classpath_vmstackwalker::vm_get_class_context,
-        //         ),
-        //         (
-        //             "getClassLoader",
-        //             "(Ljava/lang/Class;)Ljava/lang/ClassLoader;",
-        //             gnu_classpath_vmstackwalker::vm_get_classloader,
-        //         ),
-        //     ],
-        // ),
         Preload::with_natives(
             "java/lang/System",
             &[
@@ -167,20 +113,56 @@ pub fn init_bootstrap_classes(classloader: &ClassLoader) -> VmResult<()> {
         Preload::new("java/util/HashMap"),
         Preload::with_natives(
             "java/security/AccessController",
-            &[(
-                "doPrivileged",
-                "(Ljava/security/PrivilegedAction;)Ljava/lang/Object;",
-                java_security_accesscontroller::vm_do_privileged,
-            )],
+            &[
+                (
+                    "doPrivileged",
+                    "(Ljava/security/PrivilegedAction;)Ljava/lang/Object;",
+                    java_security_accesscontroller::vm_do_privileged,
+                ),
+                (
+                    "doPrivileged",
+                    "(Ljava/security/PrivilegedExceptionAction;)Ljava/lang/Object;",
+                    java_security_accesscontroller::vm_do_privileged_exception,
+                ),
+            ],
         ),
         Preload::with_natives("sun/misc/VM", &[("initialize", "()V", vm_nop_void)]),
         Preload::with_natives(
             "java/io/FileInputStream",
             &[("initIDs", "()V", vm_nop_void)],
         ),
+        Preload::with_natives(
+            "java/io/FileOutputStream",
+            &[("initIDs", "()V", vm_nop_void)],
+        ),
         Preload::with_natives("java/io/FileDescriptor", &[("initIDs", "()V", vm_nop_void)]),
         Preload::with_natives(
             "sun/misc/Unsafe",
+            &[
+                ("registerNatives", "()V", vm_nop_void),
+                (
+                    "arrayBaseOffset",
+                    "(Ljava/lang/Class;)I",
+                    sun_misc_unsafe::vm_array_base_offset,
+                ),
+                (
+                    "arrayIndexScale",
+                    "(Ljava/lang/Class;)I",
+                    sun_misc_unsafe::vm_array_index_scale,
+                ),
+                ("addressSize", "()I", sun_misc_unsafe::vm_address_size),
+            ],
+        ),
+        Preload::with_natives(
+            "sun/reflect/Reflection",
+            &[(
+                "getCallerClass",
+                "()Ljava/lang/Class;",
+                sun_reflect_reflection::vm_get_caller_class,
+            )],
+        ),
+        Preload::with_natives(
+            "java/lang/Thread",
             &[("registerNatives", "()V", vm_nop_void)],
         ),
     ];

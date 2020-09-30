@@ -1,5 +1,5 @@
 use crate::alloc::VmRef;
-use crate::class::{FunctionArgs, WhichLoader};
+use crate::class::{FunctionArgs, Method, Object, WhichLoader};
 use crate::error::{Throwable, Throwables};
 use crate::interpreter::Frame;
 use crate::thread;
@@ -8,8 +8,10 @@ use cafebabe::mutf8::StrExt;
 use cafebabe::MethodAccessFlags;
 use std::iter::once;
 
-pub fn vm_do_privileged(mut args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
-    let action = args.take(0).into_reference().unwrap();
+fn find_run(
+    action: &VmRef<Object>,
+    iface: &'static str,
+) -> Result<VmRef<Method>, VmRef<Throwable>> {
     let cls = if let Some(cls) = action.class() {
         cls
     } else {
@@ -19,10 +21,10 @@ pub fn vm_do_privileged(mut args: FunctionArgs) -> Result<Option<DataValue>, VmR
     let thread = thread::get();
 
     // resolve PrivilegedAction iface and run method
-    let priv_action_cls = thread.global().class_loader().load_class(
-        "java/security/PrivilegedAction".as_mstr(),
-        WhichLoader::Bootstrap,
-    )?;
+    let priv_action_cls = thread
+        .global()
+        .class_loader()
+        .load_class(iface.as_mstr(), WhichLoader::Bootstrap)?;
     let run_iface_method = priv_action_cls
         .find_method_in_this_only(
             "run".as_mstr(),
@@ -33,14 +35,39 @@ pub fn vm_do_privileged(mut args: FunctionArgs) -> Result<Option<DataValue>, VmR
         .expect("no run method");
 
     // resolve run impl
-    let run_method = cls
+    Ok(cls
         .find_overriding_method(&run_iface_method)
-        .expect("no impl of run()");
+        .expect("no impl of run()"))
+}
+
+pub fn vm_do_privileged(mut args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    let action = args.take(0).into_reference().unwrap();
+
+    // resolve run()
+    let run_method = find_run(&action, "java/security/PrivilegedAction")?;
 
     // lmao just run it
     // TODO privileged execution?
+    // TODO propagate unchecked exception
     let frame = Frame::new_with_args(run_method, once(DataValue::Reference(action)))
         .expect("cant make frame");
-    let ret = thread.interpreter().execute_frame(frame)?;
+    let ret = thread::get().interpreter().execute_frame(frame)?;
+    Ok(ret)
+}
+pub fn vm_do_privileged_exception(
+    mut args: FunctionArgs,
+) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    let action = args.take(0).into_reference().unwrap();
+
+    // resolve run()
+    let run_method = find_run(&action, "java/security/PrivilegedExceptionAction")?;
+
+    // lmao just run it
+    // TODO privileged execution?
+    // TODO propagate unchecked exception, raise another exception if it raises a checked exception
+
+    let frame = Frame::new_with_args(run_method, once(DataValue::Reference(action)))
+        .expect("cant make frame");
+    let ret = thread::get().interpreter().execute_frame(frame)?;
     Ok(ret)
 }
