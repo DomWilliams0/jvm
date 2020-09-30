@@ -21,7 +21,7 @@ mod thread;
 mod types;
 
 // TODO actually choose versions
-pub const JAVA_VERSION: &str = "11.0.8";
+pub const JAVA_VERSION: &str = "1.8.0";
 pub const JAVA_VM_SPEC_VERSION: &str = "1.0";
-pub const JAVA_SPEC_VERSION: &str = "11.0.8";
+pub const JAVA_SPEC_VERSION: &str = "1.8.0";
 pub const CLASS_VERSION: &str = "50.0";

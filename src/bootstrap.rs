@@ -3,9 +3,12 @@
 use cafebabe::mutf8::StrExt;
 use cafebabe::MethodAccessFlags;
 
+use crate::alloc::VmRef;
 use crate::class::{Class, ClassLoader, NativeInternalFn, WhichLoader};
-use crate::error::VmResult;
+use crate::error::{Throwable, VmResult};
+use crate::interpreter::Frame;
 use crate::natives::*;
+use crate::thread;
 use crate::types::PrimitiveDataType;
 
 struct Preload {
@@ -31,7 +34,14 @@ impl Preload {
 
 pub fn init_bootstrap_classes(classloader: &ClassLoader) -> VmResult<()> {
     // our lord and saviours first
-    Preload::new("java/lang/Object").load(classloader)?;
+    Preload::with_natives(
+        "java/lang/Object",
+        &[
+            ("registerNatives", "()V", vm_nop_void),
+            ("hashCode", "()I", java_lang_system::vm_identity_hashcode),
+        ],
+    )
+    .load(classloader)?;
     Preload::new("java/lang/Class").load(classloader)?;
 
     // now that Class is loaded, fix up missing class_object ptrs in all loaded classes so far
@@ -40,72 +50,166 @@ pub fn init_bootstrap_classes(classloader: &ClassLoader) -> VmResult<()> {
     init_primitives(classloader)?;
 
     let preload = [
-        Preload::new("java/lang/Class"),
         Preload::new("java/lang/String"),
-        Preload::new("java/lang/ClassLoader"),
         Preload::with_natives(
-            "gnu/classpath/VMSystemProperties",
-            &[(
-                "preInit",
-                "(Ljava/util/Properties;)V",
-                gnu_classpath_vmsystemproperties::vm_systemproperties_preinit,
-            )],
-        ),
-        Preload::with_natives(
-            "java/lang/VMSystem",
+            "java/lang/Class",
             &[
                 (
-                    "identityHashCode",
-                    "(Ljava/lang/Object;)I",
-                    java_lang_vmsystem::vm_identity_hashcode,
+                    "registerNatives",
+                    "()V",
+                    java_lang_class::vm_register_natives,
                 ),
                 (
-                    "arraycopy",
-                    "(Ljava/lang/Object;ILjava/lang/Object;II)V",
-                    java_lang_vmsystem::vm_array_copy,
+                    "getPrimitiveClass",
+                    "(Ljava/lang/String;)Ljava/lang/Class;",
+                    java_lang_class::vm_get_primitive_class,
+                ),
+                (
+                    "desiredAssertionStatus0",
+                    "(Ljava/lang/Class;)Z",
+                    java_lang_class::vm_desired_assertion_status,
                 ),
             ],
         ),
         Preload::with_natives(
-            "java/lang/VMThrowable",
+            "java/lang/ClassLoader",
+            &[("registerNatives", "()V", vm_nop_void)],
+        ),
+        Preload::with_natives(
+            "java/lang/Float",
             &[(
-                "fillInStackTrace",
-                "(Ljava/lang/Throwable;)Ljava/lang/VMThrowable;",
-                java_lang_vmthrowable::vm_fill_in_stack_trace,
+                "floatToRawIntBits",
+                "(F)I",
+                java_lang_float::vm_float_to_raw_int_bits,
             )],
         ),
         Preload::with_natives(
-            "java/lang/VMObject",
-            &[(
-                "clone",
-                "(Ljava/lang/Cloneable;)Ljava/lang/Object;",
-                java_lang_vmobject::vm_clone,
-            )],
-        ),
-        Preload::new("[Ljava/lang/Class;"),
-        Preload::with_natives(
-            "gnu/classpath/VMStackWalker",
+            "java/lang/Double",
             &[
                 (
-                    "getClassContext",
-                    "()[Ljava/lang/Class;",
-                    gnu_classpath_vmstackwalker::vm_get_class_context,
+                    "doubleToRawLongBits",
+                    "(D)J",
+                    java_lang_double::vm_double_to_raw_int_bits,
                 ),
                 (
-                    "getClassLoader",
-                    "(Ljava/lang/Class;)Ljava/lang/ClassLoader;",
-                    gnu_classpath_vmstackwalker::vm_get_classloader,
+                    "longBitsToDouble",
+                    "(J)D",
+                    java_lang_double::vm_long_bits_to_double,
                 ),
             ],
         ),
-        Preload::new("java/lang/System"),
+        // Preload::with_natives(
+        //     "gnu/classpath/VMSystemProperties",
+        //     &[(
+        //         "preInit",
+        //         "(Ljava/util/Properties;)V",
+        //         gnu_classpath_vmsystemproperties::vm_systemproperties_preinit,
+        //     )],
+        // ),
+        // Preload::with_natives(
+        //     "java/lang/VMSystem",
+        //     &[
+        //         (
+        //             "identityHashCode",
+        //             "(Ljava/lang/Object;)I",
+        //             java_lang_vmsystem::vm_identity_hashcode,
+        //         ),
+        //         (
+        //             "arraycopy",
+        //             "(Ljava/lang/Object;ILjava/lang/Object;II)V",
+        //             java_lang_vmsystem::vm_array_copy,
+        //         ),
+        //     ],
+        // ),
+        // Preload::with_natives(
+        //     "java/lang/VMThrowable",
+        //     &[(
+        //         "fillInStackTrace",
+        //         "(Ljava/lang/Throwable;)Ljava/lang/VMThrowable;",
+        //         java_lang_vmthrowable::vm_fill_in_stack_trace,
+        //     )],
+        // ),
+        // Preload::with_natives(
+        //     "java/lang/VMObject",
+        //     &[(
+        //         "clone",
+        //         "(Ljava/lang/Cloneable;)Ljava/lang/Object;",
+        //         java_lang_vmobject::vm_clone,
+        //     )],
+        // ),
+        // Preload::with_natives(
+        //     "gnu/classpath/VMStackWalker",
+        //     &[
+        //         (
+        //             "getClassContext",
+        //             "()[Ljava/lang/Class;",
+        //             gnu_classpath_vmstackwalker::vm_get_class_context,
+        //         ),
+        //         (
+        //             "getClassLoader",
+        //             "(Ljava/lang/Class;)Ljava/lang/ClassLoader;",
+        //             gnu_classpath_vmstackwalker::vm_get_classloader,
+        //         ),
+        //     ],
+        // ),
+        Preload::with_natives(
+            "java/lang/System",
+            &[
+                ("registerNatives", "()V", vm_nop_void),
+                (
+                    "initProperties",
+                    "(Ljava/util/Properties;)Ljava/util/Properties;",
+                    java_lang_system::vm_init_properties,
+                ),
+            ],
+        ),
         Preload::new("[I"),
         Preload::new("java/util/HashMap"),
+        Preload::with_natives(
+            "java/security/AccessController",
+            &[(
+                "doPrivileged",
+                "(Ljava/security/PrivilegedAction;)Ljava/lang/Object;",
+                java_security_accesscontroller::vm_do_privileged,
+            )],
+        ),
+        Preload::with_natives("sun/misc/VM", &[("initialize", "()V", vm_nop_void)]),
+        Preload::with_natives(
+            "java/io/FileInputStream",
+            &[("initIDs", "()V", vm_nop_void)],
+        ),
+        Preload::with_natives("java/io/FileDescriptor", &[("initIDs", "()V", vm_nop_void)]),
+        Preload::with_natives(
+            "sun/misc/Unsafe",
+            &[("registerNatives", "()V", vm_nop_void)],
+        ),
     ];
 
     for preload in preload.iter() {
         preload.load(classloader)?;
     }
+
+    Ok(())
+}
+
+pub fn init_jvm() -> Result<(), VmRef<Throwable>> {
+    let thread = thread::get();
+
+    // resolve and call java/lang/System.initializeSystemClass
+    let init_system = thread
+        .global()
+        .class_loader()
+        .get_bootstrap_class("java/lang/System")
+        .find_method_in_this_only(
+            "initializeSystemClass".as_mstr(),
+            "()V".as_mstr(),
+            MethodAccessFlags::STATIC,
+            MethodAccessFlags::ABSTRACT,
+        )
+        .expect("cant find java/lang/System.initializeSystemClass");
+    thread
+        .interpreter()
+        .execute_frame(Frame::new_no_args(init_system).unwrap())?;
 
     Ok(())
 }

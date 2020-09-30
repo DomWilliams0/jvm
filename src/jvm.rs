@@ -91,6 +91,11 @@ impl Jvm {
             return Err(e);
         }
 
+        if let Err(e) = bootstrap::init_jvm() {
+            error!("jvm startup threw exception: {:?}", e);
+            return Err(JvmError::ExceptionThrown(e));
+        }
+
         Ok(jvm)
     }
 

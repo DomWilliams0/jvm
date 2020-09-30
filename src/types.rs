@@ -8,6 +8,7 @@ use crate::thread;
 use num_enum::TryFromPrimitive;
 use std::borrow::Cow;
 use std::convert::TryInto;
+use std::str::FromStr;
 
 // TODO more efficient packing of data values
 #[derive(PartialEq, Eq, Debug, Clone)]
@@ -216,6 +217,20 @@ impl DataValue {
     pub fn as_float(&self) -> Option<f32> {
         match self {
             DataValue::Float(f) => Some(*f),
+            _ => None,
+        }
+    }
+
+    pub fn as_double(&self) -> Option<f64> {
+        match self {
+            DataValue::Double(d) => Some(*d),
+            _ => None,
+        }
+    }
+
+    pub fn as_long(&self) -> Option<i64> {
+        match self {
+            DataValue::Long(l) => Some(*l),
             _ => None,
         }
     }
@@ -699,6 +714,24 @@ impl From<NewarrayType> for PrimitiveDataType {
             NewarrayType::Int => PrimitiveDataType::Int,
             NewarrayType::Long => PrimitiveDataType::Long,
         }
+    }
+}
+
+impl FromStr for PrimitiveDataType {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "boolean" => PrimitiveDataType::Boolean,
+            "char" => PrimitiveDataType::Char,
+            "float" => PrimitiveDataType::Float,
+            "double" => PrimitiveDataType::Double,
+            "byte" => PrimitiveDataType::Byte,
+            "short" => PrimitiveDataType::Short,
+            "int" => PrimitiveDataType::Int,
+            "long" => PrimitiveDataType::Long,
+            _ => return Err(()),
+        })
     }
 }
 
