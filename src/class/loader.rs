@@ -130,7 +130,6 @@ impl ClassLoader {
         // TODO run user classloader first
         // TODO array classes are treated differently
 
-        // let class_name = class_name.as_ref();
         let array_type = ArrayType::from_descriptor(class_name);
 
         // use bootstrap loader for primitives
@@ -173,7 +172,7 @@ impl ClassLoader {
 
         debug!("loading class {:?}", class_name);
         #[cfg(feature = "log-class-loading")]
-        self.logger.lock().register_class_load(class_name, cause);
+        self.logger.lock().register_class_load(class_name, _cause);
 
         // loading is required, update shared state
         // TODO record that this loader is an initiating loader

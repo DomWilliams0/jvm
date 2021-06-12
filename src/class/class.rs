@@ -1400,3 +1400,90 @@ impl Debug for LockedClassState {
         write!(f, "LockedClassState")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Jvm, JvmArgs};
+    use std::path::PathBuf;
+
+    fn test_jvm() -> Jvm {
+        macro_rules! var {
+            ($var:expr) => {
+                std::env::var($var).expect(std::concat!("missing env var ", $var))
+            };
+        }
+        let test_cases = {
+            let mut root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            root.push("test-cases");
+            String::from(root.to_string_lossy())
+        };
+
+        let bootpath = {
+            let gnu_classpath = var!("JVM_BOOTCLASSPATH");
+            format!("{}:{}", gnu_classpath, test_cases)
+        };
+
+        let args = vec![
+            "<unused main>",
+            "--XXnosystemclassloader",
+            "--Xbootclasspath",
+            &bootpath,
+            "--cp",
+            &test_cases,
+        ];
+        let args = JvmArgs::parse(args.into_iter().map(String::from)).expect("bad args");
+        Jvm::new(args).expect("init failed")
+    }
+
+    fn test_logging() {
+        let _ = env_logger::builder()
+            .is_test(true)
+            .filter_level(LevelFilter::Debug)
+            .filter_module("cafebabe", LevelFilter::Info)
+            .try_init();
+    }
+
+    fn get_static_field(class: &VmRef<Class>, name: &'static str, desc: &'static str) -> DataValue {
+        let name = mstr::from_literal(name);
+        let desc = DataType::from_descriptor(mstr::from_literal(desc)).expect("bad descriptor");
+
+        // get field id
+        let field_id = class
+            .find_field_recursive(name, &desc, FieldSearchType::Static)
+            .expect("field not found");
+
+        class.ensure_init().expect("init failed");
+
+        // get field value
+        class.static_fields().ensure_get(field_id)
+    }
+
+    fn get_class(name: &'static str) -> VmRef<Class> {
+        let thread = thread::get();
+        let classloader = thread.global().class_loader();
+        classloader
+            .load_class(mstr::from_literal(name), WhichLoader::Bootstrap)
+            .unwrap_or_else(|err| panic!("failed to load class {:?}: {}", name, err.symbol()))
+    }
+
+    #[test]
+    fn static_field_inheritance() {
+        test_logging();
+        let _jvm = test_jvm();
+
+        // TODO compile java source code at test time
+
+        let outer = get_class("Statics");
+        let inner1 = get_class("Statics$Inner");
+        let inner2 = get_class("Statics$InnerDeeper");
+
+        assert_eq!(get_static_field(&outer, "FIVE", "I"), DataValue::Int(5));
+
+        // inherited from super class
+        assert_eq!(get_static_field(&inner1, "FIVE", "I"), DataValue::Int(5));
+
+        // inherited from super super class
+        assert_eq!(get_static_field(&inner2, "FIVE", "I"), DataValue::Int(5));
+    }
+}
