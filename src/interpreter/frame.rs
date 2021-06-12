@@ -420,6 +420,30 @@ impl JavaFrame {
 
     /// "..., value1, value2 →"
     /// Returns (value1, value2)
+    pub fn pop_2_longs(&mut self) -> Result<(i64, i64), InterpreterError> {
+        let (val1, val2) = {
+            let mut objs = self.pop_values(2)?;
+
+            // popped in reverse order
+            let val2 = objs.next().unwrap();
+            let val1 = objs.next().unwrap();
+
+            (val1, val2)
+        };
+
+        let val1 = val1
+            .as_long()
+            .ok_or_else(|| InterpreterError::InvalidOperandForIntOp(val1.data_type()))?;
+
+        let val2 = val2
+            .as_long()
+            .ok_or_else(|| InterpreterError::InvalidOperandForIntOp(val2.data_type()))?;
+
+        Ok((val1, val2))
+    }
+
+    /// "..., value1, value2 →"
+    /// Returns (value1, value2)
     pub fn pop_2_ints(&mut self) -> Result<(i32, i32), InterpreterError> {
         let (val1, val2) = {
             let mut objs = self.pop_values(2)?;

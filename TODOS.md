@@ -1,4 +1,4 @@
-# TODOs (148)
+# TODOs (153)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -24,7 +24,7 @@
    * `// TODO actually intern strings`
    * `// TODO methods on VmRef newtype`
    * `// TODO oom error`
- * [src/class/class.rs](src/class/class.rs) (21)
+ * [src/class/class.rs](src/class/class.rs) (20)
    * `/// TODO weak reference for cyclic reference?`
    * `// TODO store dimensions`
    * `// TODO JNI style C function`
@@ -40,7 +40,6 @@
    * `// TODO ensure there is only 1`
    * `// TODO also this check, wtf does it mean:`
    * `todo!("instanceof for arrays") // TODO`
-   * `// TODO this is always the same`
    * `// TODO use Arc::get_mut_unchecked instead`
    * `// TODO initialise final static fields from ConstantValue attrs`
    * `// TODO wrap exception here and return the proper type`
@@ -60,12 +59,13 @@
    * `// TODO add array lookup with enum constants for common symbols like Object, or perfect hashing`
    * `// TODO cache this`
    * `// TODO newtype VmRef should handle equality`
- * [src/class/object.rs](src/class/object.rs) (7)
+ * [src/class/object.rs](src/class/object.rs) (8)
    * `// TODO arrays should live on the GC java heap`
    * `// TODO arrays should be specialised and not hold massive DataValues`
    * `// TODO mutex only needed in edge case, try with atomic op first`
    * `// TODO just allocate an object instead of this unsafeness`
    * `// TODO limit array length to i32::MAX somewhere`
+   * `// TODO do this without all the allocations`
    * `// TODO statics too`
    * `// TODO not quite correct toString`
  * [src/classpath.rs](src/classpath.rs) (1)
@@ -73,7 +73,7 @@
  * [src/constant_pool.rs](src/constant_pool.rs) (3)
    * `// TODO store interned string instance here`
    * `// TODO method and field refs should be resolved vtable indices instead of loads of strings`
-   * `// TODO A numeric constant of type long or double OR A symbolic reference to a`
+   * `// TODO OR A symbolic reference to a dynamically-computed constant whose field descriptor is J (denoting long) or D (denoting double)`
  * [src/debug.rs](src/debug.rs) (1)
    * `// TODO log IO error`
  * [src/error.rs](src/error.rs) (3)
@@ -98,8 +98,10 @@
    * `// TODO some 2s are signed`
    * `// TODO assignment compatibility check`
    * `// TODO sign extended?`
+   * `// TODO value set conversion`
    * `// TODO narrow float to int properly`
    * `// TODO is probably wrong`
+   * `// TODO value set conversion`
    * `// TODO "converted to the float result using IEEE 754 round to nearest mode"`
    * `// TODO invokeinterface throws a lot more exceptions`
    * `// TODO NoSuchMethod error`
@@ -115,9 +117,7 @@
    * `// TODO may need to convert int to byte/short etc first`
    * `// TODO lookup natively interned string instance`
    * `// TODO natively intern new string instance`
-   * `// TODO int constant`
    * `// TODO deny long and double`
-   * `// TODO class symbolic reference`
    * `// TODO monitorenter`
    * `// TODO monitorexit`
    * `// TODO ensure not abstract, throw InstantiationError`
@@ -150,6 +150,14 @@
    * `// TODO get vmdata field`
  * [src/natives/gnu_classpath_vmsystemproperties.rs](src/natives/gnu_classpath_vmsystemproperties.rs) (1)
    * `// TODO actually do preInit`
+ * [src/natives/java_lang_class.rs](src/natives/java_lang_class.rs) (2)
+   * `// TODO actually register natives`
+   * `// TODO get actual assertion status`
+ * [src/natives/java_lang_double.rs](src/natives/java_lang_double.rs) (2)
+   * `// TODO this is definitely wrong`
+   * `// TODO this is definitely wrong`
+ * [src/natives/java_lang_float.rs](src/natives/java_lang_float.rs) (1)
+   * `// TODO this is definitely wrong`
  * [src/natives/java_lang_vmsystem.rs](src/natives/java_lang_vmsystem.rs) (3)
    * `// TODO dont unwrap`
    * `// TODO check elements really are assignable`

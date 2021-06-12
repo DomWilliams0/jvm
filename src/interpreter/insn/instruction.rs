@@ -24,6 +24,7 @@ use crate::interpreter::insn::InstructionBlob;
 use crate::interpreter::{Frame, InterpreterState};
 use crate::thread;
 use crate::types::{DataType, DataValue, NewarrayType, PrimitiveDataType};
+use std::ops::{BitAnd, BitXor, Shr};
 
 // TODO operand stack pop then verify might be wrong - only pop if its the right type?
 
@@ -656,7 +657,22 @@ impl Caload {
 
 impl Castore {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Castore")
+        let frame = interp.current_frame_mut();
+
+        // pop value
+        let value = frame.pop_value()?;
+        debug_assert!(value.is_int());
+
+        // pop reference type array and idx
+        let (array, idx) = frame.pop_arrayref_and_idx(|cls| {
+            matches!(
+                cls.class_type(),
+                ClassType::Primitive(PrimitiveDataType::Char)
+            )
+        })?;
+
+        array.array_set_unchecked(idx, value);
+        Ok(PostExecuteAction::Continue)
     }
 }
 
@@ -806,7 +822,10 @@ impl Drem {
 
 impl Dreturn {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Dreturn")
+        let frame = interp.current_frame_mut();
+        let val = frame.pop_value()?.as_double().expect("not double");
+        // TODO value set conversion
+        do_return_value(interp, DataValue::Double(val))
     }
 }
 
@@ -1085,7 +1104,10 @@ impl Frem {
 
 impl Freturn {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Freturn")
+        let frame = interp.current_frame_mut();
+        let val = frame.pop_value()?.as_float().expect("not float");
+        // TODO value set conversion
+        do_return_value(interp, DataValue::Float(val))
     }
 }
 
@@ -1278,7 +1300,14 @@ impl I2F {
 
 impl I2L {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction I2L")
+        let frame = interp.current_frame_mut();
+
+        // pop int
+        let int = frame.pop_int()?;
+
+        // extend to long
+        frame.operand_stack.push(DataValue::Long(int as i64));
+        Ok(PostExecuteAction::Continue)
     }
 }
 
@@ -1302,7 +1331,7 @@ impl Iaload {
 
 impl Iand {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Iand")
+        int_two_op(interp, "&", |a, b| a.bitand(b))
     }
 }
 
@@ -1509,6 +1538,28 @@ fn int_two_op(
     );
 
     frame.operand_stack.push(DataValue::Int(result));
+    Ok(PostExecuteAction::Continue)
+}
+
+fn long_two_op(
+    interp: &mut InterpreterState,
+    wat: &'static str,
+    op: impl FnOnce(i64, i64) -> i64,
+) -> ExecuteResult {
+    let frame = interp.current_frame_mut();
+
+    let (val1, val2) = frame.pop_2_longs()?;
+    let result = op(val1, val2);
+
+    trace!(
+        "{a} {op} {b} = {result}",
+        a = val1,
+        op = wat,
+        b = val2,
+        result = result
+    );
+
+    frame.operand_stack.push(DataValue::Long(result));
     Ok(PostExecuteAction::Continue)
 }
 
@@ -1984,7 +2035,7 @@ impl Invokevirtual {
         })?;
 
         // should already be initialised if its been instantiated
-        debug_assert!(!class.needs_init());
+        // debug_assert!(!class.needs_init());
 
         // TODO ensure method is not static, IncompatibleClassChangeError
         assert!(!resolved_method.flags().is_static());
@@ -2063,7 +2114,16 @@ impl Ireturn {
 
 impl Ishl {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Ishl")
+        let frame = interp.current_frame_mut();
+
+        let (value, mut shift_by) = frame.pop_2_ints()?;
+        shift_by &= 0x1f; // low 5 bits only
+
+        let result = value.wrapping_shl(shift_by as u32);
+        trace!("{} << {} => {}", value, shift_by, result);
+
+        frame.operand_stack.push(DataValue::Int(result));
+        Ok(PostExecuteAction::Continue)
     }
 }
 
@@ -2108,13 +2168,23 @@ impl Isub {
 
 impl Iushr {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Iushr")
+        let frame = interp.current_frame_mut();
+
+        let (value, mut shift_by) = frame.pop_2_ints()?;
+        shift_by &= 0x1f; // low 5 bits only
+
+        // unsigned for logical shift
+        let result = (value as u32).shr(shift_by as u32) as i32;
+        trace!("{} << {} => {}", value, shift_by, result);
+
+        frame.operand_stack.push(DataValue::Int(result));
+        Ok(PostExecuteAction::Continue)
     }
 }
 
 impl Ixor {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Ixor")
+        int_two_op(interp, "^", |a, b| a.bitxor(b))
     }
 }
 
@@ -2150,7 +2220,7 @@ impl L2I {
 
 impl Ladd {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Ladd")
+        long_two_op(interp, "+", |a, b| a.wrapping_add(b))
     }
 }
 
@@ -2162,7 +2232,7 @@ impl Laload {
 
 impl Land {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Land")
+        long_two_op(interp, "&", |a, b| a.bitand(b))
     }
 }
 
@@ -2196,7 +2266,7 @@ impl Ldc {
 
         let pool = frame.class.constant_pool();
         let entry = pool
-            .loadable_entry(self.0 as u16)
+            .entry_and(self.0 as u16, |e| e.is_loadable())
             .ok_or_else(|| InterpreterError::NotLoadable(self.0 as u16))?;
 
         let to_push = match entry {
@@ -2220,9 +2290,18 @@ impl Ldc {
                 DataValue::Reference(string_instance)
             }
             Entry::Float(f) => DataValue::from(*f),
-            // TODO int constant
+            Entry::Int(i) => DataValue::from(*i),
             // TODO deny long and double
-            // TODO class symbolic reference
+            Entry::ClassRef(cls_ref) => {
+                // resolve class
+                let cls = thread::get()
+                    .global()
+                    .class_loader()
+                    .load_class(&cls_ref.name, frame.class.loader().clone())?;
+
+                // get class object reference
+                DataValue::Reference(cls.class_object().clone())
+            }
             e => unimplemented!("loadable entry {:?}", e),
         };
 
@@ -2234,7 +2313,21 @@ impl Ldc {
 
 impl Ldc2W {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Ldc2W")
+        let frame = interp.current_frame_mut();
+
+        let pool = frame.class.constant_pool();
+        let entry = pool
+            .entry_and(self.0 as u16, |e| e.is_loadable_wide())
+            .ok_or_else(|| InterpreterError::NotLoadable(self.0 as u16))?;
+
+        let to_push = match entry {
+            Entry::Long(l) => DataValue::from(*l),
+            Entry::Double(d) => DataValue::from(*d),
+            e => unimplemented!("wide loadable entry {:?}", e),
+        };
+
+        frame.operand_stack.push(to_push);
+        Ok(PostExecuteAction::Continue)
     }
 }
 
@@ -2321,7 +2414,16 @@ impl Lreturn {
 
 impl Lshl {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Lshl")
+        let frame = interp.current_frame_mut();
+
+        let shift_by = frame.pop_int()? & 0x3f; // low 6 bits only
+        let value = frame.pop_value()?.as_long().expect("not long");
+
+        let result = value.wrapping_shl(shift_by as u32);
+        trace!("{} << {} => {}", value, shift_by, result);
+
+        frame.operand_stack.push(DataValue::Long(result));
+        Ok(PostExecuteAction::Continue)
     }
 }
 
@@ -2648,7 +2750,12 @@ impl Sastore {
 
 impl Sipush {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Sipush")
+        let val = self.0 as i16 as i32;
+        interp
+            .current_frame_mut()
+            .operand_stack
+            .push(DataValue::Int(val));
+        Ok(PostExecuteAction::Continue)
     }
 }
 

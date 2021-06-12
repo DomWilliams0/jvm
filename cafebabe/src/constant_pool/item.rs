@@ -47,13 +47,13 @@ pub enum Item<'c> {
         string: Index,
     },
     Integer {
-        int: u32,
+        int: i32,
     },
     Float {
         float: f32,
     },
     Long {
-        long: u64,
+        long: i64,
     },
     Double {
         double: f64,
@@ -149,7 +149,7 @@ impl<'c> Item<'c> {
                 let high = buf.read::<u32>()?;
                 let low = buf.read::<u32>()?;
                 Item::Long {
-                    long: ((high as u64) << 32) + low as u64,
+                    long: (((high as u64) << 32) + low as u64) as i64,
                 }
             }
 

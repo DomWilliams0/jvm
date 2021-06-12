@@ -753,25 +753,23 @@ impl Class {
     }
 
     pub fn is_instance_of(self: &VmRef<Class>, other: &VmRef<Class>) -> bool {
+        if vmref_eq(self, other) {
+            return true;
+        };
         match self.class_type() {
             ClassType::Normal => {
                 debug_assert!(!self.is_interface());
 
-                if vmref_eq(self, other) {
-                    // check self first
-                    true
-                } else {
-                    let mut found = false;
-                    self.with_supers(|super_cls| {
-                        if vmref_eq(super_cls, other) {
-                            found = true;
-                            SuperIteration::Stop
-                        } else {
-                            SuperIteration::KeepGoing
-                        }
-                    });
-                    found
-                }
+                let mut found = false;
+                self.with_supers(|super_cls| {
+                    if vmref_eq(super_cls, other) {
+                        found = true;
+                        SuperIteration::Stop
+                    } else {
+                        SuperIteration::KeepGoing
+                    }
+                });
+                found
             }
             ClassType::Array(_) => {
                 /*If S is an array type SC[], that is, an array of components of type SC, then:
@@ -851,21 +849,6 @@ impl Class {
 
     /// class_cls: java/lang/Class class to be instantiated
     pub(in crate::class) fn init_class_object(self: &mut VmRef<Class>, class_cls: VmRef<Class>) {
-        let vmdata_fieldid = {
-            // TODO this is always the same
-            let field_idx = class_cls
-                .find_field_index(
-                    "vmdata".as_mstr(),
-                    &DataType::Reference("java/lang/Object".to_mstr()),
-                    FieldSearchType::Instance,
-                )
-                .expect("java/lang/Class should have vmdata field");
-            class_cls
-                .instance_fields_layout()
-                .get_self_id(field_idx)
-                .unwrap()
-        };
-
         // allocate class instance
         let cls_object = VmRef::new(Object::new(class_cls));
 
@@ -875,14 +858,6 @@ impl Class {
         debug_assert!(vmref_is_null(&self_mut.class_object));
         let dummy = std::mem::replace(&mut self_mut.class_object, cls_object);
         std::mem::forget(dummy); // dont run the destructor of the null pointer
-
-        // set vmdata field to this
-        let fields = self
-            .class_object
-            .fields()
-            .expect("class should have fields");
-
-        fields.ensure_set(vmdata_fieldid, DataValue::VmDataClass(self.clone()));
     }
 
     /// Class object monitor must be held!!

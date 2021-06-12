@@ -115,7 +115,6 @@ impl Object {
         // alloc char array
         let char_array_cls = classloader.get_primitive_array(PrimitiveDataType::Char);
         let char_array = vmref_alloc_object(|| Ok(Object::new_array(char_array_cls, utf16.len())))?;
-        let length = utf16.len();
 
         // populate char array
         {
@@ -131,23 +130,16 @@ impl Object {
         let set_field = |name: &'static str, value: DataValue| -> VmResult<()> {
             let name = name.to_mstr();
             let datatype = value.data_type();
+            trace!("setting string field {:?} to {:?}", name, value);
             let field_id = string_instance
                 .find_field_in_this_only(name.as_ref(), &datatype, FieldSearchType::Instance)
                 .ok_or_else(|| Throwables::Other("java/lang/NoSuchFieldError"))?;
 
-            trace!(
-                "setting string field {:?} ({:?}) to {:?}",
-                name,
-                field_id,
-                value
-            );
             fields.ensure_set(field_id, value);
             Ok(())
         };
 
         set_field("value", DataValue::Reference(char_array))?;
-
-        set_field("count", DataValue::Int(length as i32))?;
 
         Ok(string_instance)
     }
@@ -263,6 +255,35 @@ impl Object {
     pub fn print_fields(&self) -> ObjectFieldPrinter {
         ObjectFieldPrinter { obj: self }
     }
+
+    pub fn with_string_value<R>(&self, mut f: impl FnMut(&str) -> R) -> Option<R> {
+        if self.class.name().as_bytes() == b"java/lang/String" {
+            if let Some(DataValue::Reference(chars)) = self.find_field(
+                "value".as_mstr(),
+                &DataType::Reference(Cow::Borrowed("[C".as_mstr())),
+                FieldSearchType::Instance,
+            ) {
+                if !chars.is_null() {
+                    let chars = chars.array_unchecked();
+                    let chars = chars
+                        .iter()
+                        .map(|val| match val {
+                            DataValue::Char(c) => *c,
+                            _ => unreachable!(),
+                        })
+                        .collect_vec();
+
+                    // TODO do this without all the allocations
+                    let tmp_str = String::from_utf16_lossy(&chars);
+                    return Some(f(&tmp_str));
+                }
+            } else {
+                unreachable!("bad string class")
+            }
+        }
+
+        None
+    }
 }
 
 impl Debug for ObjectFieldPrinter<'_> {
@@ -321,29 +342,11 @@ impl Debug for Object {
             let ptr = self as *const _ as u64;
             write!(f, "{}@{:#x}", self.class.name(), ptr)?;
 
-            // even less correct but helpful for debugging
-            if self.class.name().as_bytes() == b"java/lang/String" {
-                if let Some(DataValue::Reference(chars)) = self.find_field(
-                    "value".as_mstr(),
-                    &DataType::Reference(Cow::Borrowed("[C".as_mstr())),
-                    FieldSearchType::Instance,
-                ) {
-                    if !chars.is_null() {
-                        let chars = chars.array_unchecked();
-                        let chars = chars
-                            .iter()
-                            .map(|val| match val {
-                                DataValue::Char(c) => *c,
-                                _ => unreachable!(),
-                            })
-                            .collect_vec();
+            // helpful for debugging
+            let result = self.with_string_value(|str_val| write!(f, " ({:?})", str_val));
 
-                        let tmp_str = String::from_utf16(&chars).expect("bad utf16");
-                        write!(f, " ({:?})", tmp_str)?;
-                    }
-                } else {
-                    unreachable!("bad string class")
-                }
+            if let Some(result) = result {
+                result?; // lol
             }
 
             Ok(())

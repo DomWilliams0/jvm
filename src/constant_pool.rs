@@ -16,6 +16,9 @@ pub enum Entry {
     FieldRef(FieldRef),
     ClassRef(ClassRef),
     Float(f32),
+    Long(i64),
+    Double(f64),
+    Int(i32),
 }
 
 // TODO method and field refs should be resolved vtable indices instead of loads of strings
@@ -108,6 +111,9 @@ impl RuntimeConstantPool {
                     );
                 }
                 Item::Float { float } => my_pool.put_entry(idx, Entry::Float(*float)),
+                Item::Long { long } => my_pool.put_entry(idx, Entry::Long(*long)),
+                Item::Double { double } => my_pool.put_entry(idx, Entry::Double(*double)),
+                Item::Integer { int } => my_pool.put_entry(idx, Entry::Int(*int)),
 
                 _ => continue,
             }
@@ -135,9 +141,9 @@ impl RuntimeConstantPool {
         self.0.get(idx).and_then(|i| i.as_ref())
     }
 
-    pub fn loadable_entry(&self, idx: u16) -> Option<&Entry> {
+    pub fn entry_and(&self, idx: u16, mut pred: impl FnMut(&Entry) -> bool) -> Option<&Entry> {
         self.entry(idx)
-            .and_then(|e| if e.is_loadable() { Some(e) } else { None })
+            .and_then(|e| if pred(e) { Some(e) } else { None })
     }
 
     /// Method ref only
@@ -194,15 +200,17 @@ impl Entry {
             | Entry::InterfaceMethodRef(_)
             | Entry::FieldRef(_)
             | Entry::ClassRef(_)
+            | Entry::Int(_)
             | Entry::Float(_) => true,
             _ => false,
         }
     }
-
-    pub fn is_long_or_double(&self) -> bool {
-        // TODO A numeric constant of type long or double OR A symbolic reference to a
-        //  dynamically-computed constant whose field descriptor is J (denoting long) or D (denoting double)
-        false
+    pub fn is_loadable_wide(&self) -> bool {
+        match self {
+            Entry::Double(_) | Entry::Long(_) => true,
+            // TODO OR A symbolic reference to a dynamically-computed constant whose field descriptor is J (denoting long) or D (denoting double)
+            _ => false,
+        }
     }
 }
 
