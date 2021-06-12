@@ -8,18 +8,19 @@ edition = "2018"
 
 [dependencies]
 cafebabe = {path = "cafebabe"}
-thiserror = "^1.0"
-log = "^0.4"
-env_logger = "^0.7"
-itertools = "^0.9"
-parking_lot = "^0.11"
-lazy_static = "^1.4"
-num_enum = "^0.5"
-strum = "^0.19"
-strum_macros = "^0.19"
-clap = "^2.33"
-whoami = "^0.9"
-dirs = "^3.0"
+thiserror = "1.0"
+log = "0.4"
+env_logger = "0.7"
+itertools = "0.9"
+parking_lot = "0.11"
+lazy_static = "1.4"
+num_enum = "0.5"
+strum = "0.19"
+strum_macros = "0.19"
+clap = "2.33"
+whoami = "0.9"
+dirs = "3.0"
+libloading = "0.7"
 
 [features]
 default = []

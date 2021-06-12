@@ -1,4 +1,4 @@
-# TODOs (154)
+# TODOs (158)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -61,12 +61,13 @@
    * `// TODO add array lookup with enum constants for common symbols like Object, or perfect hashing`
    * `// TODO cache this`
    * `// TODO newtype VmRef should handle equality`
- * [src/class/object.rs](src/class/object.rs) (7)
+ * [src/class/object.rs](src/class/object.rs) (8)
    * `// TODO arrays should live on the GC java heap`
    * `// TODO arrays should be specialised and not hold massive DataValues`
    * `// TODO mutex only needed in edge case, try with atomic op first`
    * `// TODO just allocate an object instead of this unsafeness`
    * `// TODO limit array length to i32::MAX somewhere`
+   * `// TODO do this without all the allocations`
    * `// TODO do this without all the allocations`
    * `// TODO not quite correct toString`
  * [src/classpath.rs](src/classpath.rs) (1)
@@ -160,6 +161,10 @@
    * `// TODO this is definitely wrong`
  * [src/natives/java_lang_vmclassloader.rs](src/natives/java_lang_vmclassloader.rs) (1)
    * `// TODO vm_get_primitive_class`
+ * [src/natives/java_lang_vmruntime.rs](src/natives/java_lang_vmruntime.rs) (3)
+   * `type JavaVM = (); // TODO JNI types`
+   * `// TODO use classloader arg`
+   * `// TODO keep native library reference around`
  * [src/natives/java_lang_vmsystem.rs](src/natives/java_lang_vmsystem.rs) (3)
    * `// TODO dont unwrap`
    * `// TODO check elements really are assignable`
@@ -170,7 +175,7 @@
    * `// TODO these properties are not all correct`
    * `prop!("java.home", dirs::data_dir()); // TODO`
    * `prop!("java.specification.version", "TODO"); // TODO get from Configuration class?`
-   * `prop!("java.library.path", "."); // TODO`
+   * `); // TODO`
    * `prop!("java.ext.dirs", "."); // TODO`
  * [src/storage.rs](src/storage.rs) (5)
    * `// TODO field storage should be inline in VmRef<Object>`

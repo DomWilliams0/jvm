@@ -99,8 +99,12 @@ impl Object {
     }
 
     pub(crate) fn new_string(contents: &mstr) -> VmResult<Object> {
+        Self::new_string_utf8(&*contents.to_utf8())
+    }
+
+    pub(crate) fn new_string_utf8(contents: &str) -> VmResult<Object> {
         // encode for java/lang/String
-        let utf16 = contents.to_utf8().encode_utf16().collect_vec();
+        let utf16 = contents.encode_utf16().collect_vec();
         let string_length = utf16.len();
 
         // TODO limit array length to i32::MAX somewhere
@@ -252,6 +256,36 @@ impl Object {
         ObjectFieldPrinter(self)
     }
 
+    pub fn string_value(&self) -> Option<String> {
+        if self.class.name().as_bytes() == b"java/lang/String" {
+            if let Some(DataValue::Reference(chars)) = self.find_instance_field(
+                "value".as_mstr(),
+                &DataType::Reference(Cow::Borrowed("[C".as_mstr())),
+            ) {
+                if !chars.is_null() {
+                    let chars = chars.array_unchecked();
+                    let chars = chars
+                        .iter()
+                        .map(|val| match val {
+                            DataValue::Char(c) => *c,
+                            DataValue::Int(i) => *i as u16,
+                            _ => unreachable!("expected char array but got {:?}", val),
+                        })
+                        .collect_vec();
+
+                    // TODO do this without all the allocations
+                    let tmp_str = String::from_utf16_lossy(&chars);
+                    return Some(tmp_str);
+                }
+            } else {
+                unreachable!("bad string class")
+            }
+        }
+
+        None
+    }
+
+    #[deprecated]
     pub fn with_string_value<R>(&self, mut f: impl FnMut(&str) -> R) -> Option<R> {
         if self.class.name().as_bytes() == b"java/lang/String" {
             if let Some(DataValue::Reference(chars)) = self.find_instance_field(
@@ -283,6 +317,8 @@ impl Object {
 
     /// Panics if not an instance of `java/lang/Class`
     pub fn vmdata(&self) -> (Option<VmRef<Class>>, FieldId) {
+        assert_eq!(self.class.name().as_bytes(), b"java/lang/Class");
+
         let field_id = self
             .find_field_in_this_only(
                 mstr::from_literal("vmdata"),

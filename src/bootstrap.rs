@@ -107,6 +107,21 @@ pub fn init_bootstrap_classes(classloader: &ClassLoader) -> VmResult<()> {
             )],
         ),
         Preload::new("java/lang/System"),
+        Preload::with_natives(
+            "java/lang/VMRuntime",
+            &[
+                (
+                    "mapLibraryName",
+                    "(Ljava/lang/String;)Ljava/lang/String;",
+                    java_lang_vmruntime::vm_map_library_name,
+                ),
+                (
+                    "nativeLoad",
+                    "(Ljava/lang/String;Ljava/lang/ClassLoader;)I",
+                    java_lang_vmruntime::vm_native_load,
+                ),
+            ],
+        ),
         Preload::new("[I"),
         Preload::new("java/util/HashMap"),
     ];
