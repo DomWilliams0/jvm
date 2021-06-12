@@ -159,6 +159,7 @@ impl Class {
         classloader: &ClassLoader,
     ) -> VmResult<VmRef<Self>> {
         debug!("linking class {:?}", expected_name);
+        // TODO this crashes in release builds, oops
 
         // check this is indeed the class we expected
         // TODO verify constant pool offsets so we can raise a single classformaterror then trust it
@@ -1195,6 +1196,9 @@ impl Class {
             }
             _ => return Ok(()),
         };
+
+        // native method was not already bound (e.g. by bootstrap preload), so fallback to resolving
+        // it as a JNI method
 
         debug!("binding native method {}", method);
 

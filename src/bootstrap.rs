@@ -98,6 +98,14 @@ pub fn init_bootstrap_classes(classloader: &ClassLoader) -> VmResult<()> {
                 ),
             ],
         ),
+        Preload::with_natives(
+            "java/lang/VMClassLoader",
+            &[(
+                "getPrimitiveClass",
+                "(C)Ljava/lang/Class;",
+                java_lang_vmclassloader::vm_get_primitive_class,
+            )],
+        ),
         Preload::new("java/lang/System"),
         Preload::new("[I"),
         Preload::new("java/util/HashMap"),

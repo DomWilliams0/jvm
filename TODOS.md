@@ -1,4 +1,4 @@
-# TODOs (153)
+# TODOs (155)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -24,7 +24,7 @@
    * `// TODO actually intern strings`
    * `// TODO methods on VmRef newtype`
    * `// TODO oom error`
- * [src/class/class.rs](src/class/class.rs) (21)
+ * [src/class/class.rs](src/class/class.rs) (22)
    * `/// TODO weak reference for cyclic reference?`
    * `// TODO store dimensions`
    * `// TODO JNI style C function`
@@ -46,6 +46,7 @@
    * `// TODO wrap exception here and return the proper type`
    * `// TODO proper exception type here`
    * `// TODO specific exception type e.g. ExceptionInInitializerError`
+   * `// TODO compile java source code at test time`
  * [src/class/loader.rs](src/class/loader.rs) (13)
    * `// TODO types for str to differentiate java/lang/Object, java.lang.Object and descrptors e.g. Ljava/lang/Object;`
    * `// TODO register class "package" with loader (https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-5.html#jvms-5.3)`
@@ -158,6 +159,8 @@
    * `// TODO this is definitely wrong`
  * [src/natives/java_lang_float.rs](src/natives/java_lang_float.rs) (1)
    * `// TODO this is definitely wrong`
+ * [src/natives/java_lang_vmclassloader.rs](src/natives/java_lang_vmclassloader.rs) (1)
+   * `// TODO vm_get_primitive_class`
  * [src/natives/java_lang_vmsystem.rs](src/natives/java_lang_vmsystem.rs) (3)
    * `// TODO dont unwrap`
    * `// TODO check elements really are assignable`
