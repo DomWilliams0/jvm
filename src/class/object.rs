@@ -202,13 +202,8 @@ impl Object {
         self.class.instance_fields_layout().get_self_id(field_index)
     }
 
-    pub fn find_field(
-        &self,
-        name: &mstr,
-        desc: &DataType,
-        search: FieldSearchType,
-    ) -> Option<DataValue> {
-        let field_id = self.class.find_field_recursive(name, desc, search)?;
+    pub fn find_instance_field(&self, name: &mstr, desc: &DataType) -> Option<DataValue> {
+        let field_id = self.class.find_instance_field_recursive(name, desc)?;
         Some(self.field(field_id))
     }
 
@@ -250,16 +245,15 @@ impl Object {
         }
     }
 
-    pub fn print_fields(&self) -> ObjectFieldPrinter {
+    pub fn print_fields<'a>(&'a self) -> impl Debug + 'a {
         ObjectFieldPrinter(self)
     }
 
     pub fn with_string_value<R>(&self, mut f: impl FnMut(&str) -> R) -> Option<R> {
         if self.class.name().as_bytes() == b"java/lang/String" {
-            if let Some(DataValue::Reference(chars)) = self.find_field(
+            if let Some(DataValue::Reference(chars)) = self.find_instance_field(
                 "value".as_mstr(),
                 &DataType::Reference(Cow::Borrowed("[C".as_mstr())),
-                FieldSearchType::Instance,
             ) {
                 if !chars.is_null() {
                     let chars = chars.array_unchecked();
@@ -297,21 +291,21 @@ impl Debug for ObjectFieldPrinter<'_> {
             None => return write!(f, "None"),
             Some(fields) => fields,
         };
-        let static_storage = cls.static_fields();
 
         let instance_layout = cls.instance_fields_layout();
-        let static_layout = cls.static_fields_layout();
 
         let mut cls_idx = 0;
         let mut result = Ok(());
-        cls.field_resolution_order(|fields| {
+        cls.field_resolution_order(|cls_opt, fields| {
+            let cls = cls_opt.unwrap_or(&cls);
+
             let mut i_instance = 0;
             let mut i_static = 0;
             for field in fields.iter() {
                 let val = if field.flags().is_static() {
-                    let field_id = static_layout.get_id(cls_idx, i_static).unwrap();
+                    let field_id = cls.static_fields_layout().get_id(0, i_static).unwrap();
                     i_static += 1;
-                    static_storage.ensure_get(field_id)
+                    cls.static_fields().ensure_get(field_id)
                 } else {
                     let field_id = instance_layout.get_id(cls_idx, i_instance).unwrap();
                     i_instance += 1;

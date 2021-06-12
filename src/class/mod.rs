@@ -1,5 +1,5 @@
 pub use class::{
-    Class, ClassType, FieldSearchType, FunctionArgs, Method, MethodCode, NativeCode,
+    Class, ClassType, FieldSearchType, FoundField, FunctionArgs, Method, MethodCode, NativeCode,
     NativeFunction, NativeInternalFn,
 };
 pub use loader::{ClassLoader, WhichLoader};

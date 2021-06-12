@@ -1,6 +1,7 @@
 use crate::types::{DataType, DataValue};
 
-use parking_lot::RwLock;
+use log::*;
+use parking_lot::Mutex;
 
 use std::fmt::Debug;
 
@@ -17,30 +18,45 @@ pub struct FieldId(u32);
 // TODO compact field storage i.e. not using DataValue enum
 // TODO phantom generic type to tag this as Static or Instance fields
 #[derive(Debug)] // TODO fieldstorage better debug impl
-pub struct FieldStorage(RwLock<Box<[DataValue]>>);
+pub struct FieldStorage(Mutex<Box<[DataValue]>>);
+
+#[derive(Debug)]
+pub enum FieldDataType {
+    /// Data value is present in storage
+    Present(DataType<'static>),
+    /// Data value is not present, exists in a super class instead
+    NotPresent(DataType<'static>),
+}
 
 #[derive(Debug)]
 pub struct FieldStorageLayout {
     /// Indexed by field_id.class_id, the cumulative index of the first field of that class in storage
     counts: Box<[u32]>,
 
-    types: Box<[DataType<'static>]>,
+    types: Box<[FieldDataType]>,
 }
 
 pub struct FieldStorageLayoutBuilder {
     counts: Vec<u32>,
-    types: Vec<DataType<'static>>,
+    types: Vec<FieldDataType>,
 }
 
 impl FieldStorageLayoutBuilder {
+    pub fn empty() -> Self {
+        Self {
+            counts: Vec::default(),
+            types: Vec::default(),
+        }
+    }
+
     pub fn with_capacity(classes: usize, fields: usize) -> Self {
-        FieldStorageLayoutBuilder {
+        Self {
             counts: Vec::with_capacity(classes),
             types: Vec::with_capacity(fields),
         }
     }
 
-    pub fn add_fields_from_class(&mut self, tys: impl Iterator<Item = DataType<'static>>) {
+    pub fn add_fields_from_class(&mut self, tys: impl Iterator<Item = FieldDataType>) {
         // store start offset of this class
         self.counts.push(self.types.len() as u32);
         self.types.extend(tys)
@@ -56,7 +72,7 @@ impl FieldStorageLayoutBuilder {
 
 impl FieldStorageLayout {
     pub fn empty() -> Self {
-        FieldStorageLayout {
+        Self {
             counts: Vec::new().into_boxed_slice(),
             types: Vec::new().into_boxed_slice(),
         }
@@ -66,14 +82,36 @@ impl FieldStorageLayout {
         let values = self
             .types
             .iter()
-            .map(|ty| ty.clone().default_value())
+            .filter_map(|ty| match ty {
+                FieldDataType::Present(ty) => Some(ty.clone().default_value()),
+                FieldDataType::NotPresent(_) => None,
+            })
             .collect();
-        FieldStorage(RwLock::new(values))
+        FieldStorage(Mutex::new(values))
     }
 
     pub fn get_id(&self, class_index: usize, field_index: usize) -> Option<FieldId> {
         let start_idx = *self.counts.get(class_index)? as usize;
-        Some(FieldId((start_idx + field_index) as u32))
+        let idx = start_idx + field_index;
+
+        match self.types.get(idx) {
+            None => {
+                trace!("bad class index {}", class_index);
+                return None;
+            }
+            Some(FieldDataType::NotPresent(_)) => {
+                // field is not stored in this storage
+                trace!(
+                    "field {} in class {} is not present",
+                    field_index,
+                    class_index
+                );
+                return None;
+            }
+            Some(FieldDataType::Present(_)) => {}
+        }
+
+        Some(FieldId(idx as u32))
     }
 
     pub fn get_self_id(&self, field_index: usize) -> Option<FieldId> {
@@ -83,15 +121,15 @@ impl FieldStorageLayout {
 
 impl FieldStorage {
     pub fn empty() -> Self {
-        FieldStorage(RwLock::new(Box::from([])))
+        Self(Mutex::new(Box::from([])))
     }
 
     pub fn try_get(&self, id: FieldId) -> Option<DataValue> {
-        self.0.read().get(id.0 as usize).cloned()
+        self.0.lock().get(id.0 as usize).cloned()
     }
 
     pub fn try_set(&self, id: FieldId, value: DataValue) -> bool {
-        let mut guard = self.0.write();
+        let mut guard = self.0.lock();
         guard
             .get_mut(id.0 as usize)
             .map(|val| {
@@ -120,8 +158,15 @@ impl FieldStorage {
 
 impl Clone for FieldStorage {
     fn clone(&self) -> Self {
-        let data_clone = self.0.read().clone();
-        FieldStorage(RwLock::new(data_clone))
+        let data_clone = self.0.lock().clone();
+        Self(Mutex::new(data_clone))
+    }
+}
+
+impl FieldId {
+    #[cfg(test)]
+    pub fn get(self) -> u32 {
+        self.0
     }
 }
 

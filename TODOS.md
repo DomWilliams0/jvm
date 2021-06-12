@@ -33,9 +33,8 @@
    * `// TODO this crashes in release builds, oops`
    * `// TODO verify constant pool offsets so we can raise a single classformaterror then trust it`
    * `// TODO preparation? https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-5.html#jvms-5.4.2`
-   * `// TODO precalculate capacity`
+   * `// TODO different order for field layout than resolution? supers first to enable slicing? or not needed?`
    * `// TODO no need to iterate interfaces when looking for instance fields, add separate iterator method`
-   * `// TODO are static fields treated and resolved the same as instance fields?`
    * `// TODO do verification first to throw ClassFormatErrors, then this should not throw any classformaterrors`
    * `// TODO Every array type implements the interfaces Cloneable and java.io.Serializable.`
    * `// TODO ensure there is only 1`
@@ -46,6 +45,7 @@
    * `// TODO wrap exception here and return the proper type`
    * `// TODO proper exception type here`
    * `// TODO specific exception type e.g. ExceptionInInitializerError`
+   * `// TODO this is basically copied from getstatic, reuse instruction impl if possible`
    * `// TODO compile java source code at test time`
  * [src/class/loader.rs](src/class/loader.rs) (13)
    * `// TODO types for str to differentiate java/lang/Object, java.lang.Object and descrptors e.g. Ljava/lang/Object;`

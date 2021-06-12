@@ -20,7 +20,9 @@ use crate::class::{ClassLoader, WhichLoader};
 use crate::constant_pool::RuntimeConstantPool;
 use crate::error::{Throwable, Throwables, VmResult};
 use crate::interpreter::{Frame, InterpreterError};
-use crate::storage::{FieldId, FieldStorage, FieldStorageLayout, FieldStorageLayoutBuilder};
+use crate::storage::{
+    FieldDataType, FieldId, FieldStorage, FieldStorageLayout, FieldStorageLayoutBuilder,
+};
 use crate::thread;
 use crate::types::{DataType, DataValue, MethodSignature, PrimitiveDataType, ReturnType};
 
@@ -88,6 +90,15 @@ pub enum FieldSearchType {
     Static,
 }
 
+/// Result of searching for a field in a class
+pub enum FoundField {
+    /// Field value is in the storage of the searched class
+    InThisClass(FieldId),
+
+    /// Field value is in the storage of a super class of the searched class (i.e. it's static)
+    InOtherClass(FieldId, VmRef<Class>),
+}
+
 #[derive(Debug)]
 pub enum MethodCode {
     /// Abstract, no code
@@ -147,7 +158,7 @@ pub enum SuperIteration {
     Stop,
 }
 
-pub struct ClassStaticFieldPrinter<'a>(&'a Class);
+struct ClassStaticFieldPrinter<'a>(&'a VmRef<Class>);
 
 // TODO get classloader reference from tls instead of parameter
 
@@ -350,35 +361,52 @@ impl Class {
 
         // initialise field layout
         let (static_fields_layout, instance_fields_layout) = {
-            // TODO precalculate capacity
-            let mut static_builder = FieldStorageLayoutBuilder::with_capacity(4, 16);
+            let mut static_builder = FieldStorageLayoutBuilder::empty();
             let mut instance_builder = FieldStorageLayoutBuilder::with_capacity(4, 16);
 
             // add fields from supers in resolution order
+            // TODO different order for field layout than resolution? supers first to enable slicing? or not needed?
             // TODO no need to iterate interfaces when looking for instance fields, add separate iterator method
             Self::field_resolution_order_with(
+                None, // no self yet
                 &fields,
                 &interfaces,
                 super_class.as_ref(),
-                |fields| {
+                |this_cls, fields| {
                     instance_builder.add_fields_from_class(fields.iter().filter_map(|f| {
                         if !f.flags.is_static() {
-                            trace!("registering instance field {:?}", f);
-                            Some(f.desc.clone())
+                            trace!("registering instance field {:?} (from {:?})", f, this_cls);
+                            Some(FieldDataType::Present(f.desc.clone()))
                         } else {
                             None
                         }
                     }));
 
-                    // TODO are static fields treated and resolved the same as instance fields?
-                    static_builder.add_fields_from_class(fields.iter().filter_map(|f| {
-                        if f.flags.is_static() {
-                            trace!("registering static field {:?}", f);
-                            Some(f.desc.clone())
-                        } else {
-                            None
+                    match this_cls {
+                        None => {
+                            // this is the first call with this class's fields, so they are present
+                            static_builder.add_fields_from_class(fields.iter().filter_map(|f| {
+                                if f.flags.is_static() {
+                                    trace!("registering present static field {:?}", f);
+                                    Some(FieldDataType::Present(f.desc.clone()))
+                                } else {
+                                    None
+                                }
+                            }));
                         }
-                    }));
+                        Some(cls) => {
+                            // static fields in super classes are not present
+                            static_builder.add_fields_from_class(fields.iter().filter_map(|f| {
+                                if f.flags.is_static() {
+                                    trace!("registering non-present static field {:?} (present in {:?})", f, cls);
+                                    Some(FieldDataType::NotPresent(f.desc.clone()))
+                                } else {
+                                    None
+                                }
+                            }));
+                        }
+                    }
+
                     SuperIteration::KeepGoing
                 },
             );
@@ -727,32 +755,89 @@ impl Class {
         Self::find_field_index_with(&self.fields, name, desc, search)
     }
 
-    pub fn find_field_recursive(
-        &self,
+    fn find_field_recursive(
+        self: &VmRef<Class>,
         name: &mstr,
         desc: &DataType,
         ty: FieldSearchType,
-    ) -> Option<FieldId> {
-        let mut fieldid = None;
+    ) -> Option<FoundField> {
+        let mut found = None;
         let mut cls_idx = 0;
-        self.field_resolution_order(|fields| {
+
+        enum FoundResult {
+            /// (class, field)
+            Static(VmRef<Class>, usize),
+            /// (class index, field index)
+            Instance(usize, usize),
+        }
+
+        trace!("searching for field {:?} in {:?}", name, self);
+        self.field_resolution_order(|cls, fields| {
+            let cls = cls.unwrap(); // always provided
             if let Some(idx) = Self::find_field_index_with(fields, name, desc, ty) {
-                fieldid = Some(idx);
+                found = Some(match ty {
+                    FieldSearchType::Instance => FoundResult::Instance(cls_idx, idx),
+                    FieldSearchType::Static => FoundResult::Static(cls.clone(), idx),
+                });
                 SuperIteration::Stop
             } else {
+                trace!("nope {} = {:?}", cls_idx, cls);
                 cls_idx += 1;
                 SuperIteration::KeepGoing
             }
         });
 
-        fieldid.and_then(|f| {
-            let layout = match ty {
-                FieldSearchType::Instance => &self.instance_fields_layout,
-                FieldSearchType::Static => &self.static_fields_layout,
-            };
+        match found? {
+            FoundResult::Static(cls, field_idx) => {
+                trace!(
+                    "found static field {:?} in {:?} at field index {:?}",
+                    name,
+                    cls,
+                    field_idx
+                );
 
-            layout.get_id(cls_idx, f)
-        })
+                let layout = &cls.static_fields_layout;
+
+                // lookup present field in self, which was just resolved in this class
+                let field_id = layout.get_self_id(field_idx).unwrap();
+
+                Some(if vmref_eq(&cls, self) {
+                    FoundField::InThisClass(field_id)
+                } else {
+                    FoundField::InOtherClass(field_id, cls)
+                })
+            }
+            FoundResult::Instance(cls_idx, field_idx) => {
+                trace!(
+                    "found instance field {:?} in class index {:?} at field index {:?}",
+                    name,
+                    cls_idx,
+                    field_idx
+                );
+                let layout = &self.instance_fields_layout;
+                let field_id = layout.get_id(cls_idx, field_idx).unwrap();
+                Some(FoundField::InThisClass(field_id))
+            }
+        }
+    }
+
+    pub fn find_instance_field_recursive(
+        self: &VmRef<Class>,
+        name: &mstr,
+        desc: &DataType,
+    ) -> Option<FieldId> {
+        match self.find_field_recursive(name, desc, FieldSearchType::Instance)? {
+            FoundField::InOtherClass(_, _) => unreachable!(), // all instance fields are present
+            FoundField::InThisClass(field_id) => Some(field_id),
+        }
+    }
+
+    pub fn find_static_field_recursive(
+        self: &VmRef<Class>,
+        name: &mstr,
+        desc: &DataType,
+    ) -> Option<FoundField> {
+        self.find_field_recursive(name, desc, FieldSearchType::Static)
     }
 
     pub fn is_instance_of(self: &VmRef<Class>, other: &VmRef<Class>) -> bool {
@@ -1103,10 +1188,11 @@ impl Class {
     }
 
     pub(in crate::class) fn field_resolution_order(
-        &self,
-        mut f: impl FnMut(&[Field]) -> SuperIteration,
+        self: &VmRef<Class>,
+        mut f: impl FnMut(Option<&VmRef<Class>>, &[Field]) -> SuperIteration,
     ) {
         Self::__field_resolution_order_recurse(
+            Some(self),
             &self.fields,
             &self.interfaces,
             self.super_class.as_ref(),
@@ -1115,24 +1201,26 @@ impl Class {
     }
 
     fn field_resolution_order_with(
+        this_class: Option<&VmRef<Class>>,
         fields: &[Field],
         interfaces: &[VmRef<Class>],
         super_class: Option<&VmRef<Class>>,
-        mut f: impl FnMut(&[Field]) -> SuperIteration,
+        mut f: impl FnMut(Option<&VmRef<Class>>, &[Field]) -> SuperIteration,
     ) {
-        Self::__field_resolution_order_recurse(fields, interfaces, super_class, &mut f);
+        Self::__field_resolution_order_recurse(this_class, fields, interfaces, super_class, &mut f);
     }
 
     fn __field_resolution_order_recurse(
+        this_class: Option<&VmRef<Class>>,
         fields: &[Field],
         interfaces: &[VmRef<Class>],
         super_class: Option<&VmRef<Class>>,
-        f: &mut impl FnMut(&[Field]) -> SuperIteration,
+        f: &mut impl FnMut(Option<&VmRef<Class>>, &[Field]) -> SuperIteration,
     ) -> SuperIteration {
         let mut keep_going;
 
         // own fields first
-        keep_going = f(fields);
+        keep_going = f(this_class, fields);
 
         // then recurse on direct super interfaces
         let mut ifaces = interfaces.iter();
@@ -1140,6 +1228,7 @@ impl Class {
             match ifaces.next() {
                 Some(iface) => {
                     keep_going = Self::__field_resolution_order_recurse(
+                        Some(iface),
                         &iface.fields,
                         &iface.interfaces,
                         iface.super_class.as_ref(),
@@ -1154,6 +1243,7 @@ impl Class {
         if matches!(keep_going, SuperIteration::KeepGoing) {
             if let Some(super_class) = super_class {
                 return Self::__field_resolution_order_recurse(
+                    Some(super_class),
                     &super_class.fields,
                     &super_class.interfaces,
                     super_class.super_class.as_ref(),
@@ -1218,6 +1308,34 @@ impl Class {
 
         false
     }
+
+    pub fn iter_static_fields(
+        self: &VmRef<Class>,
+        mut per_field: impl FnMut(&Field, DataValue) -> SuperIteration,
+    ) {
+        let mut cls_idx = 0;
+        self.field_resolution_order(|cls_opt, fields| {
+            let cls = cls_opt.unwrap_or(self);
+            let layout = &cls.static_fields_layout;
+            let field_storage = &cls.static_fields_values;
+
+            for (i, field) in fields.iter().filter(|f| f.flags().is_static()).enumerate() {
+                let field_id = layout.get_self_id(i).unwrap();
+                let val = field_storage.ensure_get(field_id);
+
+                if let SuperIteration::Stop = per_field(field, val) {
+                    break;
+                }
+            }
+
+            cls_idx += 1;
+            SuperIteration::KeepGoing
+        });
+    }
+
+    pub fn print_static_fields<'a>(self: &'a VmRef<Class>) -> impl Debug + 'a {
+        ClassStaticFieldPrinter(self)
+    }
 }
 
 impl Debug for Class {
@@ -1231,31 +1349,21 @@ impl Debug for ClassStaticFieldPrinter<'_> {
         let cls = self.0;
         write!(f, "Static fields for {:?}: ", cls)?;
 
-        let layout = &cls.static_fields_layout;
-        let field_storage = &cls.static_fields_values;
-
-        let mut cls_idx = 0;
         let mut result = Ok(());
-        cls.field_resolution_order(|fields| {
-            for (i, field) in fields.iter().filter(|f| f.flags().is_static()).enumerate() {
-                let field_id = layout.get_id(cls_idx, i).unwrap();
-                let val = field_storage.ensure_get(field_id);
-
-                result = write!(
-                    f,
-                    "\n * {} ({:?} {:?}) => {:?}",
-                    field.name(),
-                    field.desc(),
-                    field.flags(),
-                    val
-                );
-                if result.is_err() {
-                    return SuperIteration::Stop;
-                }
+        cls.iter_static_fields(|field, val| {
+            result = write!(
+                f,
+                "\n * {} ({:?} {:?}) => {:?}",
+                field.name(),
+                field.desc(),
+                field.flags(),
+                val
+            );
+            if result.is_err() {
+                SuperIteration::Stop
+            } else {
+                SuperIteration::KeepGoing
             }
-
-            cls_idx += 1;
-            SuperIteration::KeepGoing
         });
 
         result
@@ -1439,24 +1547,35 @@ mod tests {
     fn test_logging() {
         let _ = env_logger::builder()
             .is_test(true)
-            .filter_level(LevelFilter::Debug)
+            .filter_level(LevelFilter::Trace)
             .filter_module("cafebabe", LevelFilter::Info)
             .try_init();
     }
 
     fn get_static_field(class: &VmRef<Class>, name: &'static str, desc: &'static str) -> DataValue {
+        // TODO this is basically copied from getstatic, reuse instruction impl if possible
+
         let name = mstr::from_literal(name);
         let desc = DataType::from_descriptor(mstr::from_literal(desc)).expect("bad descriptor");
 
         // get field id
-        let field_id = class
-            .find_field_recursive(name, &desc, FieldSearchType::Static)
+        let found = class
+            .find_static_field_recursive(name, &desc)
             .expect("field not found");
+
+        let (storage_class, field_id) = match found {
+            FoundField::InThisClass(id) => (class.clone(), id),
+            FoundField::InOtherClass(id, cls) => (cls, id),
+        };
 
         class.ensure_init().expect("init failed");
 
         // get field value
-        class.static_fields().ensure_get(field_id)
+        info!(
+            "searched {:?}, found id {:?} in {:?}",
+            class, field_id, storage_class
+        );
+        storage_class.static_fields().ensure_get(field_id)
     }
 
     fn get_class(name: &'static str) -> VmRef<Class> {
@@ -1468,22 +1587,104 @@ mod tests {
     }
 
     #[test]
-    fn static_field_inheritance() {
+    fn static_field_inheritance_get() {
         test_logging();
         let _jvm = test_jvm();
 
         // TODO compile java source code at test time
 
-        let outer = get_class("Statics");
-        let inner1 = get_class("Statics$Inner");
-        let inner2 = get_class("Statics$InnerDeeper");
+        let outer = get_class("Inheritance");
+        let inner1 = get_class("Inheritance$Inner");
+        let inner2 = get_class("Inheritance$InnerDeeper");
 
+        // own fields
         assert_eq!(get_static_field(&outer, "FIVE", "I"), DataValue::Int(5));
+        assert_eq!(get_static_field(&inner1, "SIX", "I"), DataValue::Int(6));
 
         // inherited from super class
         assert_eq!(get_static_field(&inner1, "FIVE", "I"), DataValue::Int(5));
+        assert_eq!(get_static_field(&inner2, "SIX", "I"), DataValue::Int(6));
 
         // inherited from super super class
         assert_eq!(get_static_field(&inner2, "FIVE", "I"), DataValue::Int(5));
+    }
+
+    #[test]
+    fn static_field_iter() {
+        test_logging();
+        let _jvm = test_jvm();
+
+        let inner1 = get_class("Inheritance$Inner");
+        let inner2 = get_class("Inheritance$InnerDeeper");
+
+        fn check_statics(
+            cls: &VmRef<Class>,
+            expected: Vec<(&'static str, &'static str, DataValue)>,
+        ) {
+            cls.ensure_init().expect("init failed");
+
+            let mut vec = vec![];
+            cls.iter_static_fields(|field, val| {
+                vec.push((field.name.clone(), field.desc.clone(), val));
+                SuperIteration::KeepGoing
+            });
+
+            let expected = expected
+                .into_iter()
+                .map(|(name, ty, val)| {
+                    (
+                        NativeString::from_utf8(name.as_bytes()),
+                        DataType::from_descriptor(mstr::from_literal(ty)).expect("bad descriptor"),
+                        val,
+                    )
+                })
+                .collect_vec();
+            assert_eq!(vec, expected)
+        }
+
+        check_statics(
+            &inner1,
+            vec![
+                ("SIX", "I", DataValue::Int(6)),
+                ("FIVE", "I", DataValue::Int(5)),
+            ],
+        );
+
+        let outer = get_class("Inheritance");
+        check_statics(&outer, vec![("FIVE", "I", DataValue::Int(5))]);
+
+        check_statics(
+            &inner2,
+            vec![
+                ("SIX", "I", DataValue::Int(6)),
+                ("FIVE", "I", DataValue::Int(5)),
+            ],
+        );
+    }
+
+    #[test]
+    fn instance_field_layout_inheritance() {
+        test_logging();
+        let _jvm = test_jvm();
+
+        let outer = get_class("Inheritance");
+        let inner1 = get_class("Inheritance$Inner");
+        let inner2 = get_class("Inheritance$InnerDeeper");
+
+        fn get_field_id(cls: &VmRef<Class>, name: &'static str) -> FieldId {
+            cls.find_instance_field_recursive(
+                mstr::from_literal(name),
+                &DataType::from_descriptor(mstr::from_literal("I")).expect("bad descriptor"),
+            )
+            .expect("field not found")
+        }
+
+        assert_eq!(get_field_id(&outer, "five").get(), 0);
+
+        assert_eq!(get_field_id(&inner1, "five").get(), 1);
+        assert_eq!(get_field_id(&inner1, "six").get(), 0);
+
+        assert_eq!(get_field_id(&inner2, "five").get(), 1);
+        assert_eq!(get_field_id(&inner2, "six").get(), 0);
     }
 }

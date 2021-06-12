@@ -13,8 +13,8 @@ use cafebabe::mutf8::StrExt;
 use cafebabe::{AccessFlags, ClassAccessFlags, MethodAccessFlags};
 
 use crate::alloc::{vmref_alloc_object, vmref_eq, VmRef};
-use crate::class::WhichLoader;
-use crate::class::{null, Class, ClassType, FieldSearchType, Object};
+use crate::class::{null, Class, ClassType, Object};
+use crate::class::{FoundField, WhichLoader};
 use crate::constant_pool::Entry;
 use crate::error::{Throwable, Throwables};
 use crate::interpreter::error::InterpreterError;
@@ -1188,7 +1188,7 @@ impl Getfield {
 
         // get field value
         let value = obj
-            .find_field(field.name.as_mstr(), &field.desc, FieldSearchType::Instance)
+            .find_instance_field(field.name.as_mstr(), &field.desc)
             .ok_or_else(|| InterpreterError::FieldNotFound {
                 name: field.name.to_owned(),
                 desc: field.desc.clone(),
@@ -1220,21 +1220,27 @@ impl Getstatic {
             frame.class.name(),
         )?;
 
-        // get field id
-        let field_id = class
-            .find_field_recursive(&field.name, &field.desc, FieldSearchType::Static)
+        // get field id and owning class
+        let found = class
+            .find_static_field_recursive(&field.name, &field.desc)
             .ok_or_else(|| InterpreterError::FieldNotFound {
                 name: field.name.clone(),
                 desc: field.desc.clone(),
             })?;
+
+        // class holding static field data is not necessarily the same
+        let (storage_class, field_id) = match found {
+            FoundField::InThisClass(id) => (class.clone(), id),
+            FoundField::InOtherClass(id, cls) => (cls, id),
+        };
 
         // initialise class on successful resolution
         if class.needs_init() {
             return Ok(PostExecuteAction::ClassInit(class));
         }
 
-        // get field value
-        let value = class.static_fields().ensure_get(field_id);
+        // get field value from storage class
+        let value = storage_class.static_fields().ensure_get(field_id);
 
         // push onto stack
         frame.operand_stack.push(value);
@@ -2651,10 +2657,12 @@ impl Putfield {
         // TODO verify not array class
         let fields = object.fields().expect("unexpected array");
 
+        let class: VmRef<Class> = class;
+
         // get field id
         // TODO throw IncompatibleClassChangeError
         let field_id = class
-            .find_field_recursive(field.name.as_mstr(), &field.desc, FieldSearchType::Instance)
+            .find_instance_field_recursive(field.name.as_mstr(), &field.desc)
             .ok_or_else(|| InterpreterError::FieldNotFound {
                 name: field.name.clone(),
                 desc: field.desc.clone(),
@@ -2698,12 +2706,18 @@ impl Putstatic {
 
         // get field id
         // TODO throw IncompatibleClassChangeError
-        let field_id = class
-            .find_field_recursive(&field.name, &field.desc, FieldSearchType::Static)
+        let found = class
+            .find_static_field_recursive(&field.name, &field.desc)
             .ok_or_else(|| InterpreterError::FieldNotFound {
                 name: field.name.clone(),
                 desc: field.desc.clone(),
             })?;
+
+        // class holding static field data is not necessarily the same
+        let (storage_class, field_id) = match found {
+            FoundField::InThisClass(id) => (class.clone(), id),
+            FoundField::InOtherClass(id, cls) => (cls, id),
+        };
 
         // initialise class on successful resolution
         if class.needs_init() {
@@ -2717,8 +2731,8 @@ impl Putstatic {
         // TODO if final can only be in constructor
         // TODO if class is interface then can only be in constructor
 
-        // set field
-        class.static_fields().ensure_set(field_id, val);
+        // set field in storage class
+        storage_class.static_fields().ensure_set(field_id, val);
 
         Ok(PostExecuteAction::Continue)
     }
