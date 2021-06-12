@@ -1,4 +1,4 @@
-# TODOs (155)
+# TODOs (154)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -40,7 +40,7 @@
    * `// TODO ensure there is only 1`
    * `// TODO also this check, wtf does it mean:`
    * `todo!("instanceof for arrays") // TODO`
-   * `// TODO use Arc::get_mut_unchecked instead`
+   * `// TODO use Arc::get_mut_unchecked instead when stable`
    * `// TODO initialise final static fields from ConstantValue attrs`
    * `// TODO wrap exception here and return the proper type`
    * `// TODO proper exception type here`
@@ -146,9 +146,8 @@
    * `// TODO standard jvm args`
  * [src/lib.rs](src/lib.rs) (1)
    * `// TODO actually choose versions`
- * [src/natives/gnu_classpath_vmstackwalker.rs](src/natives/gnu_classpath_vmstackwalker.rs) (2)
+ * [src/natives/gnu_classpath_vmstackwalker.rs](src/natives/gnu_classpath_vmstackwalker.rs) (1)
    * `// TODO native impls for other VMStackWalker methods`
-   * `// TODO get vmdata field`
  * [src/natives/gnu_classpath_vmsystemproperties.rs](src/natives/gnu_classpath_vmsystemproperties.rs) (1)
    * `// TODO actually do preInit`
  * [src/natives/java_lang_class.rs](src/natives/java_lang_class.rs) (2)

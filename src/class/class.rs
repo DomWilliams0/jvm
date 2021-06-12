@@ -935,17 +935,25 @@ impl Class {
         &self.class_object
     }
 
-    /// class_cls: java/lang/Class class to be instantiated
+    /// class_cls: java/lang/Class class to be instantiated in this method
     pub(in crate::class) fn init_class_object(self: &mut VmRef<Class>, class_cls: VmRef<Class>) {
         // allocate class instance
         let cls_object = VmRef::new(Object::new(class_cls));
 
+        // set vmdata field on new class instance
+        let (_, field_id) = cls_object.vmdata();
+        let fields = cls_object.fields().unwrap();
+        fields.ensure_set(field_id, DataValue::VmDataClass(self.clone()));
+
         // point class_object field to class instance
-        // TODO use Arc::get_mut_unchecked instead
-        let self_mut = unsafe { &mut *(Arc::as_ptr(self) as *const _ as *mut Class) };
-        debug_assert!(vmref_is_null(&self_mut.class_object));
-        let dummy = std::mem::replace(&mut self_mut.class_object, cls_object);
-        std::mem::forget(dummy); // dont run the destructor of the null pointer
+        // TODO use Arc::get_mut_unchecked instead when stable
+        {
+            let self_mut = unsafe { &mut *(Arc::as_ptr(self) as *const _ as *mut Class) };
+            assert!(vmref_is_null(&self_mut.class_object));
+
+            let dummy = std::mem::replace(&mut self_mut.class_object, cls_object);
+            std::mem::forget(dummy); // dont run the destructor of the null pointer
+        }
     }
 
     /// Class object monitor must be held!!

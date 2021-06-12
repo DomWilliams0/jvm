@@ -1,5 +1,5 @@
 use crate::alloc::{vmref_alloc_object, VmRef};
-use crate::class::{FunctionArgs, Object};
+use crate::class::{null, FunctionArgs, Object, WhichLoader};
 use crate::error::Throwable;
 use crate::thread;
 use crate::types::DataValue;
@@ -39,9 +39,13 @@ pub fn vm_get_class_context(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<
 pub fn vm_get_classloader(mut args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     let class_obj = args.take(0).into_reference().unwrap();
 
-    // TODO get vmdata field
-    log::debug!("GET VMDATA FROM {:?}", class_obj);
-    log::debug!("{:?}", class_obj.print_fields());
+    let (vmdata, _) = class_obj.vmdata();
+    let vmdata = vmdata.expect("vmdata not set");
 
-    todo!()
+    let obj = match vmdata.loader() {
+        WhichLoader::Bootstrap => null(),
+        WhichLoader::User(o) => o.clone(),
+    };
+
+    Ok(Some(DataValue::Reference(obj)))
 }

@@ -280,6 +280,28 @@ impl Object {
 
         None
     }
+
+    /// Panics if not an instance of `java/lang/Class`
+    pub fn vmdata(&self) -> (Option<VmRef<Class>>, FieldId) {
+        let field_id = self
+            .find_field_in_this_only(
+                mstr::from_literal("vmdata"),
+                &DataType::Reference(Cow::Borrowed(mstr::from_literal("java/lang/Object"))),
+                FieldSearchType::Instance,
+            )
+            .expect("missing vmdata field");
+
+        // definitely got field storage
+        let fields = self.fields().unwrap();
+
+        let obj = match fields.ensure_get(field_id) {
+            DataValue::VmDataClass(o) => Some(o),
+            DataValue::Reference(o) if o.is_null() => None,
+            val => unreachable!("vmdata is {:?}", val),
+        };
+
+        (obj, field_id)
+    }
 }
 
 impl Debug for ObjectFieldPrinter<'_> {
