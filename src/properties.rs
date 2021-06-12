@@ -98,6 +98,6 @@ impl From<PathBuf> for SystemProperty {
 
 impl From<Option<PathBuf>> for SystemProperty {
     fn from(p: Option<PathBuf>) -> Self {
-        p.unwrap_or_else(|| PathBuf::new()).into()
+        p.unwrap_or_else(PathBuf::new).into()
     }
 }

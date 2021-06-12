@@ -45,7 +45,7 @@ impl<'c> ClassFile<'c> {
         let access_flags = {
             let int = buf.read()?;
             let flags =
-                ClassAccessFlags::from_bits(int).ok_or_else(|| ClassError::AccessFlags(int))?;
+                ClassAccessFlags::from_bits(int).ok_or(ClassError::AccessFlags(int))?;
             // TODO validate combinations
             debug!("access flags: {:?}", flags);
             flags
@@ -142,8 +142,7 @@ impl<'c> ClassFile<'c> {
             .attributes
             .iter()
             .find(|a| a.name == attr_name.as_ref())
-            .map(|attr| attr.info)
-            .ok_or_else(|| ClassError::Attribute(A::NAME))?;
+            .map(|attr| attr.info).ok_or(ClassError::Attribute(A::NAME))?;
 
         A::parse(bytes, &self.constant_pool)
     }

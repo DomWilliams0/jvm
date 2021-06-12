@@ -25,7 +25,7 @@ pub fn vm_array_copy(mut args: FunctionArgs) -> Result<Option<DataValue>, VmRef<
         || len.is_negative()
         || dst_start.is_negative()
     {
-        Err(Throwables::Other("java/lang/IndexOutOfBoundsException"))?;
+        return Err(Throwables::Other("java/lang/IndexOutOfBoundsException").into());
     }
 
     trace!(
@@ -49,7 +49,7 @@ pub fn vm_array_copy(mut args: FunctionArgs) -> Result<Option<DataValue>, VmRef<
         .class_type()
         .array_class()
         .zip(dst_cls.class_type().array_class())
-        .ok_or_else(|| Throwables::Other("java/lang/ArrayStoreException"))?;
+        .ok_or(Throwables::Other("java/lang/ArrayStoreException"))?;
 
     // TODO check elements really are assignable
     assert!(
@@ -65,7 +65,7 @@ pub fn vm_array_copy(mut args: FunctionArgs) -> Result<Option<DataValue>, VmRef<
     let src_len = src_arr.len() as i32;
     let dst_len = dst_arr.len() as i32;
     if src_end > src_len || dst_end > dst_len {
-        Err(Throwables::Other("java/lang/IndexOutOfBoundsException"))?;
+        return Err(Throwables::Other("java/lang/IndexOutOfBoundsException").into());
     }
 
     // do the copy

@@ -617,7 +617,7 @@ impl Class {
         flags: MethodAccessFlags,
     ) -> VmResult<VmRef<Method>> {
         self.find_method_in_this_only(name, descriptor, flags, MethodAccessFlags::ABSTRACT)
-            .ok_or_else(|| Throwables::Other("java/lang/NoSuchMethodError"))
+            .ok_or(Throwables::Other("java/lang/NoSuchMethodError"))
     }
 
     pub fn find_method_in_this_only(
@@ -1053,13 +1053,10 @@ impl Class {
                                     iface.name()
                                 );
 
-                                match iface.ensure_init() {
-                                    Err(e) => {
-                                        debug!("super interface initialisation failed: {:?}", e);
-                                        result = Err(e);
-                                        iter_result = SuperIteration::Stop;
-                                    }
-                                    Ok(_) => {}
+                                if let Err(e) = iface.ensure_init() {
+                                    debug!("super interface initialisation failed: {:?}", e);
+                                    result = Err(e);
+                                    iter_result = SuperIteration::Stop;
                                 }
                             }
 
@@ -1087,7 +1084,7 @@ impl Class {
                                     // TODO wrap exception here and return the proper type
                                     warn!("exception raised in static constructor: {:?}", exc);
 
-                                    thread::get().set_exception(exc.into());
+                                    thread::get().set_exception(exc);
                                     InterpreterError::ExceptionRaised(Throwables::ClassFormatError)
                                 })
                             });

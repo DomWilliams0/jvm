@@ -493,7 +493,7 @@ impl Anewarray {
             .class
             .constant_pool()
             .class_entry(self.0)
-            .ok_or_else(|| InterpreterError::NotClassRef(self.0))?;
+            .ok_or(InterpreterError::NotClassRef(self.0))?;
 
         let elem_class = class_loader.load_class_caused_by(
             &elem_type.name,
@@ -688,7 +688,7 @@ impl Checkcast {
                         .class
                         .constant_pool()
                         .class_entry(self.0)
-                        .ok_or_else(|| InterpreterError::NotClassRef(self.0))?;
+                        .ok_or(InterpreterError::NotClassRef(self.0))?;
 
                     let cls = thread::get().global().class_loader().load_class_caused_by(
                         &class_ref.name,
@@ -1156,7 +1156,7 @@ impl Getfield {
             .class
             .constant_pool()
             .field_entry(self.0)
-            .ok_or_else(|| InterpreterError::NotFieldRef(self.0))?;
+            .ok_or(InterpreterError::NotFieldRef(self.0))?;
 
         trace!("getfield {:?}", field);
 
@@ -1209,7 +1209,7 @@ impl Getstatic {
             .class
             .constant_pool()
             .field_entry(self.0)
-            .ok_or_else(|| InterpreterError::NotFieldRef(self.0))?;
+            .ok_or(InterpreterError::NotFieldRef(self.0))?;
 
         trace!("getstatic {:?}", field);
 
@@ -1724,7 +1724,7 @@ impl Instanceof {
                     .class
                     .constant_pool()
                     .class_entry(self.0)
-                    .ok_or_else(|| InterpreterError::NotClassRef(self.0))?;
+                    .ok_or(InterpreterError::NotClassRef(self.0))?;
 
                 let cls = thread::get().global().class_loader().load_class_caused_by(
                     &class_ref.name,
@@ -1768,7 +1768,7 @@ impl Invokeinterface {
             .class
             .constant_pool()
             .interface_entry(self.0)
-            .ok_or_else(|| InterpreterError::NotInterfaceRef(self.0))?;
+            .ok_or(InterpreterError::NotInterfaceRef(self.0))?;
 
         // resolve class and method
         let class = class_loader.load_class_caused_by(
@@ -1848,7 +1848,7 @@ impl Invokespecial {
             .class
             .constant_pool()
             .method_or_interface_entry(self.0)
-            .ok_or_else(|| InterpreterError::NotMethodRef(self.0))?;
+            .ok_or(InterpreterError::NotMethodRef(self.0))?;
 
         trace!("invokespecial entry {:?}", entry);
 
@@ -1966,7 +1966,7 @@ impl Invokestatic {
             .class
             .constant_pool()
             .method_entry(self.0)
-            .ok_or_else(|| InterpreterError::NotMethodRef(self.0))?;
+            .ok_or(InterpreterError::NotMethodRef(self.0))?;
         // TODO ensure class is not interface, method not abstract, not constructor
 
         // resolve class and method
@@ -2018,7 +2018,7 @@ impl Invokevirtual {
             .class
             .constant_pool()
             .method_or_interface_entry(self.0)
-            .ok_or_else(|| InterpreterError::NotMethodRef(self.0))?;
+            .ok_or(InterpreterError::NotMethodRef(self.0))?;
 
         // resolve class and method
         let class = class_loader.load_class_caused_by(
@@ -2523,7 +2523,7 @@ impl New {
             .class
             .constant_pool()
             .class_entry(self.0)
-            .ok_or_else(|| InterpreterError::NotClassRef(self.0))?;
+            .ok_or(InterpreterError::NotClassRef(self.0))?;
 
         // resolve and init class
         let class = thread::get().global().class_loader().load_class_caused_by(
@@ -2624,7 +2624,7 @@ impl Putfield {
             .class
             .constant_pool()
             .field_entry(self.0)
-            .ok_or_else(|| InterpreterError::NotFieldRef(self.0))?;
+            .ok_or(InterpreterError::NotFieldRef(self.0))?;
 
         trace!("putfield {:?}", field);
 
@@ -2693,7 +2693,7 @@ impl Putstatic {
             .class
             .constant_pool()
             .field_entry(self.0)
-            .ok_or_else(|| InterpreterError::NotFieldRef(self.0))?;
+            .ok_or(InterpreterError::NotFieldRef(self.0))?;
 
         trace!("putstatic {:?}", field);
 

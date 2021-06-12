@@ -135,12 +135,7 @@ fn init_primitives(classloader: &ClassLoader) -> VmResult<()> {
 
 impl Preload {
     fn load(&self, classloader: &ClassLoader) -> VmResult<()> {
-        let cls = classloader
-            .load_class(self.class.as_mstr(), WhichLoader::Bootstrap)
-            .and_then(|class| {
-                // class.ensure_init()?;
-                Ok(class)
-            })?;
+        let cls = classloader.load_class(self.class.as_mstr(), WhichLoader::Bootstrap)?;
 
         for (method_name, method_desc, fn_ptr) in self.native_methods.iter() {
             let method = cls

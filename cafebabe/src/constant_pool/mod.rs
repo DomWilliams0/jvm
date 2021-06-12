@@ -63,7 +63,7 @@ impl<'c> ConstantPool<'c> {
     }
 
     pub fn entry<E: Entry<'c>>(&self, index: Index) -> ClassResult<E> {
-        let item = self.item(index).ok_or_else(|| ClassError::CpIndex(index))?;
+        let item = self.item(index).ok_or(ClassError::CpIndex(index))?;
         E::from_item(item, self)
     }
 

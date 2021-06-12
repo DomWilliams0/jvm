@@ -29,7 +29,7 @@ pub fn vm_get_class_context(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<
         .global()
         .class_loader()
         .get_bootstrap_class("[Ljava/lang/Class;");
-    let array_contents = classes.into_iter().map(|cls| DataValue::Reference(cls));
+    let array_contents = classes.into_iter().map(DataValue::Reference);
     let array =
         vmref_alloc_object(|| Ok(Object::new_array_with_elements(array_class, array_contents)))?;
 

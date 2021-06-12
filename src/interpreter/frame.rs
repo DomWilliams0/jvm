@@ -62,7 +62,7 @@ impl LocalVariables {
         let count = self.0.len();
         self.0
             .get_mut(idx)
-            .ok_or_else(|| InterpreterError::InvalidLocalVar {
+            .ok_or(InterpreterError::InvalidLocalVar {
                 requested: idx,
                 count,
             })
@@ -312,14 +312,13 @@ impl Frame {
         nargs: usize,
     ) -> Result<Self, InterpreterError> {
         let stack_len = caller.operand_stack.count();
-        let args =
-            caller
-                .operand_stack
-                .pop_n(nargs)
-                .ok_or_else(|| InterpreterError::NotEnoughArgs {
-                    expected: nargs,
-                    actual: stack_len,
-                })?;
+        let args = caller
+            .operand_stack
+            .pop_n(nargs)
+            .ok_or(InterpreterError::NotEnoughArgs {
+                expected: nargs,
+                actual: stack_len,
+            })?;
 
         Self::new_with_args(method, args)
     }

@@ -119,10 +119,7 @@ impl Method {
         };
 
         let native_guard = native_code.lock();
-        match &*native_guard {
-            NativeCode::Bound(_) => true,
-            _ => false,
-        }
+        matches!(&*native_guard, NativeCode::Bound(_))
     }
 }
 

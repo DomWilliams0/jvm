@@ -22,8 +22,8 @@ impl ClassLoadGraph {
 
     pub fn register_class_load(&mut self, class: &mstr, initiator: Option<&mstr>) {
         let _ = match initiator {
-            Some(parent) => write!(&mut self.0, "{:?} -> {:?}\n", parent, class),
-            None => write!(&mut self.0, "{:?}\n", class),
+            Some(parent) => writeln!(&mut self.0, "{:?} -> {:?}\n", parent, class),
+            None => writeln!(&mut self.0, "{:?}\n", class),
         };
         // TODO log IO error
     }

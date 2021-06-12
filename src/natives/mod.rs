@@ -16,5 +16,5 @@ pub mod gnu_classpath_vmsystemproperties;
 
 pub fn vm_nop_void(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     log::warn!("calling nop native method!");
-    return Ok(None);
+    Ok(None)
 }

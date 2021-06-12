@@ -133,7 +133,7 @@ impl Object {
             trace!("setting string field {:?} to {:?}", name, value);
             let field_id = string_instance
                 .find_field_in_this_only(name.as_ref(), &datatype, FieldSearchType::Instance)
-                .ok_or_else(|| Throwables::Other("java/lang/NoSuchFieldError"))?;
+                .ok_or(Throwables::Other("java/lang/NoSuchFieldError"))?;
 
             fields.ensure_set(field_id, value);
             Ok(())

@@ -202,14 +202,21 @@ impl Entry {
             | Entry::ClassRef(_)
             | Entry::Int(_)
             | Entry::Float(_) => true,
-            _ => false,
+
+            Entry::Long(_) | Entry::Double(_) => false,
         }
     }
     pub fn is_loadable_wide(&self) -> bool {
         match self {
             Entry::Double(_) | Entry::Long(_) => true,
             // TODO OR A symbolic reference to a dynamically-computed constant whose field descriptor is J (denoting long) or D (denoting double)
-            _ => false,
+            Entry::String(_)
+            | Entry::MethodRef(_)
+            | Entry::InterfaceMethodRef(_)
+            | Entry::FieldRef(_)
+            | Entry::ClassRef(_)
+            | Entry::Int(_)
+            | Entry::Float(_) => false,
         }
     }
 }

@@ -157,7 +157,7 @@ impl<'c> FieldInfo<'c> {
         let access_flags = {
             let int = buf.read()?;
             let flags =
-                FieldAccessFlags::from_bits(int).ok_or_else(|| ClassError::AccessFlags(int))?;
+                FieldAccessFlags::from_bits(int).ok_or(ClassError::AccessFlags(int))?;
             // TODO validate combinations
             flags
         };
@@ -184,7 +184,7 @@ impl<'c> MethodInfo<'c> {
         let access_flags = {
             let int = buf.read()?;
             let flags =
-                MethodAccessFlags::from_bits(int).ok_or_else(|| ClassError::AccessFlags(int))?;
+                MethodAccessFlags::from_bits(int).ok_or(ClassError::AccessFlags(int))?;
             // TODO validate combinations
             flags
         };

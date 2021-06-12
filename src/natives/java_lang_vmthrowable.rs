@@ -5,5 +5,5 @@ use crate::types::DataValue;
 
 pub fn vm_fill_in_stack_trace(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     // TODO implement fillInStackTrace
-    return Ok(Some(DataValue::Reference(null())));
+    Ok(Some(DataValue::Reference(null())))
 }
