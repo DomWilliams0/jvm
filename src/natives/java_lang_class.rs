@@ -8,14 +8,17 @@ pub fn vm_register_natives(_args: FunctionArgs) -> Result<Option<DataValue>, VmR
     // TODO actually register natives
     Ok(None)
 }
+
 pub fn vm_get_primitive_class(
     mut args: FunctionArgs,
 ) -> Result<Option<DataValue>, VmRef<Throwable>> {
     let str = args.take(0).into_reference().unwrap();
 
-    let prim_type = str.with_string_value(|str| str.parse::<PrimitiveDataType>().ok());
+    let prim_type = str
+        .string_value()
+        .and_then(|str| str.parse::<PrimitiveDataType>().ok())
+        .expect("invalid primitive type");
 
-    let prim_type = prim_type.flatten().expect("invalid primitive type");
     let cls = thread::get()
         .global()
         .class_loader()

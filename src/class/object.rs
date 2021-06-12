@@ -285,36 +285,6 @@ impl Object {
         None
     }
 
-    #[deprecated]
-    pub fn with_string_value<R>(&self, mut f: impl FnMut(&str) -> R) -> Option<R> {
-        if self.class.name().as_bytes() == b"java/lang/String" {
-            if let Some(DataValue::Reference(chars)) = self.find_instance_field(
-                "value".as_mstr(),
-                &DataType::Reference(Cow::Borrowed("[C".as_mstr())),
-            ) {
-                if !chars.is_null() {
-                    let chars = chars.array_unchecked();
-                    let chars = chars
-                        .iter()
-                        .map(|val| match val {
-                            DataValue::Char(c) => *c,
-                            DataValue::Int(i) => *i as u16,
-                            _ => unreachable!("expected char array but got {:?}", val),
-                        })
-                        .collect_vec();
-
-                    // TODO do this without all the allocations
-                    let tmp_str = String::from_utf16_lossy(&chars);
-                    return Some(f(&tmp_str));
-                }
-            } else {
-                unreachable!("bad string class")
-            }
-        }
-
-        None
-    }
-
     /// Panics if not an instance of `java/lang/Class`
     pub fn vmdata(&self) -> (Option<VmRef<Class>>, FieldId) {
         assert_eq!(self.class.name().as_bytes(), b"java/lang/Class");
@@ -406,12 +376,9 @@ impl Debug for Object {
             write!(f, "{}@{:#x}", self.class.name(), ptr)?;
 
             // helpful for debugging
-            let result = self.with_string_value(|str_val| write!(f, " ({:?})", str_val));
-
-            if let Some(result) = result {
-                result?; // lol
+            if let Some(s) = self.string_value() {
+                write!(f, " ({:?})", s)?;
             }
-
             Ok(())
         }
     }

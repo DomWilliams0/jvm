@@ -12,7 +12,7 @@ pub fn vm_map_library_name(mut args: FunctionArgs) -> Result<Option<DataValue>, 
     let dll = arg.as_reference().expect("string expected");
 
     let dll_path = dll
-        .with_string_value(|s| {
+        .string_value().map(|s| {
             #[cfg(unix)]
             return format!("lib{}.so", s);
 
