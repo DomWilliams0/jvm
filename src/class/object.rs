@@ -34,9 +34,7 @@ pub struct Object {
     hashcode: Mutex<Option<NonZeroI32>>,
 }
 
-pub struct ObjectFieldPrinter<'a> {
-    obj: &'a Object,
-}
+pub struct ObjectFieldPrinter<'a>(&'a Object);
 
 lazy_static! {
     static ref NULL: VmRef<Object> = VmRef::new(Object::new_null());
@@ -253,7 +251,7 @@ impl Object {
     }
 
     pub fn print_fields(&self) -> ObjectFieldPrinter {
-        ObjectFieldPrinter { obj: self }
+        ObjectFieldPrinter(self)
     }
 
     pub fn with_string_value<R>(&self, mut f: impl FnMut(&str) -> R) -> Option<R> {
@@ -288,28 +286,37 @@ impl Object {
 
 impl Debug for ObjectFieldPrinter<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let cls = match self.obj.class() {
+        let cls = match self.0.class() {
             None => return write!(f, "(null)"),
             Some(cls) => cls,
         };
 
-        write!(f, "Fields for {:?}: ", self.obj)?;
+        write!(f, "Fields for {:?}: ", self.0)?;
 
-        let field_storage = match self.obj.fields() {
+        let instance_storage = match self.0.fields() {
             None => return write!(f, "None"),
             Some(fields) => fields,
         };
+        let static_storage = cls.static_fields();
 
-        let layout = cls.instance_fields_layout();
+        let instance_layout = cls.instance_fields_layout();
+        let static_layout = cls.static_fields_layout();
 
         let mut cls_idx = 0;
         let mut result = Ok(());
         cls.field_resolution_order(|fields| {
-            for (i, field) in fields.iter().filter(|f| !f.flags().is_static()).enumerate() {
-                // TODO statics too
-
-                let field_id = layout.get_id(cls_idx, i).unwrap();
-                let val = field_storage.ensure_get(field_id);
+            let mut i_instance = 0;
+            let mut i_static = 0;
+            for field in fields.iter() {
+                let val = if field.flags().is_static() {
+                    let field_id = static_layout.get_id(cls_idx, i_static).unwrap();
+                    i_static += 1;
+                    static_storage.ensure_get(field_id)
+                } else {
+                    let field_id = instance_layout.get_id(cls_idx, i_instance).unwrap();
+                    i_instance += 1;
+                    instance_storage.ensure_get(field_id)
+                };
 
                 result = write!(
                     f,

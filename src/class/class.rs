@@ -147,6 +147,8 @@ pub enum SuperIteration {
     Stop,
 }
 
+pub struct ClassStaticFieldPrinter<'a>(&'a Class);
+
 // TODO get classloader reference from tls instead of parameter
 
 impl Class {
@@ -1001,6 +1003,8 @@ impl Class {
                                 // TODO proper exception type here
                                 return Err(Throwables::ClassFormatError);
                             }
+
+                            trace!("initialized class: {:?}", ClassStaticFieldPrinter(&*self))
                         }
                     }
 
@@ -1176,6 +1180,10 @@ impl Class {
         &self.instance_fields_layout
     }
 
+    pub fn static_fields_layout(&self) -> &FieldStorageLayout {
+        &self.static_fields_layout
+    }
+
     pub fn ensure_method_bound(&self, method: &Method) -> Result<(), InterpreterError> {
         let _guard = match &method.code {
             MethodCode::Native(native) => {
@@ -1211,6 +1219,42 @@ impl Class {
 impl Debug for Class {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "Class({})", self.name())
+    }
+}
+
+impl Debug for ClassStaticFieldPrinter<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let cls = self.0;
+        write!(f, "Static fields for {:?}: ", cls)?;
+
+        let layout = &cls.static_fields_layout;
+        let field_storage = &cls.static_fields_values;
+
+        let mut cls_idx = 0;
+        let mut result = Ok(());
+        cls.field_resolution_order(|fields| {
+            for (i, field) in fields.iter().filter(|f| f.flags().is_static()).enumerate() {
+                let field_id = layout.get_id(cls_idx, i).unwrap();
+                let val = field_storage.ensure_get(field_id);
+
+                result = write!(
+                    f,
+                    "\n * {} ({:?} {:?}) => {:?}",
+                    field.name(),
+                    field.desc(),
+                    field.flags(),
+                    val
+                );
+                if result.is_err() {
+                    return SuperIteration::Stop;
+                }
+            }
+
+            cls_idx += 1;
+            SuperIteration::KeepGoing
+        });
+
+        result
     }
 }
 

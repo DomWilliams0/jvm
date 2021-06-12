@@ -24,12 +24,13 @@
    * `// TODO actually intern strings`
    * `// TODO methods on VmRef newtype`
    * `// TODO oom error`
- * [src/class/class.rs](src/class/class.rs) (20)
+ * [src/class/class.rs](src/class/class.rs) (21)
    * `/// TODO weak reference for cyclic reference?`
    * `// TODO store dimensions`
    * `// TODO JNI style C function`
    * `// TODO arrayvec`
    * `// TODO get classloader reference from tls instead of parameter`
+   * `// TODO this crashes in release builds, oops`
    * `// TODO verify constant pool offsets so we can raise a single classformaterror then trust it`
    * `// TODO preparation? https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-5.html#jvms-5.4.2`
    * `// TODO precalculate capacity`
@@ -59,14 +60,13 @@
    * `// TODO add array lookup with enum constants for common symbols like Object, or perfect hashing`
    * `// TODO cache this`
    * `// TODO newtype VmRef should handle equality`
- * [src/class/object.rs](src/class/object.rs) (8)
+ * [src/class/object.rs](src/class/object.rs) (7)
    * `// TODO arrays should live on the GC java heap`
    * `// TODO arrays should be specialised and not hold massive DataValues`
    * `// TODO mutex only needed in edge case, try with atomic op first`
    * `// TODO just allocate an object instead of this unsafeness`
    * `// TODO limit array length to i32::MAX somewhere`
    * `// TODO do this without all the allocations`
-   * `// TODO statics too`
    * `// TODO not quite correct toString`
  * [src/classpath.rs](src/classpath.rs) (1)
    * `// TODO enum for path type, zip/jar or directory`
