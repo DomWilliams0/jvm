@@ -101,6 +101,10 @@ impl Object {
     pub(crate) fn new_string(contents: &mstr) -> VmResult<Object> {
         // encode for java/lang/String
         let utf16 = contents.to_utf8().encode_utf16().collect_vec();
+        let string_length = utf16.len();
+
+        // TODO limit array length to i32::MAX somewhere
+        assert!(string_length <= i32::MAX as usize);
 
         let tls = thread::get();
         let classloader = tls.global().class_loader();
@@ -123,8 +127,6 @@ impl Object {
             }
         }
 
-        // TODO limit array length to i32::MAX somewhere
-
         let set_field = |name: &'static str, value: DataValue| -> VmResult<()> {
             let name = name.to_mstr();
             let datatype = value.data_type();
@@ -138,6 +140,7 @@ impl Object {
         };
 
         set_field("value", DataValue::Reference(char_array))?;
+        set_field("count", DataValue::Int(string_length as i32))?;
 
         Ok(string_instance)
     }
@@ -261,7 +264,8 @@ impl Object {
                         .iter()
                         .map(|val| match val {
                             DataValue::Char(c) => *c,
-                            _ => unreachable!(),
+                            DataValue::Int(i) => *i as u16,
+                            _ => unreachable!("expected char array but got {:?}", val),
                         })
                         .collect_vec();
 
