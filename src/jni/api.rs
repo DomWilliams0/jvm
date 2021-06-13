@@ -1282,11 +1282,40 @@ mod jnienv {
 
     pub extern "C" fn GetStaticMethodID(
         env: *mut JNIEnv,
-        arg2: jclass,
-        arg3: *const ::std::os::raw::c_char,
-        arg4: *const ::std::os::raw::c_char,
+        class: jclass,
+        name: *const ::std::os::raw::c_char,
+        sig: *const ::std::os::raw::c_char,
     ) -> jmethodID {
-        todo!("GetStaticMethodID")
+        let class = unsafe { as_vmref::<Class>(class) };
+        let name = unsafe { as_string(name) };
+        let sig = unsafe { as_string(sig) };
+
+        // TODO throw exception instead of panic
+        let method = class
+            .find_method_recursive_in_superclasses(
+                name,
+                sig,
+                MethodAccessFlags::STATIC,
+                MethodAccessFlags::empty(),
+            )
+            .unwrap_or_else(|| {
+                panic!(
+                    "static method {:?}::{:?} ({}) not found",
+                    class.name(),
+                    name,
+                    sig
+                )
+            });
+
+        trace!(
+            "GetStaticMethodId({:?}::{} (type {:?})) -> {}",
+            class.name(),
+            name,
+            sig,
+            method,
+        );
+
+        JniMethodId(method).into()
     }
 
     pub unsafe extern "C" fn CallStaticObjectMethod(
