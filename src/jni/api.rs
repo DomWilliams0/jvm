@@ -409,7 +409,7 @@ mod jnienv {
         {
             Ok(cls) => {
                 // add local ref
-                interp.with_current_jni_frame(|jni| jni.add_local_ref(&cls));
+                interp.with_current_native_frame(|frame| frame.add_local_ref(&cls));
 
                 vmref_into_raw(cls) as jclass
             }
@@ -591,7 +591,7 @@ mod jnienv {
             .unwrap_or_else(|| panic!("method {:?}::{:?} ({}) not found", class.name(), name, sig));
 
         trace!(
-            "GetMethodId({:?}::{} (type {:?})) -> {:?}",
+            "GetMethodId({:?}::{} (type {:?})) -> {}",
             class.name(),
             name,
             sig,

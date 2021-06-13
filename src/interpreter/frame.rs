@@ -39,11 +39,6 @@ pub struct NativeFrame {
     pub function: Option<NativeFunction>,
     /// Some on init, None after exec
     pub args: Option<Box<[DataValue]>>,
-}
-
-/// Call into internal JNI implementation i.e. via JNIEnv/JavaVM
-pub struct JniFrame {
-    pub function_name: Cow<'static, str>,
     local_refs: RefCell<Vec<VmRef<()>>>,
 }
 
@@ -52,7 +47,8 @@ pub enum NativeFrameInner {
         class: VmRef<Class>,
         method: VmRef<Method>,
     },
-    Jni(JniFrame),
+    /// Call into internal JNI implementation i.e. via JNIEnv/JavaVM
+    Jni { function_name: Cow<'static, str> },
 }
 
 pub enum Frame {
@@ -318,6 +314,7 @@ impl Frame {
                             },
                             function: Some(function.clone()),
                             args: Some(args),
+                            local_refs: Default::default(),
                         }))
                     }
                 }
@@ -355,7 +352,7 @@ impl Frame {
                 ..
             }) => FrameInfo::Method(class, method),
             Frame::Native(NativeFrame {
-                inner: NativeFrameInner::Jni(JniFrame { function_name, .. }),
+                inner: NativeFrameInner::Jni { function_name },
                 ..
             }) => FrameInfo::Jni(function_name),
         }
@@ -372,22 +369,6 @@ impl<'a> FrameInfo<'a> {
             FrameInfo::Method(cls, _) => Some(cls),
             _ => None,
         }
-    }
-}
-
-impl JniFrame {
-    pub fn new(jni_func: impl Into<Cow<'static, str>>) -> Self {
-        Self {
-            function_name: jni_func.into(),
-            local_refs: RefCell::new(vec![]),
-        }
-    }
-
-    pub fn add_local_ref<T: Debug>(&self, obj: &VmRef<T>) {
-        // store a strong copy in the frame
-        let local_ref = unsafe { std::mem::transmute::<VmRef<T>, VmRef<()>>(obj.clone()) };
-        self.local_refs.borrow_mut().push(local_ref);
-        debug!("bumped local ref count for {:?}", obj);
     }
 }
 
@@ -596,6 +577,46 @@ impl JavaFrame {
             .peek()
             .cloned()
             .ok_or(InterpreterError::NoOperand)
+    }
+}
+
+impl NativeFrame {
+    pub fn jni_direct(func_name: &'static str, func_ptr: usize) -> Self {
+        Self {
+            inner: NativeFrameInner::Jni {
+                function_name: Cow::Borrowed(func_name),
+            },
+            function: Some(NativeFunction::JniDirect(func_ptr)),
+            args: None, // passed in manually
+            local_refs: RefCell::new(Vec::new()),
+        }
+    }
+
+    pub fn add_local_ref<T: Debug>(&self, obj: &VmRef<T>) {
+        // store a strong copy in the frame
+        let local_ref = unsafe { std::mem::transmute::<VmRef<T>, VmRef<()>>(obj.clone()) };
+        self.local_refs.borrow_mut().push(local_ref);
+        debug!("bumped local ref count for {:?}", obj);
+    }
+}
+
+impl Drop for NativeFrame {
+    fn drop(&mut self) {
+        let locals = self.local_refs.borrow();
+        if !locals.is_empty() {
+            debug!("releasing {} local refs in {:?}", locals.len(), self.inner);
+        }
+    }
+}
+
+impl Debug for NativeFrameInner {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NativeFrameInner::Method { class, method } => {
+                write!(f, "{}::{}", class.name(), method.name())
+            }
+            NativeFrameInner::Jni { function_name } => write!(f, "{} (native)", function_name),
+        }
     }
 }
 

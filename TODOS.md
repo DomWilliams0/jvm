@@ -1,4 +1,4 @@
-# TODOs (163)
+# TODOs (162)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -146,8 +146,7 @@
    * `// TODO keep track of global references in jvm or is it ok to leak them like this?`
    * `// TODO throw exception instead of panic`
    * `// TODO throw exception instead of panic`
- * [src/jni/library.rs](src/jni/library.rs) (3)
-   * `// TODO add constructor for native frame`
+ * [src/jni/library.rs](src/jni/library.rs) (2)
    * `// TODO call JNI_OnUnload in Drop`
    * `// TODO does this work on windows too?`
  * [src/jvm.rs](src/jvm.rs) (5)

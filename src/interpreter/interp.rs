@@ -2,9 +2,7 @@ use crate::alloc::{vmref_from_raw, vmref_into_raw, VmRef};
 use log::*;
 
 use crate::error::{Throwable, Throwables};
-use crate::interpreter::frame::{
-    Frame, FrameStack, JavaFrame, JniFrame, NativeFrame, NativeFrameInner,
-};
+use crate::interpreter::frame::{Frame, FrameStack, JavaFrame, NativeFrame, NativeFrameInner};
 use crate::interpreter::insn::{get_insn, InstructionBlob, PostExecuteAction};
 use crate::thread;
 
@@ -16,7 +14,7 @@ use crate::types::{DataType, DataValue, PrimitiveDataType, ReturnType};
 use cafebabe::AccessFlags;
 use smallvec::SmallVec;
 use std::cell::{RefCell, RefMut};
-use std::fmt::Display;
+
 use std::fmt::{Debug, Formatter};
 
 #[derive(Debug)]
@@ -222,14 +220,7 @@ impl Interpreter {
         let mut state = self.state_mut();
 
         if let Some(native) = state.frames.top_native_mut() {
-            trace!(
-                "invoking native method {}",
-                match &native.inner {
-                    NativeFrameInner::Method { method, .. } => method as &dyn Display,
-                    NativeFrameInner::Jni(JniFrame { function_name, .. }) =>
-                        &*function_name as &dyn Display,
-                }
-            );
+            trace!("invoking native method {:?}", native.inner);
 
             // dismantle frame - unwraps move the values out here as the first and only call
             let func = native.function.take().unwrap();
@@ -367,15 +358,11 @@ impl Interpreter {
         f(frame)
     }
 
-    /// Panics if not called from a Rust-implemented JNIEnv method
-    pub fn with_current_jni_frame<R>(&self, f: impl FnOnce(&JniFrame) -> R) -> R {
+    /// Panics if not in a native frame
+    pub fn with_current_native_frame<R>(&self, f: impl FnOnce(&NativeFrame) -> R) -> R {
         let state = self.state.borrow();
-        if let Some(Frame::Native(NativeFrame {
-            inner: NativeFrameInner::Jni(jni),
-            ..
-        })) = state.frames.top()
-        {
-            f(jni)
+        if let Some(Frame::Native(frame)) = state.frames.top() {
+            f(frame)
         } else {
             unreachable!("not in a jni function ({:?})", state.frames.top())
         }

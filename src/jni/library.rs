@@ -1,11 +1,11 @@
-use crate::interpreter::{JniFrame, NativeFrame, NativeFrameInner};
+use crate::interpreter::NativeFrame;
 use crate::jni::api::current_javavm;
 use crate::jni::{sys, JNI_VERSION};
 use crate::thread;
 use log::*;
 
 use crate::alloc::{vmref_to_weak, VmRef, WeakVmRef};
-use crate::class::{NativeFunction, Object};
+use crate::class::Object;
 use std::ffi::CStr;
 use std::path::Path;
 use std::ptr;
@@ -51,12 +51,7 @@ impl NativeLibrary {
             debug!("running JNI_OnLoad in library {:?}", name);
             let thread = thread::get();
             let interp = thread.interpreter();
-            let frame = NativeFrame {
-                // TODO add constructor for native frame
-                inner: NativeFrameInner::Jni(JniFrame::new("JNI_OnLoad")),
-                function: Some(NativeFunction::JniDirect(func_addr)),
-                args: None, // passed manually
-            };
+            let frame = NativeFrame::jni_direct("JNI_OnLoad", func_addr);
 
             interp.execute_native_frame(frame, || {
                 let ret = func(current_javavm(), ptr::null_mut());
