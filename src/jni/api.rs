@@ -1,5 +1,5 @@
 use crate::jni::sys;
-use crate::jni::sys::{jfieldID, JNIInvokeInterface_, _jmethodID, jmethodID};
+use crate::jni::sys::{jfieldID, jmethodID, JNIInvokeInterface_};
 
 use crate::alloc::{vmref_from_raw, vmref_into_raw, VmRef};
 use crate::class::Method;

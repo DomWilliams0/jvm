@@ -1,4 +1,4 @@
-use crate::alloc::{vmref_increment, vmref_ptr, VmRef};
+use crate::alloc::VmRef;
 use crate::class::{Class, ClassType, Method, MethodCode, NativeCode, NativeFunction, Object};
 use crate::interpreter::error::InterpreterError;
 use crate::types::DataValue;

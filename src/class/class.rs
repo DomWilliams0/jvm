@@ -20,11 +20,15 @@ use crate::class::{ClassLoader, WhichLoader};
 use crate::constant_pool::RuntimeConstantPool;
 use crate::error::{Throwable, Throwables, VmResult};
 use crate::interpreter::{Frame, InterpreterError};
+use crate::jni::NativeLibraries;
 use crate::storage::{
     FieldDataType, FieldId, FieldStorage, FieldStorageLayout, FieldStorageLayoutBuilder,
 };
 use crate::thread;
 use crate::types::{DataType, DataValue, MethodSignature, PrimitiveDataType, ReturnType};
+use std::ffi::{CStr, CString};
+
+// TODO when a ClassLoader is dropped, ensure all native libraries associated with it are freed too
 
 pub struct Class {
     name: InternedString,
@@ -162,6 +166,12 @@ pub enum SuperIteration {
 }
 
 struct ClassStaticFieldPrinter<'a>(&'a VmRef<Class>);
+
+/// Short mangled name e.g. Java_com_me_Class_methodName
+struct MangledMethodName(CString);
+
+/// Long mangled name e.g. Java_com_me_Class_methodName__IL
+struct MangledMethodNameLong(CString);
 
 // TODO get classloader reference from tls instead of parameter
 
@@ -1284,7 +1294,7 @@ impl Class {
     }
 
     pub fn ensure_method_bound(&self, method: &Method) -> Result<(), InterpreterError> {
-        let _guard = match &method.code {
+        let mut guard = match &method.code {
             MethodCode::Native(native) => {
                 let guard = native.lock();
                 match *guard {
@@ -1300,7 +1310,25 @@ impl Class {
 
         debug!("binding native method {}", method);
 
-        todo!("resolve mangled native method")
+        let name = method.mangled_native_name();
+        let thread = thread::get();
+        let native_libs: &mut NativeLibraries = &mut *thread.global().native_libraries_mut();
+
+        // try short name first, then long name
+        let ptr = native_libs
+            .resolve_symbol(name.as_ref())
+            .or_else(|| native_libs.resolve_symbol(name.into_long(method.descriptor()).as_ref()))
+            .ok_or_else(|| InterpreterError::NativeMethodNotFound {
+                class: method.class().clone(),
+                name: method.name.clone(),
+                desc: method.desc.clone(),
+            })?;
+
+        debug!("found native method at {:?}", ptr);
+
+        // bind method
+        *guard = NativeCode::Bound(NativeFunction::Jni(ptr as usize));
+        Ok(())
     }
 
     pub fn bind_internal_method(&self, method: &Method, function: NativeInternalFn) -> bool {
@@ -1415,6 +1443,11 @@ impl Method {
         // safety: always initialised in Class::link
         unsafe { &*self.class.as_ptr() }
     }
+
+    fn mangled_native_name(&self) -> MangledMethodName {
+        // TODO cache mangled name in the method
+        MangledMethodName::new(self.class().name(), self.name())
+    }
 }
 
 impl Display for Method {
@@ -1526,6 +1559,91 @@ unsafe impl Sync for LockedClassState {}
 impl Debug for LockedClassState {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "LockedClassState")
+    }
+}
+
+impl MangledMethodName {
+    fn new(class_name: &mstr, method_name: &mstr) -> Self {
+        let mut mangled = {
+            // +6 for Java_ and other _
+            let estimated_len = class_name.len() + method_name.len() + 6;
+            Vec::with_capacity(estimated_len)
+        };
+
+        mangled.extend(b"Java_");
+        class_name
+            .to_utf8()
+            .chars()
+            .for_each(|c| Self::mangle_char(c, &mut mangled));
+        mangled.push(b'_');
+        method_name
+            .to_utf8()
+            .chars()
+            .for_each(|c| Self::mangle_char(c, &mut mangled));
+
+        // safety: mangled
+        debug_assert!(std::str::from_utf8(&mangled).is_ok());
+        MangledMethodName(unsafe { CString::from_vec_unchecked(mangled) })
+    }
+
+    /// desc assumed valid
+    fn into_long(self, desc: &mstr) -> MangledMethodNameLong {
+        debug_assert!(MethodSignature::is_valid(desc));
+
+        let params = {
+            let start = 1;
+            let end = desc
+                .as_bytes()
+                .iter()
+                .rev()
+                .position(|b| *b == b')')
+                .unwrap(); // assumed valid
+            let end = desc.len() - 1 - end; // found in reverse
+            mstr::from_mutf8(&desc.as_bytes()[start..end])
+        };
+
+        let mut string = self.0.into_bytes();
+
+        string.extend(b"__");
+        params
+            .to_utf8()
+            .chars()
+            .for_each(|c| Self::mangle_char(c, &mut string));
+
+        // safety: mangled
+        debug_assert!(std::str::from_utf8(&string).is_ok());
+        MangledMethodNameLong(unsafe { CString::from_vec_unchecked(string) })
+    }
+
+    fn mangle_char(c: char, out: &mut Vec<u8>) {
+        let mut buf = [0; 6];
+        match c {
+            '/' => out.push(b'_'),
+            '_' => out.extend(b"_1"),
+            ';' => out.extend(b"_2"),
+            '[' => out.extend(b"_3"),
+            c if c.is_ascii() => {
+                let str = c.encode_utf8(&mut buf);
+                out.extend(str.as_bytes());
+            }
+            c => {
+                use std::io::Write;
+                let _ = write!(&mut buf[..], "_0{:04x}", c as u32);
+                out.extend(&buf);
+            }
+        }
+    }
+}
+
+impl AsRef<CStr> for MangledMethodName {
+    fn as_ref(&self) -> &CStr {
+        self.0.as_ref()
+    }
+}
+
+impl AsRef<CStr> for MangledMethodNameLong {
+    fn as_ref(&self) -> &CStr {
+        self.0.as_ref()
     }
 }
 
@@ -1706,5 +1824,32 @@ mod tests {
 
         assert_eq!(get_field_id(&inner2, "five").get(), 1);
         assert_eq!(get_field_id(&inner2, "six").get(), 0);
+    }
+
+    #[test]
+    fn mangling_method_names() {
+        let mangled = MangledMethodName::new(
+            mstr::from_literal("my/package/Cool"),
+            mstr::from_literal("doThings_lol"),
+        );
+
+        fn cstring(bytes: &[u8]) -> &CStr {
+            CStr::from_bytes_with_nul(bytes).unwrap()
+        }
+
+        assert_eq!(
+            mangled.as_ref(),
+            cstring(b"Java_my_package_Cool_doThings_1lol\0")
+        );
+
+        //                                      look out  --v
+        let sig = mstr::from_literal("(ILjava/lang/Objêct;[J)D");
+        assert!(MethodSignature::is_valid(sig));
+        let long = mangled.into_long(sig);
+
+        assert_eq!(
+            long.as_ref(),
+            cstring(b"Java_my_package_Cool_doThings_1lol__ILjava_lang_Obj_000eact_2_3J\0")
+        )
     }
 }

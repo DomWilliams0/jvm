@@ -2,7 +2,9 @@ use crate::alloc::{vmref_alloc_object, VmRef};
 use crate::class::{FunctionArgs, Object};
 use crate::error::Throwable;
 use crate::jni::NativeLibrary;
+use crate::thread;
 use crate::types::DataValue;
+use itertools::Itertools;
 
 pub fn vm_map_library_name(mut args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     #[cfg(not(any(unix, windows)))]
@@ -35,22 +37,30 @@ pub fn vm_native_load(mut args: FunctionArgs) -> Result<Option<DataValue>, VmRef
         .and_then(|obj| obj.string_value())
         .expect("not a string");
 
-    // TODO use classloader arg - native lib can be loaded by 1 classloader only
-    // let class_loader = args.take(0);
+    let thread = thread::get();
+    let jvm = thread.global();
+    let mut native_libs = jvm.native_libraries_mut();
 
-    log::debug!("loading native library {:?}", lib_name);
+    let result = if native_libs.contains(&lib_name) {
+        // already loaded, nop
+        log::debug!("native library {:?} is already loaded", lib_name);
+        1
+    } else {
+        let class_loader = args.take(0).into_reference().expect("not an object");
 
-    let lib = NativeLibrary::load(&lib_name);
+        log::debug!("loading native library {:?}", lib_name);
 
-    let result = match lib {
-        Ok(lib) => {
-            // TODO keep native library reference around and release when classloader is GC'd
-            std::mem::forget(lib);
-            1
-        }
-        Err(err) => {
-            log::warn!("failed to load library: {}", err);
-            0
+        let lib = NativeLibrary::load(&lib_name);
+
+        match lib {
+            Ok(lib) => {
+                native_libs.register(lib, lib_name, &class_loader);
+                2
+            }
+            Err(err) => {
+                log::warn!("failed to load library: {}", err);
+                0
+            }
         }
     };
 

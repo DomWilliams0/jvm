@@ -15,10 +15,14 @@ use crate::classpath::ClassPath;
 use crate::error::ResultExt;
 use crate::interpreter::{Frame, InstructionLookupTable};
 use crate::jit::{JitClient, JitThread};
+use crate::jni::NativeLibraries;
 use crate::properties::SystemProperties;
 use crate::thread::JvmThreadState;
 use crate::types::DataValue;
 use crate::{thread, JvmError, JvmResult};
+use parking_lot::Mutex;
+
+use std::ops::DerefMut;
 
 pub struct Jvm {
     args: JvmArgsPersist,
@@ -32,6 +36,7 @@ pub struct JvmGlobalState {
     insn_lookup: InstructionLookupTable,
     jit: JitClient,
     properties: SystemProperties,
+    native_libraries: Mutex<NativeLibraries>,
 }
 
 #[derive(Default, Debug)]
@@ -74,6 +79,7 @@ impl Jvm {
             insn_lookup: InstructionLookupTable::new(),
             jit: jit_client,
             properties: args.properties,
+            native_libraries: Mutex::new(NativeLibraries::default()),
         });
 
         let jvm = Jvm {
@@ -205,5 +211,9 @@ impl JvmGlobalState {
 
     pub(crate) fn properties(&self) -> &SystemProperties {
         &self.properties
+    }
+
+    pub(crate) fn native_libraries_mut(&self) -> impl DerefMut<Target = NativeLibraries> + '_ {
+        self.native_libraries.lock()
     }
 }

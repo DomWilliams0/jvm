@@ -3,10 +3,11 @@ use crate::error::{Throwable, Throwables, VmResult};
 
 use cafebabe::mutf8::MString;
 use std::mem::ManuallyDrop;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 // TODO gc arena
 pub type VmRef<T> = Arc<T>;
+pub type WeakVmRef<T> = Weak<T>;
 
 // TODO actually intern strings
 
@@ -50,6 +51,10 @@ pub fn vmref_alloc_object(f: impl FnOnce() -> VmResult<Object>) -> VmResult<VmRe
 pub fn vmref_alloc_exception(throwable: Throwables) -> VmRef<Throwable> {
     let class_name = throwable.symbol();
     VmRef::new(Throwable { class_name })
+}
+
+pub fn vmref_to_weak<T>(vmref: &VmRef<T>) -> WeakVmRef<T> {
+    Arc::downgrade(vmref)
 }
 
 #[cfg(test)]

@@ -24,7 +24,8 @@
    * `// TODO actually intern strings`
    * `// TODO methods on VmRef newtype`
    * `// TODO oom error`
- * [src/class/class.rs](src/class/class.rs) (22)
+ * [src/class/class.rs](src/class/class.rs) (24)
+   * `// TODO when a ClassLoader is dropped, ensure all native libraries associated with it are freed too`
    * `/// TODO weak reference for cyclic reference?`
    * `// TODO store dimensions`
    * `// TODO is this needed?`
@@ -45,6 +46,7 @@
    * `// TODO wrap exception here and return the proper type`
    * `// TODO proper exception type here`
    * `// TODO specific exception type e.g. ExceptionInInitializerError`
+   * `// TODO cache mangled name in the method`
    * `// TODO this is basically copied from getstatic, reuse instruction impl if possible`
    * `// TODO compile java source code at test time`
  * [src/class/loader.rs](src/class/loader.rs) (13)
@@ -169,9 +171,6 @@
    * `// TODO this is definitely wrong`
  * [src/natives/java_lang_vmclassloader.rs](src/natives/java_lang_vmclassloader.rs) (1)
    * `// TODO vm_get_primitive_class`
- * [src/natives/java_lang_vmruntime.rs](src/natives/java_lang_vmruntime.rs) (2)
-   * `// TODO use classloader arg - native lib can be loaded by 1 classloader only`
-   * `// TODO keep native library reference around and release when classloader is GC'd`
  * [src/natives/java_lang_vmsystem.rs](src/natives/java_lang_vmsystem.rs) (3)
    * `// TODO dont unwrap`
    * `// TODO check elements really are assignable`

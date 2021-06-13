@@ -4,7 +4,8 @@ use crate::types::{DataType, DataValue, ReturnType};
 use cafebabe::mutf8::MString;
 use thiserror::*;
 
-use crate::class::ClassType;
+use crate::alloc::VmRef;
+use crate::class::{Class, ClassType};
 
 // TODO combine repetetive errors for different data types
 
@@ -108,6 +109,13 @@ pub enum InterpreterError {
     /// Not really an error
     #[error("Exception raised: {0:?}")]
     ExceptionRaised(Throwables),
+
+    #[error("The native method {}.{name:?}:{desc:?} could not be resolved", .class.name())]
+    NativeMethodNotFound {
+        class: VmRef<Class>,
+        name: MString,
+        desc: MString,
+    },
 }
 
 impl From<Throwables> for InterpreterError {
