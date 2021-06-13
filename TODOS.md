@@ -1,4 +1,4 @@
-# TODOs (162)
+# TODOs (164)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -139,10 +139,12 @@
    * `// TODO actually compile`
    * `// TODO return result`
    * `CompileState::NotCompiled => unreachable!("not queued"), // TODO queue here?`
- * [src/jni/api.rs](src/jni/api.rs) (3)
+ * [src/jni/api.rs](src/jni/api.rs) (5)
    * `// TODO get actual env for current thread, rather than a global`
    * `// TODO set exception`
    * `// TODO keep track of global references in jvm or is it ok to leak them like this?`
+   * `// TODO throw exception instead of panic`
+   * `// TODO throw exception instead of panic`
  * [src/jni/library.rs](src/jni/library.rs) (3)
    * `// TODO add constructor for native frame`
    * `// TODO call JNI_OnUnload in Drop`

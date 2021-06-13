@@ -164,9 +164,13 @@ impl Clone for FieldStorage {
 }
 
 impl FieldId {
-    #[cfg(test)]
     pub fn get(self) -> u32 {
         self.0
+    }
+
+    /// Be careful..
+    pub fn from_raw(id: u32) -> Self {
+        Self(id)
     }
 }
 

@@ -1,6 +1,9 @@
 use crate::jni::sys;
-use crate::jni::sys::JNIInvokeInterface_;
+use crate::jni::sys::{jfieldID, JNIInvokeInterface_, _jmethodID, jmethodID};
 
+use crate::alloc::{vmref_from_raw, vmref_into_raw, VmRef};
+use crate::class::Method;
+use crate::storage::FieldId;
 use std::ptr;
 
 /// safety: *mut pointers that are non-Sync are reserved and never used
@@ -11,6 +14,12 @@ unsafe impl Sync for sys::JNINativeInterface_ {}
 struct UnsafeSyncPtr<T>(*const T);
 unsafe impl Sync for UnsafeSyncPtr<sys::JNIInvokeInterface_> {}
 unsafe impl Sync for UnsafeSyncPtr<sys::JNINativeInterface_> {}
+
+#[repr(C)]
+struct JniFieldId(FieldId);
+
+#[repr(C)]
+struct JniMethodId(VmRef<Method>);
 
 pub fn current_javavm() -> *const sys::JavaVM {
     static JAVA_VM: sys::JNIInvokeInterface_ = JNIInvokeInterface_ {
@@ -331,18 +340,31 @@ mod javavm {
 mod jnienv {
     #![allow(non_snake_case, unused_variables)]
     use crate::alloc::{vmref_from_raw, vmref_increment, vmref_into_raw, vmref_ptr, VmRef};
-    use crate::class::WhichLoader;
+    use crate::class::{Class, WhichLoader};
 
+    use crate::jni::api::{JniFieldId, JniMethodId};
     use crate::jni::sys::*;
+    use crate::jni::JNI_VERSION;
     use crate::thread;
+    use crate::types::DataType;
     use cafebabe::mutf8::mstr;
+    use cafebabe::MethodAccessFlags;
     use log::*;
     use std::ffi::CStr;
     use std::mem::ManuallyDrop;
     use std::ptr;
 
+    unsafe fn as_string<'a>(s: *const ::std::os::raw::c_char) -> &'a mstr {
+        let cstr = CStr::from_ptr(s);
+        mstr::from_mutf8(cstr.to_bytes())
+    }
+
+    unsafe fn as_vmref<T>(obj: *const ::std::os::raw::c_void) -> ManuallyDrop<VmRef<T>> {
+        ManuallyDrop::new(vmref_from_raw(obj as *const T))
+    }
+
     pub extern "C" fn GetVersion(env: *mut JNIEnv) -> jint {
-        todo!("GetVersion")
+        JNI_VERSION as jint
     }
 
     pub extern "C" fn DefineClass(
@@ -356,10 +378,7 @@ mod jnienv {
     }
 
     pub extern "C" fn FindClass(env: *mut JNIEnv, name: *const ::std::os::raw::c_char) -> jclass {
-        let name = unsafe {
-            let cstr = CStr::from_ptr(name);
-            mstr::from_mutf8(cstr.to_bytes())
-        };
+        let name = unsafe { as_string(name) };
 
         debug!("FindClass({})", name);
 
@@ -477,11 +496,16 @@ mod jnienv {
         // TODO keep track of global references in jvm or is it ok to leak them like this?
 
         // obj must have come from us, and is already a full reference, so ensure we dont drop it
-        let vmobj = ManuallyDrop::new(unsafe { vmref_from_raw(obj) });
+        let vmobj = unsafe { as_vmref::<()>(obj) };
 
         // bump ref count
         let refs = vmref_increment(&vmobj);
-        debug!("incremented ref count of {:?} to {}", vmobj, refs);
+
+        debug!(
+            "incremented ref count of object at {:?} to {}",
+            vmref_ptr(&vmobj),
+            refs
+        );
 
         // return the same object
         obj
@@ -548,11 +572,33 @@ mod jnienv {
 
     pub extern "C" fn GetMethodID(
         env: *mut JNIEnv,
-        arg2: jclass,
-        arg3: *const ::std::os::raw::c_char,
-        arg4: *const ::std::os::raw::c_char,
+        class: jclass,
+        name: *const ::std::os::raw::c_char,
+        sig: *const ::std::os::raw::c_char,
     ) -> jmethodID {
-        todo!("GetMethodID")
+        let class = unsafe { as_vmref::<Class>(class) };
+        let name = unsafe { as_string(name) };
+        let sig = unsafe { as_string(sig) };
+
+        // TODO throw exception instead of panic
+        let method = class
+            .find_method_recursive_in_superclasses(
+                name,
+                sig,
+                MethodAccessFlags::empty(),
+                MethodAccessFlags::empty(),
+            )
+            .unwrap_or_else(|| panic!("method {:?}::{:?} ({}) not found", class.name(), name, sig));
+
+        trace!(
+            "GetMethodId({:?}::{} (type {:?})) -> {:?}",
+            class.name(),
+            name,
+            sig,
+            method,
+        );
+
+        JniMethodId(method).into()
     }
 
     pub unsafe extern "C" fn CallObjectMethod(
@@ -1122,11 +1168,29 @@ mod jnienv {
 
     pub extern "C" fn GetFieldID(
         env: *mut JNIEnv,
-        arg2: jclass,
-        arg3: *const ::std::os::raw::c_char,
-        arg4: *const ::std::os::raw::c_char,
+        class: jclass,
+        name: *const ::std::os::raw::c_char,
+        sig: *const ::std::os::raw::c_char,
     ) -> jfieldID {
-        todo!("GetFieldID")
+        let class = unsafe { as_vmref::<Class>(class) };
+        let name = unsafe { as_string(name) };
+        let sig = unsafe { as_string(sig) };
+
+        let desc = DataType::from_descriptor(sig).expect("bad signature");
+        // TODO throw exception instead of panic
+        let field = class
+            .find_instance_field_recursive(name, &desc)
+            .unwrap_or_else(|| panic!("field {:?}.{:?} ({}) not found", class.name(), name, sig));
+
+        trace!(
+            "GetFieldId({:?}.{} (type {:?})) -> {:?}",
+            class.name(),
+            name,
+            sig,
+            field
+        );
+
+        JniFieldId(field).into()
     }
 
     pub extern "C" fn GetObjectField(env: *mut JNIEnv, arg2: jobject, arg3: jfieldID) -> jobject {
@@ -2153,5 +2217,43 @@ mod jnienv {
 
     pub extern "C" fn GetObjectRefType(env: *mut JNIEnv, arg2: jobject) -> jobjectRefType {
         todo!("GetObjectRefType")
+    }
+}
+
+impl From<JniFieldId> for sys::jfieldID {
+    fn from(f: JniFieldId) -> Self {
+        let id = f.0.get();
+        debug_assert!(std::mem::size_of_val(&id) <= std::mem::size_of::<sys::jfieldID>());
+        id as jfieldID
+    }
+}
+impl From<sys::jfieldID> for JniFieldId {
+    fn from(f: jfieldID) -> Self {
+        let id = f as u32;
+        JniFieldId(FieldId::from_raw(id))
+    }
+}
+
+impl From<JniMethodId> for sys::jmethodID {
+    fn from(m: JniMethodId) -> Self {
+        vmref_into_raw(m.0) as sys::jmethodID
+    }
+}
+
+impl From<sys::jmethodID> for JniMethodId {
+    fn from(m: jmethodID) -> Self {
+        let method = unsafe { vmref_from_raw::<Method>(m as *const _) };
+        JniMethodId(method)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::jni::sys::jfieldID;
+
+    #[test]
+    fn from_jfieldid() {
+        assert!(std::mem::size_of::<JniFieldId>() <= std::mem::size_of::<jfieldID>());
     }
 }
