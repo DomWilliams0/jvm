@@ -54,7 +54,7 @@ impl NativeLibrary {
             let frame = NativeFrame {
                 // TODO add constructor for native frame
                 inner: NativeFrameInner::Jni(JniFrame::new("JNI_OnLoad")),
-                function: NativeFunction::Jni(func_addr),
+                function: Some(NativeFunction::JniDirect(func_addr)),
                 args: None, // passed manually
             };
 

@@ -1,4 +1,4 @@
-# TODOs (164)
+# TODOs (163)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -24,11 +24,10 @@
    * `// TODO actually intern strings`
    * `// TODO methods on VmRef newtype`
    * `// TODO oom error`
- * [src/class/class.rs](src/class/class.rs) (24)
+ * [src/class/class.rs](src/class/class.rs) (23)
    * `// TODO when a ClassLoader is dropped, ensure all native libraries associated with it are freed too`
    * `/// TODO weak reference for cyclic reference?`
    * `// TODO store dimensions`
-   * `// TODO is this needed?`
    * `// TODO arrayvec`
    * `// TODO get classloader reference from tls instead of parameter`
    * `// TODO this crashes in release builds, oops`

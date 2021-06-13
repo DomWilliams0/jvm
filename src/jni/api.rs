@@ -38,7 +38,7 @@ pub fn current_javavm() -> *const sys::JavaVM {
     &JAVA_VM_PTR.0 as *const sys::JavaVM
 }
 
-fn global_env() -> *const sys::JNIEnv {
+pub fn global_env() -> *const sys::JNIEnv {
     static JNI_ENV: sys::JNINativeInterface_ = sys::JNINativeInterface_ {
         reserved0: ptr::null_mut(),
         reserved1: ptr::null_mut(),

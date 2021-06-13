@@ -1,4 +1,4 @@
-use crate::alloc::VmRef;
+use crate::alloc::{vmref_from_raw, vmref_into_raw, VmRef};
 use log::*;
 
 use crate::error::{Throwable, Throwables};
@@ -10,7 +10,11 @@ use crate::thread;
 
 use crate::class::{FunctionArgs, Method, NativeFunction};
 use crate::interpreter::InterpreterError;
-use crate::types::DataValue;
+
+use crate::jni::sys::JNIEnv;
+use crate::types::{DataType, DataValue, PrimitiveDataType, ReturnType};
+use cafebabe::AccessFlags;
+use smallvec::SmallVec;
 use std::cell::{RefCell, RefMut};
 use std::fmt::Display;
 use std::fmt::{Debug, Formatter};
@@ -227,18 +231,59 @@ impl Interpreter {
                 }
             );
 
-            // dismantle frame
-            let func = native.function;
-            let mut args = native.args.take().unwrap(); // this happens once only the upon call
+            // dismantle frame - unwraps move the values out here as the first and only call
+            let func = native.function.take().unwrap();
+            let mut args = native.args.take().unwrap();
             let args = FunctionArgs::from(args.as_mut());
+
+            // for jni calls we need the method reference
+            let method = match (&func, &native.inner) {
+                (NativeFunction::Jni(_), NativeFrameInner::Method { method, .. }) => {
+                    Some(method.clone())
+                }
+                _ => None,
+            };
 
             // drop mutable ref to interpreter to go native - it might recursively call this interpreter method
             drop(state);
 
             // go native!! best of luck
-            let result = match func {
-                NativeFunction::Internal(func) => func(args),
-                NativeFunction::Jni(_) => unreachable!(), // call jni functions differently
+            let result = match (func, method) {
+                (NativeFunction::Internal(func), _) => {
+                    // internal native call, just call it
+                    func(args)
+                }
+                (NativeFunction::Jni(ptr), Some(method)) => {
+                    let (cif, code) = build_jni_cif(ptr, &method);
+                    let jni = thread.jni_env();
+                    let cif_args = build_jni_cif_args(&method, &args, &jni);
+
+                    trace!("calling jni function {:?}", method.name());
+                    let raw_ret: u64 = unsafe { cif.call(code, cif_args.as_slice()) };
+
+                    // check exception
+                    let thread = thread::get();
+                    if let Some(exc) = thread.exception() {
+                        Err(exc)
+                    } else {
+                        trace!("jni function returned {:#x}", raw_ret);
+                        match method.return_type() {
+                            ReturnType::Returns(ty) => {
+                                let val = unsafe { DataValue::from_raw_return_value(raw_ret, ty) };
+                                Ok(Some(val))
+                            }
+                            _ => {
+                                // void
+                                Ok(None)
+                            }
+                        }
+                    }
+                }
+                (NativeFunction::JniDirect(_), _) => {
+                    // jni direct functions are called differently
+                    unreachable!("direct jni functions are called differently")
+                }
+                (NativeFunction::Jni(_), None) => unreachable!(), // set above
             };
 
             let return_value = match result {
@@ -332,7 +377,7 @@ impl Interpreter {
         {
             f(jni)
         } else {
-            unreachable!("not in a jni function")
+            unreachable!("not in a jni function ({:?})", state.frames.top())
         }
     }
 
@@ -349,32 +394,15 @@ impl Interpreter {
     /// Fn is not called if frame doesn't exist
     pub fn with_frame<R>(&self, n: usize, f: impl FnOnce(&Frame) -> R) -> Option<R> {
         let state = self.state.borrow();
-        let ret = if let Some(frame) = state.frames.iter().nth(n) {
-            Some(f(frame))
-        } else {
-            None
-        };
+        let ret = state.frames.iter().nth(n).map(|frame| f(frame));
 
         ret
     }
 
     pub fn execute_native_frame<R>(&self, frame: NativeFrame, f: impl FnOnce() -> R) -> R {
-        let func = frame.function;
         self.state_mut().push_frame(Frame::Native(frame));
         let ret = f();
-        let frame = self.state_mut().pop_frame();
-
-        // ensure we popped the right frame
-        assert_eq!(
-            frame.as_ref().and_then(|f| match f {
-                Frame::Native(NativeFrame { function, .. }) => Some(*function),
-                _ => None,
-            }),
-            Some(func),
-            "popped wrong frame {:?}",
-            frame
-        );
-
+        self.state_mut().pop_frame();
         ret
     }
 }
@@ -385,6 +413,93 @@ impl Default for Interpreter {
             state: RefCell::new(InterpreterState {
                 frames: FrameStack::new(),
             }),
+        }
+    }
+}
+
+fn build_jni_cif(func: usize, method: &Method) -> (libffi::middle::Cif, libffi::middle::CodePtr) {
+    use libffi::middle::Type;
+
+    let mut cif_builder = libffi::middle::Builder::new().arg(Type::pointer()); // JNIEnv
+
+    if method.flags().is_static() {
+        cif_builder = cif_builder.arg(Type::pointer()); // jclass
+    }
+
+    let cif = cif_builder
+        .args(method.args().iter().map(Into::into))
+        .res(match method.return_type() {
+            ReturnType::Void => Type::void(),
+            ReturnType::Returns(ty) => ty.into(),
+        })
+        .into_cif();
+
+    let code = libffi::middle::CodePtr(func as *mut _);
+
+    (cif, code)
+}
+
+fn build_jni_cif_args(
+    method: &Method,
+    args: &FunctionArgs,
+    jni_env: &*const JNIEnv,
+) -> SmallVec<[libffi::middle::Arg; 6]> {
+    use std::mem::transmute;
+
+    let mut cif_args = SmallVec::new();
+
+    // jnienv as first arg
+    cif_args.push(unsafe { transmute(jni_env) });
+
+    if method.flags().is_static() {
+        // add class as `this` param for static methods
+        let class = method.class().clone();
+        let class_ref = vmref_into_raw(class);
+        cif_args.push(unsafe { transmute(class_ref) });
+    }
+
+    // remaining args
+    cif_args.extend(args.as_refs().map(|ptr| unsafe { transmute(ptr) }));
+    cif_args
+}
+
+impl<'a> From<&DataType<'a>> for libffi::middle::Type {
+    fn from(ty: &DataType<'a>) -> Self {
+        use libffi::middle::Type;
+        use PrimitiveDataType::*;
+        match ty {
+            DataType::Primitive(Boolean) => Type::u8(),
+            DataType::Primitive(Byte) => Type::i8(),
+            DataType::Primitive(Short) => Type::i16(),
+            DataType::Primitive(Int) => Type::i32(),
+            DataType::Primitive(Long) => Type::i64(),
+            DataType::Primitive(Char) => Type::u16(),
+            DataType::Primitive(Float) => Type::f32(),
+            DataType::Primitive(Double) => Type::f64(),
+            DataType::ReturnAddress => Type::usize(),
+            DataType::Reference(_) => Type::pointer(),
+        }
+    }
+}
+
+impl DataValue {
+    unsafe fn from_raw_return_value(ret: u64, ty: &DataType) -> Self {
+        use DataType::*;
+        use DataValue as V;
+        use PrimitiveDataType::*;
+
+        let ret_ptr = &ret as *const _;
+        match ty {
+            Primitive(Boolean) => V::Boolean(*(ret_ptr as *const _)),
+            Primitive(Byte) => V::Byte(*(ret_ptr as *const _)),
+            Primitive(Short) => V::Short(*(ret_ptr as *const _)),
+            Primitive(Int) => V::Int(*(ret_ptr as *const _)),
+            Primitive(Long) => V::Long(*(ret_ptr as *const _)),
+            Primitive(Char) => V::Char(*(ret_ptr as *const _)),
+            Primitive(Float) => V::Float(*(ret_ptr as *const _)),
+            Primitive(Double) => V::Double(*(ret_ptr as *const _)),
+            ReturnAddress => V::ReturnAddress(*(ret_ptr as *const _)),
+            Reference(_) => V::Reference(vmref_from_raw(ret as *const _)),
         }
     }
 }

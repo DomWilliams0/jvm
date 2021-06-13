@@ -32,6 +32,10 @@ pub fn vmref_into_raw<T>(vmref: VmRef<T>) -> *const T {
     Arc::into_raw(vmref)
 }
 
+pub fn vmref_as_raw<T>(vmref: &VmRef<T>) -> *const T {
+    Arc::as_ptr(vmref)
+}
+
 /// Must have come from [vmref_into_raw]
 pub unsafe fn vmref_from_raw<T>(ptr: *const T) -> VmRef<T> {
     Arc::from_raw(ptr)

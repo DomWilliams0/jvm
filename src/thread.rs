@@ -9,6 +9,7 @@ use crate::alloc::VmRef;
 
 use crate::error::Throwable;
 use crate::interpreter::Interpreter;
+use crate::jni::sys::JNIEnv;
 use crate::jvm::JvmGlobalState;
 use crate::types::DataValue;
 use std::thread::ThreadId;
@@ -163,5 +164,9 @@ impl JvmThreadState {
 
     pub fn global(&self) -> &JvmGlobalState {
         &self.jvm
+    }
+
+    pub fn jni_env(&self) -> *const JNIEnv {
+        crate::jni::global_env()
     }
 }

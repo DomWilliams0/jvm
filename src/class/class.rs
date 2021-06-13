@@ -13,7 +13,7 @@ use cafebabe::{
     attribute, AccessFlags, ClassAccessFlags, ClassError, FieldAccessFlags, MethodAccessFlags,
 };
 
-use crate::alloc::{vmref_eq, vmref_is_null, InternedString, NativeString, VmRef};
+use crate::alloc::{vmref_as_raw, vmref_eq, vmref_is_null, InternedString, NativeString, VmRef};
 use crate::class::loader::current_thread;
 use crate::class::object::Object;
 use crate::class::{ClassLoader, WhichLoader};
@@ -128,13 +128,14 @@ pub type NativeInternalFn = fn(FunctionArgs) -> Result<Option<DataValue>, VmRef<
 
 pub struct FunctionArgs<'a>(&'a mut [DataValue]);
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub enum NativeFunction {
     /// Rust function
     Internal(NativeInternalFn),
 
-    /// JNI style C function
-    // TODO is this needed?
+    /// JNI style C function called directly from native, like JNI_OnLoad
+    JniDirect(usize),
+
     Jni(usize),
 }
 
@@ -1518,7 +1519,7 @@ impl PartialEq for NativeFunction {
         use NativeFunction::*;
         match (self, other) {
             (Internal(a), Internal(b)) => std::ptr::eq(a, b),
-            (Jni(a), Jni(b)) => a == b,
+            (JniDirect(a), JniDirect(b)) => a == b,
             _ => false,
         }
     }
@@ -1528,7 +1529,7 @@ impl Debug for NativeFunction {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let ptr = match self {
             NativeFunction::Internal(f) => f as *const _ as usize,
-            NativeFunction::Jni(f) => *f,
+            NativeFunction::JniDirect(f) | NativeFunction::Jni(f) => *f,
         };
         write!(f, "NativeFunction({:#x})", ptr)
     }
@@ -1544,6 +1545,23 @@ impl<'a> FunctionArgs<'a> {
     pub fn take(&mut self, idx: usize) -> DataValue {
         let val = self.0.get_mut(idx).unwrap(); // verified
         std::mem::replace(val, DataValue::Boolean(false))
+    }
+
+    pub fn as_refs(&self) -> impl Iterator<Item = *const ()> + '_ {
+        use DataValue::*;
+        self.0.iter().map(|val| match val {
+            DataValue::Boolean(val) => val as *const _ as *const (),
+            ReturnAddress(val) => val as *const _ as *const (),
+            Byte(val) => val as *const _ as *const (),
+            Short(val) => val as *const _ as *const (),
+            Int(val) => val as *const _ as *const (),
+            Long(val) => val as *const _ as *const (),
+            Char(val) => val as *const _ as *const (),
+            Float(val) => val as *const _ as *const (),
+            Double(val) => val as *const _ as *const (),
+            Reference(val) => vmref_as_raw(val) as *const (),
+            VmDataClass(val) => vmref_as_raw(val) as *const (),
+        })
     }
 }
 

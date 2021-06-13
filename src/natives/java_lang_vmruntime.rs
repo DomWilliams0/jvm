@@ -4,7 +4,6 @@ use crate::error::Throwable;
 use crate::jni::NativeLibrary;
 use crate::thread;
 use crate::types::DataValue;
-use itertools::Itertools;
 
 pub fn vm_map_library_name(mut args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     #[cfg(not(any(unix, windows)))]

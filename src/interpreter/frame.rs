@@ -35,11 +35,13 @@ pub struct JavaFrame {
 
 pub struct NativeFrame {
     pub inner: NativeFrameInner,
-    pub function: NativeFunction,
+    /// Some on init, None after exec
+    pub function: Option<NativeFunction>,
     /// Some on init, None after exec
     pub args: Option<Box<[DataValue]>>,
 }
 
+/// Call into internal JNI implementation i.e. via JNIEnv/JavaVM
 pub struct JniFrame {
     pub function_name: Cow<'static, str>,
     local_refs: RefCell<Vec<VmRef<()>>>,
@@ -314,7 +316,7 @@ impl Frame {
                                 class,
                                 method: method.clone(),
                             },
-                            function: *function,
+                            function: Some(function.clone()),
                             args: Some(args),
                         }))
                     }
