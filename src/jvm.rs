@@ -153,6 +153,12 @@ impl JvmArgs {
                     .takes_value(true),
             )
             .arg(Arg::with_name("nosystemclassloader").long("XXnosystemclassloader"))
+            // TODO generic -D arg collection
+            .arg(
+                Arg::with_name("librarypath")
+                    .long("XXlibrarypath")
+                    .takes_value(true),
+            )
             .get_matches_from(args);
 
         let mut jvm_args = Self::default();
@@ -172,6 +178,10 @@ impl JvmArgs {
         jvm_args
             .properties
             .set_path("sun.boot.class.path", &bootclasspath);
+        jvm_args.properties.set_path(
+            "java.library.path",
+            &ClassPath::from_colon_separated(matches.value_of("librarypath").unwrap_or(".")),
+        );
 
         jvm_args.bootclasspath = Arc::new(bootclasspath);
         jvm_args.userclasspath = Arc::new(classpath);

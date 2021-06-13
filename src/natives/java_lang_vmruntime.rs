@@ -12,7 +12,8 @@ pub fn vm_map_library_name(mut args: FunctionArgs) -> Result<Option<DataValue>, 
     let dll = arg.as_reference().expect("string expected");
 
     let dll_path = dll
-        .string_value().map(|s| {
+        .string_value()
+        .map(|s| {
             #[cfg(unix)]
             return format!("lib{}.so", s);
 
@@ -34,6 +35,9 @@ pub fn vm_native_load(mut args: FunctionArgs) -> Result<Option<DataValue>, VmRef
         .and_then(|obj| obj.string_value())
         .expect("not a string");
 
+    // TODO use classloader arg - native lib can be loaded by 1 classloader only
+    // let class_loader = args.take(0);
+
     log::debug!("loading native library {:?}", lib_name);
 
     let do_native_load = || -> Result<(), Box<dyn Error>> {
@@ -50,10 +54,7 @@ pub fn vm_native_load(mut args: FunctionArgs) -> Result<Option<DataValue>, VmRef
             }
         }
 
-        // TODO use classloader arg
-        // let class_loader = args.take(0);
-
-        // TODO keep native library reference around
+        // TODO keep native library reference around and release when classloader is GC'd
         std::mem::forget(lib);
         Ok(())
     };

@@ -139,13 +139,12 @@
    * `// TODO actually compile`
    * `// TODO return result`
    * `CompileState::NotCompiled => unreachable!("not queued"), // TODO queue here?`
- * [src/jvm.rs](src/jvm.rs) (4)
+ * [src/jvm.rs](src/jvm.rs) (5)
    * `// TODO "catch" any exception during init, and log it properly with stacktrace etc`
    * `// TODO populate String[] args`
    * `// TODO wait for threads to die, unintialise TLS, assert this is the last ref to global state`
    * `// TODO standard jvm args`
- * [src/lib.rs](src/lib.rs) (1)
-   * `// TODO actually choose versions`
+   * `// TODO generic -D arg collection`
  * [src/natives/gnu_classpath_vmstackwalker.rs](src/natives/gnu_classpath_vmstackwalker.rs) (1)
    * `// TODO native impls for other VMStackWalker methods`
  * [src/natives/gnu_classpath_vmsystemproperties.rs](src/natives/gnu_classpath_vmsystemproperties.rs) (1)
@@ -161,9 +160,9 @@
  * [src/natives/java_lang_vmclassloader.rs](src/natives/java_lang_vmclassloader.rs) (1)
    * `// TODO vm_get_primitive_class`
  * [src/natives/java_lang_vmruntime.rs](src/natives/java_lang_vmruntime.rs) (3)
+   * `// TODO use classloader arg - native lib can be loaded by 1 classloader only`
    * `type JavaVM = (); // TODO JNI types`
-   * `// TODO use classloader arg`
-   * `// TODO keep native library reference around`
+   * `// TODO keep native library reference around and release when classloader is GC'd`
  * [src/natives/java_lang_vmsystem.rs](src/natives/java_lang_vmsystem.rs) (3)
    * `// TODO dont unwrap`
    * `// TODO check elements really are assignable`
@@ -174,7 +173,7 @@
    * `// TODO these properties are not all correct`
    * `prop!("java.home", dirs::data_dir()); // TODO`
    * `prop!("java.specification.version", "TODO"); // TODO get from Configuration class?`
-   * `); // TODO`
+   * `prop!("java.library.path", "."); // TODO`
    * `prop!("java.ext.dirs", "."); // TODO`
  * [src/storage.rs](src/storage.rs) (5)
    * `// TODO field storage should be inline in VmRef<Object>`
