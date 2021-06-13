@@ -9,6 +9,8 @@ use crate::error::Throwables;
 
 use cafebabe::AccessFlags;
 
+use std::borrow::Cow;
+use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
@@ -32,16 +34,33 @@ pub struct JavaFrame {
 }
 
 pub struct NativeFrame {
-    pub class: VmRef<Class>,
-    pub method: VmRef<Method>,
+    pub inner: NativeFrameInner,
     pub function: NativeFunction,
     /// Some on init, None after exec
     pub args: Option<Box<[DataValue]>>,
 }
 
+pub struct JniFrame {
+    pub function_name: Cow<'static, str>,
+    local_refs: RefCell<Vec<VmRef<()>>>,
+}
+
+pub enum NativeFrameInner {
+    Method {
+        class: VmRef<Class>,
+        method: VmRef<Method>,
+    },
+    Jni(JniFrame),
+}
+
 pub enum Frame {
     Java(JavaFrame),
     Native(NativeFrame),
+}
+
+pub enum FrameInfo<'a> {
+    Method(&'a VmRef<Class>, &'a VmRef<Method>),
+    Jni(&'a str),
 }
 
 impl LocalVariables {
@@ -291,8 +310,10 @@ impl Frame {
 
                         let args = args.collect();
                         Ok(Frame::Native(NativeFrame {
-                            class,
-                            method: method.clone(),
+                            inner: NativeFrameInner::Method {
+                                class,
+                                method: method.clone(),
+                            },
                             function: *function,
                             args: Some(args),
                         }))
@@ -323,10 +344,18 @@ impl Frame {
         Self::new_with_args(method, args)
     }
 
-    pub fn class_and_method(&self) -> (&VmRef<Class>, &VmRef<Method>) {
+    /// None for direct JNI calls like JNI_OnLoad
+    pub fn class_and_method(&self) -> FrameInfo {
         match self {
-            Frame::Java(frame) => (&frame.class, &frame.method),
-            Frame::Native(frame) => (&frame.class, &frame.method),
+            Frame::Java(frame) => FrameInfo::Method(&frame.class, &frame.method),
+            Frame::Native(NativeFrame {
+                inner: NativeFrameInner::Method { class, method },
+                ..
+            }) => FrameInfo::Method(class, method),
+            Frame::Native(NativeFrame {
+                inner: NativeFrameInner::Jni(JniFrame { function_name, .. }),
+                ..
+            }) => FrameInfo::Jni(function_name),
         }
     }
 
@@ -335,12 +364,41 @@ impl Frame {
     }
 }
 
+impl<'a> FrameInfo<'a> {
+    pub fn class(self) -> Option<&'a VmRef<Class>> {
+        match self {
+            FrameInfo::Method(cls, _) => Some(cls),
+            _ => None,
+        }
+    }
+}
+
+impl JniFrame {
+    pub fn new(jni_func: impl Into<Cow<'static, str>>) -> Self {
+        Self {
+            function_name: jni_func.into(),
+            local_refs: RefCell::new(vec![]),
+        }
+    }
+
+    pub fn add_local_ref<T: Debug>(&self, obj: VmRef<T>) -> VmRef<T> {
+        // just store a strong type-erased copy
+        let local_ref = unsafe { std::mem::transmute::<VmRef<T>, VmRef<()>>(obj.clone()) };
+        self.local_refs.borrow_mut().push(local_ref);
+        debug!("bumped local ref count for {:?}", obj);
+        obj
+    }
+}
+
 impl Debug for Frame {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let (_, method) = self.class_and_method();
-        let suffix = if self.is_java() { "" } else { " (native)" };
-
-        write!(f, "{}{}", method, suffix)
+        match self.class_and_method() {
+            FrameInfo::Method(_, method) => {
+                let suffix = if self.is_java() { "" } else { " (native)" };
+                write!(f, "{}{}", method, suffix)
+            }
+            FrameInfo::Jni(name) => write!(f, "{} (jni)", name),
+        }
     }
 }
 

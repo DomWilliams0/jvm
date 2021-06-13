@@ -1,4 +1,4 @@
-# TODOs (159)
+# TODOs (161)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -27,7 +27,7 @@
  * [src/class/class.rs](src/class/class.rs) (22)
    * `/// TODO weak reference for cyclic reference?`
    * `// TODO store dimensions`
-   * `// TODO JNI style C function`
+   * `// TODO is this needed?`
    * `// TODO arrayvec`
    * `// TODO get classloader reference from tls instead of parameter`
    * `// TODO this crashes in release builds, oops`
@@ -139,11 +139,13 @@
    * `// TODO actually compile`
    * `// TODO return result`
    * `CompileState::NotCompiled => unreachable!("not queued"), // TODO queue here?`
- * [src/jni/api.rs](src/jni/api.rs) (1)
+ * [src/jni/api.rs](src/jni/api.rs) (2)
    * `// TODO get actual env for current thread, rather than a global`
- * [src/jni/library.rs](src/jni/library.rs) (2)
-   * `// TODO setup interpreter for direct native call`
+   * `// TODO set exception`
+ * [src/jni/library.rs](src/jni/library.rs) (3)
+   * `// TODO add constructor for native frame`
    * `// TODO call JNI_OnUnload in Drop`
+   * `// TODO does this work on windows too?`
  * [src/jvm.rs](src/jvm.rs) (5)
    * `// TODO "catch" any exception during init, and log it properly with stacktrace etc`
    * `// TODO populate String[] args`

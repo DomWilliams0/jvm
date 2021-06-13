@@ -2,7 +2,9 @@ use crate::alloc::VmRef;
 use log::*;
 
 use crate::error::{Throwable, Throwables};
-use crate::interpreter::frame::{Frame, FrameStack, JavaFrame};
+use crate::interpreter::frame::{
+    Frame, FrameStack, JavaFrame, JniFrame, NativeFrame, NativeFrameInner,
+};
 use crate::interpreter::insn::{get_insn, InstructionBlob, PostExecuteAction};
 use crate::thread;
 
@@ -10,6 +12,7 @@ use crate::class::{FunctionArgs, Method, NativeFunction};
 use crate::interpreter::InterpreterError;
 use crate::types::DataValue;
 use std::cell::{RefCell, RefMut};
+use std::fmt::Display;
 use std::fmt::{Debug, Formatter};
 
 #[derive(Debug)]
@@ -38,19 +41,19 @@ impl InterpreterState {
         self.frames.push(frame, 0);
     }
 
-    pub fn pop_frame(&mut self) -> bool {
+    pub fn pop_frame(&mut self) -> Option<Frame> {
         match self.frames.pop() {
-            Some(_) => {
+            Some((f, _)) => {
                 trace!(
                     "popped frame, stack depth is now {}: {:?}",
                     self.frames.depth(),
                     self.frames.top(),
                 );
-                true
+                Some(f)
             }
             None => {
                 error!("no frames to pop");
-                false
+                None
             }
         }
     }
@@ -66,7 +69,11 @@ impl InterpreterState {
     fn current_method(&self) -> Option<&Method> {
         match self.frames.top()? {
             Frame::Java(frame) => Some(&frame.method),
-            Frame::Native(frame) => Some(&frame.method),
+            Frame::Native(NativeFrame {
+                inner: NativeFrameInner::Method { method, .. },
+                ..
+            }) => Some(method),
+            _ => None,
         }
     }
 
@@ -100,7 +107,7 @@ impl InterpreterState {
         };
 
         // pop frame
-        if !self.pop_frame() {
+        if self.pop_frame().is_none() {
             return Err(InterpreterError::NoFrame);
         }
 
@@ -211,19 +218,27 @@ impl Interpreter {
         let mut state = self.state_mut();
 
         if let Some(native) = state.frames.top_native_mut() {
-            trace!("invoking native method {}", native.method,);
+            trace!(
+                "invoking native method {}",
+                match &native.inner {
+                    NativeFrameInner::Method { method, .. } => method as &dyn Display,
+                    NativeFrameInner::Jni(JniFrame { function_name, .. }) =>
+                        &*function_name as &dyn Display,
+                }
+            );
 
             // dismantle frame
             let func = native.function;
             let mut args = native.args.take().unwrap(); // this happens once only the upon call
             let args = FunctionArgs::from(args.as_mut());
 
-            // drop mutable ref to interpreter to go native - this might recursively call this interpreter method
+            // drop mutable ref to interpreter to go native - it might recursively call this interpreter method
             drop(state);
 
             // go native!! best of luck
             let result = match func {
                 NativeFunction::Internal(func) => func(args),
+                NativeFunction::Jni(_) => unreachable!(), // call jni functions differently
             };
 
             let return_value = match result {
@@ -300,10 +315,25 @@ impl Interpreter {
         self.state.borrow_mut()
     }
 
+    /// Panics if not called from a method
     pub fn with_current_frame<R>(&self, f: impl FnOnce(&Frame) -> R) -> R {
         let state = self.state.borrow();
         let frame = state.frames.top().expect("must be called from a method");
         f(frame)
+    }
+
+    /// Panics if not called from a Rust-implemented JNIEnv method
+    pub fn with_current_jni_frame<R>(&self, f: impl FnOnce(&JniFrame) -> R) -> R {
+        let state = self.state.borrow();
+        if let Some(Frame::Native(NativeFrame {
+            inner: NativeFrameInner::Jni(jni),
+            ..
+        })) = state.frames.top()
+        {
+            f(jni)
+        } else {
+            unreachable!("not in a jni function")
+        }
     }
 
     /// Called in top down order, first is current frame
@@ -312,6 +342,40 @@ impl Interpreter {
         for frame in state.frames.iter() {
             f(frame);
         }
+    }
+
+    /// 0 = current, 1 = calling, etc.
+    ///
+    /// Fn is not called if frame doesn't exist
+    pub fn with_frame<R>(&self, n: usize, f: impl FnOnce(&Frame) -> R) -> Option<R> {
+        let state = self.state.borrow();
+        let ret = if let Some(frame) = state.frames.iter().nth(n) {
+            Some(f(frame))
+        } else {
+            None
+        };
+
+        ret
+    }
+
+    pub fn execute_native_frame<R>(&self, frame: NativeFrame, f: impl FnOnce() -> R) -> R {
+        let func = frame.function;
+        self.state_mut().push_frame(Frame::Native(frame));
+        let ret = f();
+        let frame = self.state_mut().pop_frame();
+
+        // ensure we popped the right frame
+        assert_eq!(
+            frame.as_ref().and_then(|f| match f {
+                Frame::Native(NativeFrame { function, .. }) => Some(*function),
+                _ => None,
+            }),
+            Some(func),
+            "popped wrong frame {:?}",
+            frame
+        );
+
+        ret
     }
 }
 

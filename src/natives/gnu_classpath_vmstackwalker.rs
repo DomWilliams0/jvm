@@ -1,6 +1,7 @@
 use crate::alloc::{vmref_alloc_object, VmRef};
 use crate::class::{null, FunctionArgs, Object, WhichLoader};
 use crate::error::Throwable;
+use crate::interpreter::FrameInfo;
 use crate::thread;
 use crate::types::DataValue;
 
@@ -13,7 +14,10 @@ pub fn vm_get_class_context(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<
     let mut classes = Vec::new();
     let mut do_skip = true;
     thread.interpreter().with_frames(|frame| {
-        let (cls, _) = frame.class_and_method();
+        let cls = match frame.class_and_method() {
+            FrameInfo::Method(cls, _) => cls,
+            _ => return,
+        };
 
         if do_skip {
             // skip first to begin with the caller of this method

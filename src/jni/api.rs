@@ -330,7 +330,16 @@ mod javavm {
 
 mod jnienv {
     #![allow(non_snake_case, unused_variables)]
+    use crate::alloc::vmref_ptr;
+    use crate::class::WhichLoader;
+
     use crate::jni::sys::*;
+    use crate::thread;
+    use cafebabe::mutf8::mstr;
+    use log::*;
+    use std::ffi::CStr;
+    use std::ptr;
+
     pub extern "C" fn GetVersion(env: *mut JNIEnv) -> jint {
         todo!("GetVersion")
     }
@@ -345,8 +354,51 @@ mod jnienv {
         todo!("DefineClass")
     }
 
-    pub extern "C" fn FindClass(env: *mut JNIEnv, arg2: *const ::std::os::raw::c_char) -> jclass {
-        todo!("FindClass")
+    pub extern "C" fn FindClass(env: *mut JNIEnv, name: *const ::std::os::raw::c_char) -> jclass {
+        let name = unsafe {
+            let cstr = CStr::from_ptr(name);
+            mstr::from_mutf8(cstr.to_bytes())
+        };
+
+        debug!("FindClass({})", name);
+
+        let thread = thread::get();
+
+        // choose classloader based on calling class
+        let class_loader = thread
+            .interpreter()
+            .with_frame(1, |frame| {
+                let loader = frame
+                    .class_and_method()
+                    .class()
+                    .map(|cls| cls.loader().clone());
+
+                trace!("using loader {:?} from calling class {:?}", loader, frame);
+                loader
+            })
+            .flatten()
+            .unwrap_or(WhichLoader::Bootstrap);
+
+        // dont hold interpreter ref while loading class
+
+        let interp = thread.interpreter();
+        match thread
+            .global()
+            .class_loader()
+            .load_class(name, class_loader)
+        {
+            Ok(cls) => {
+                // return local ref
+                let cls = interp.with_current_jni_frame(|jni| jni.add_local_ref(cls));
+                vmref_ptr(&cls) as jclass
+            }
+            Err(err) => {
+                // TODO set exception
+                warn!("FindClass failed: {:?}", err);
+                todo!("set jni exception for {:?}", err);
+                ptr::null_mut()
+            }
+        }
     }
 
     pub extern "C" fn FromReflectedMethod(env: *mut JNIEnv, arg2: jobject) -> jmethodID {
@@ -734,12 +786,7 @@ mod jnienv {
         todo!("CallDoubleMethodA")
     }
 
-    pub unsafe extern "C" fn CallVoidMethod(
-        env: *mut JNIEnv,
-        arg2: jobject,
-        arg3: jmethodID,
-        ...
-    ) {
+    pub unsafe extern "C" fn CallVoidMethod(env: *mut JNIEnv, arg2: jobject, arg3: jmethodID, ...) {
         todo!("CallVoidMethod")
     }
 
@@ -1074,11 +1121,7 @@ mod jnienv {
         todo!("GetObjectField")
     }
 
-    pub extern "C" fn GetBooleanField(
-        env: *mut JNIEnv,
-        arg2: jobject,
-        arg3: jfieldID,
-    ) -> jboolean {
+    pub extern "C" fn GetBooleanField(env: *mut JNIEnv, arg2: jobject, arg3: jfieldID) -> jboolean {
         todo!("GetBooleanField")
     }
 
@@ -1136,12 +1179,7 @@ mod jnienv {
         todo!("SetCharField")
     }
 
-    pub extern "C" fn SetShortField(
-        env: *mut JNIEnv,
-        arg2: jobject,
-        arg3: jfieldID,
-        arg4: jshort,
-    ) {
+    pub extern "C" fn SetShortField(env: *mut JNIEnv, arg2: jobject, arg3: jfieldID, arg4: jshort) {
         todo!("SetShortField")
     }
 
@@ -1153,12 +1191,7 @@ mod jnienv {
         todo!("SetLongField")
     }
 
-    pub extern "C" fn SetFloatField(
-        env: *mut JNIEnv,
-        arg2: jobject,
-        arg3: jfieldID,
-        arg4: jfloat,
-    ) {
+    pub extern "C" fn SetFloatField(env: *mut JNIEnv, arg2: jobject, arg3: jfieldID, arg4: jfloat) {
         todo!("SetFloatField")
     }
 

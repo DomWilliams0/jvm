@@ -128,7 +128,10 @@ pub struct FunctionArgs<'a>(&'a mut [DataValue]);
 pub enum NativeFunction {
     /// Rust function
     Internal(NativeInternalFn),
-    // TODO JNI style C function
+
+    /// JNI style C function
+    // TODO is this needed?
+    Jni(usize),
 }
 
 #[derive(Debug)]
@@ -1477,10 +1480,22 @@ impl FieldSearchType {
     }
 }
 
+impl PartialEq for NativeFunction {
+    fn eq(&self, other: &Self) -> bool {
+        use NativeFunction::*;
+        match (self, other) {
+            (Internal(a), Internal(b)) => std::ptr::eq(a, b),
+            (Jni(a), Jni(b)) => a == b,
+            _ => false,
+        }
+    }
+}
+
 impl Debug for NativeFunction {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let ptr = match self {
             NativeFunction::Internal(f) => f as *const _ as usize,
+            NativeFunction::Jni(f) => *f,
         };
         write!(f, "NativeFunction({:#x})", ptr)
     }
