@@ -7,7 +7,7 @@ Toy JVM that might be useful. Uses GNU Classpath.
 * [o] [Implement all opcodes](src/interpreter/insn/instruction.rs)
   * [ ] Implement them *correctly*
 * [o] [Implement enough native methods](src/bootstrap.rs) to bootstrap the standard library
-  * [.] Implement enough of the JNI too
+  * [.] [Implement enough of the JNI](src/jni/api.rs) too
 * [ ] Execute a simple `System.out.println" call
 * [ ] Integration test rig to compare output to a reference implementation
   * [ ] Fix all the bugs and unimplemented opcodes

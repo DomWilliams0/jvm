@@ -2,6 +2,7 @@ use crate::class::Object;
 use crate::error::{Throwable, Throwables, VmResult};
 
 use cafebabe::mutf8::MString;
+use std::mem::ManuallyDrop;
 use std::sync::Arc;
 
 // TODO gc arena
@@ -18,12 +19,27 @@ pub fn vmref_is_null(vmref: &VmRef<Object>) -> bool {
     vmref_ptr(vmref) == 0 || vmref.is_null()
 }
 
-pub fn vmref_ptr<O>(vmref: &VmRef<O>) -> u64 {
-    Arc::as_ptr(vmref) as u64
+pub fn vmref_ptr<O>(vmref: &VmRef<O>) -> usize {
+    Arc::as_ptr(vmref) as usize
 }
 
 pub fn vmref_eq<A, B>(a: &VmRef<A>, b: &VmRef<B>) -> bool {
     vmref_ptr(a) == vmref_ptr(b)
+}
+
+pub fn vmref_into_raw<T>(vmref: VmRef<T>) -> *const T {
+    Arc::into_raw(vmref)
+}
+
+/// Must have come from [vmref_into_raw]
+pub unsafe fn vmref_from_raw<T>(ptr: *const T) -> VmRef<T> {
+    Arc::from_raw(ptr)
+}
+
+/// Returns new count
+pub fn vmref_increment<T>(vmref: &VmRef<T>) -> usize {
+    let _clone = ManuallyDrop::new(vmref.clone());
+    Arc::strong_count(vmref)
 }
 
 pub fn vmref_alloc_object(f: impl FnOnce() -> VmResult<Object>) -> VmResult<VmRef<Object>> {

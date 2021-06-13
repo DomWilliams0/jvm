@@ -1,4 +1,4 @@
-use crate::alloc::VmRef;
+use crate::alloc::{vmref_increment, vmref_ptr, VmRef};
 use crate::class::{Class, ClassType, Method, MethodCode, NativeCode, NativeFunction, Object};
 use crate::interpreter::error::InterpreterError;
 use crate::types::DataValue;
@@ -381,12 +381,11 @@ impl JniFrame {
         }
     }
 
-    pub fn add_local_ref<T: Debug>(&self, obj: VmRef<T>) -> VmRef<T> {
-        // just store a strong type-erased copy
+    pub fn add_local_ref<T: Debug>(&self, obj: &VmRef<T>) {
+        // store a strong copy in the frame
         let local_ref = unsafe { std::mem::transmute::<VmRef<T>, VmRef<()>>(obj.clone()) };
         self.local_refs.borrow_mut().push(local_ref);
         debug!("bumped local ref count for {:?}", obj);
-        obj
     }
 }
 

@@ -330,7 +330,7 @@ mod javavm {
 
 mod jnienv {
     #![allow(non_snake_case, unused_variables)]
-    use crate::alloc::vmref_ptr;
+    use crate::alloc::{vmref_from_raw, vmref_increment, vmref_into_raw, vmref_ptr, VmRef};
     use crate::class::WhichLoader;
 
     use crate::jni::sys::*;
@@ -338,6 +338,7 @@ mod jnienv {
     use cafebabe::mutf8::mstr;
     use log::*;
     use std::ffi::CStr;
+    use std::mem::ManuallyDrop;
     use std::ptr;
 
     pub extern "C" fn GetVersion(env: *mut JNIEnv) -> jint {
@@ -388,9 +389,10 @@ mod jnienv {
             .load_class(name, class_loader)
         {
             Ok(cls) => {
-                // return local ref
-                let cls = interp.with_current_jni_frame(|jni| jni.add_local_ref(cls));
-                vmref_ptr(&cls) as jclass
+                // add local ref
+                interp.with_current_jni_frame(|jni| jni.add_local_ref(&cls));
+
+                vmref_into_raw(cls) as jclass
             }
             Err(err) => {
                 // TODO set exception
@@ -471,8 +473,18 @@ mod jnienv {
         todo!("PopLocalFrame")
     }
 
-    pub extern "C" fn NewGlobalRef(env: *mut JNIEnv, arg2: jobject) -> jobject {
-        todo!("NewGlobalRef")
+    pub extern "C" fn NewGlobalRef(env: *mut JNIEnv, obj: jobject) -> jobject {
+        // TODO keep track of global references in jvm or is it ok to leak them like this?
+
+        // obj must have come from us, and is already a full reference, so ensure we dont drop it
+        let vmobj = ManuallyDrop::new(unsafe { vmref_from_raw(obj) });
+
+        // bump ref count
+        let refs = vmref_increment(&vmobj);
+        debug!("incremented ref count of {:?} to {}", vmobj, refs);
+
+        // return the same object
+        obj
     }
 
     pub extern "C" fn DeleteGlobalRef(env: *mut JNIEnv, arg2: jobject) {
