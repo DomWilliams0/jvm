@@ -271,10 +271,10 @@ impl Interpreter {
                     if let Some(exc) = thread.exception() {
                         Err(exc)
                     } else {
-                        trace!("jni function returned {:#x}", raw_ret);
                         match method.return_type() {
                             ReturnType::Returns(ty) => {
                                 let val = unsafe { DataValue::from_raw_return_value(raw_ret, ty) };
+                                trace!("jni function returned {:#x} == {:?}", raw_ret, val);
                                 Ok(Some(val))
                             }
                             _ => {
