@@ -1778,7 +1778,7 @@ impl Invokeinterface {
         )?;
 
         let resolved_method = class
-            .find_method_in_this_only(
+            .find_method_recursive_in_superclasses(
                 &entry.name,
                 &entry.desc,
                 MethodAccessFlags::empty(),
