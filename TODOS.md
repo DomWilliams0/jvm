@@ -1,4 +1,4 @@
-# TODOs (157)
+# TODOs (159)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -139,6 +139,11 @@
    * `// TODO actually compile`
    * `// TODO return result`
    * `CompileState::NotCompiled => unreachable!("not queued"), // TODO queue here?`
+ * [src/jni/api.rs](src/jni/api.rs) (1)
+   * `// TODO get actual env for current thread, rather than a global`
+ * [src/jni/library.rs](src/jni/library.rs) (2)
+   * `// TODO setup interpreter for direct native call`
+   * `// TODO call JNI_OnUnload in Drop`
  * [src/jvm.rs](src/jvm.rs) (5)
    * `// TODO "catch" any exception during init, and log it properly with stacktrace etc`
    * `// TODO populate String[] args`
@@ -159,9 +164,8 @@
    * `// TODO this is definitely wrong`
  * [src/natives/java_lang_vmclassloader.rs](src/natives/java_lang_vmclassloader.rs) (1)
    * `// TODO vm_get_primitive_class`
- * [src/natives/java_lang_vmruntime.rs](src/natives/java_lang_vmruntime.rs) (3)
+ * [src/natives/java_lang_vmruntime.rs](src/natives/java_lang_vmruntime.rs) (2)
    * `// TODO use classloader arg - native lib can be loaded by 1 classloader only`
-   * `type JavaVM = (); // TODO JNI types`
    * `// TODO keep native library reference around and release when classloader is GC'd`
  * [src/natives/java_lang_vmsystem.rs](src/natives/java_lang_vmsystem.rs) (3)
    * `// TODO dont unwrap`

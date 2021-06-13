@@ -28,7 +28,7 @@ thread_local! {
     static STATE_ENABLED: RwLock<bool> = RwLock::new(false);
 }
 
-pub fn current_initialised() -> bool {
+pub fn is_initialised() -> bool {
     STATE_ENABLED.with(|b| *b.read())
 }
 

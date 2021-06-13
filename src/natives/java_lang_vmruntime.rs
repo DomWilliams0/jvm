@@ -1,8 +1,8 @@
 use crate::alloc::{vmref_alloc_object, VmRef};
 use crate::class::{FunctionArgs, Object};
 use crate::error::Throwable;
+use crate::jni::NativeLibrary;
 use crate::types::DataValue;
-use std::error::Error;
 
 pub fn vm_map_library_name(mut args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     #[cfg(not(any(unix, windows)))]
@@ -40,27 +40,14 @@ pub fn vm_native_load(mut args: FunctionArgs) -> Result<Option<DataValue>, VmRef
 
     log::debug!("loading native library {:?}", lib_name);
 
-    let do_native_load = || -> Result<(), Box<dyn Error>> {
-        let lib = unsafe { libloading::Library::new(&lib_name)? };
+    let lib = NativeLibrary::load(&lib_name);
 
-        // call JNI constructor
-        unsafe {
-            type JavaVM = (); // TODO JNI types
-            let on_load =
-                lib.get::<unsafe extern "C" fn(*mut JavaVM, *mut ()) -> i32>(b"JNI_OnLoad\0");
-
-            if let Ok(_) = on_load {
-                todo!("JNI_OnLoad")
-            }
+    let result = match lib {
+        Ok(lib) => {
+            // TODO keep native library reference around and release when classloader is GC'd
+            std::mem::forget(lib);
+            1
         }
-
-        // TODO keep native library reference around and release when classloader is GC'd
-        std::mem::forget(lib);
-        Ok(())
-    };
-
-    let result = match do_native_load() {
-        Ok(_) => 1,
         Err(err) => {
             log::warn!("failed to load library: {}", err);
             0
