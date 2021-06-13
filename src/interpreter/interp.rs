@@ -6,7 +6,7 @@ use crate::interpreter::frame::{Frame, FrameStack, JavaFrame, NativeFrame, Nativ
 use crate::interpreter::insn::{get_insn, InstructionBlob, PostExecuteAction};
 use crate::thread;
 
-use crate::class::{FunctionArgs, Method, NativeFunction};
+use crate::class::{Class, FunctionArgs, Method, NativeFunction};
 use crate::interpreter::InterpreterError;
 
 use crate::jni::sys::JNIEnv;
@@ -246,10 +246,24 @@ impl Interpreter {
                 }
                 (NativeFunction::Jni(ptr), Some(method)) => {
                     let (cif, code) = build_jni_cif(ptr, &method);
-                    let jni = thread.jni_env();
-                    let cif_args = build_jni_cif_args(&method, &args, &jni);
 
-                    trace!("calling jni function {:?}", method.name());
+                    // arguments are passed to libffi by reference, so the jnienv and possibly
+                    // static class args need to live on the stack during the call
+                    let jni = thread.jni_env();
+                    let cls_ref = if method.flags().is_static() {
+                        let cls = method.class().clone();
+                        vmref_into_raw(cls)
+                    } else {
+                        std::ptr::null()
+                    };
+
+                    let cif_args = build_jni_cif_args(&method, &args, &jni, &cls_ref);
+
+                    trace!(
+                        "calling jni function {:?} with {} args",
+                        method.name(),
+                        cif_args.len()
+                    );
                     let raw_ret: u64 = unsafe { cif.call(code, cif_args.as_slice()) };
 
                     // check exception
@@ -426,10 +440,12 @@ fn build_jni_cif(func: usize, method: &Method) -> (libffi::middle::Cif, libffi::
     (cif, code)
 }
 
+/// static_class: null if not static
 fn build_jni_cif_args(
     method: &Method,
     args: &FunctionArgs,
     jni_env: &*const JNIEnv,
+    static_class: &*const Class,
 ) -> SmallVec<[libffi::middle::Arg; 6]> {
     use std::mem::transmute;
 
@@ -438,11 +454,10 @@ fn build_jni_cif_args(
     // jnienv as first arg
     cif_args.push(unsafe { transmute(jni_env) });
 
-    if method.flags().is_static() {
+    debug_assert_eq!(!static_class.is_null(), method.flags().is_static());
+    if !static_class.is_null() {
         // add class as `this` param for static methods
-        let class = method.class().clone();
-        let class_ref = vmref_into_raw(class);
-        cif_args.push(unsafe { transmute(class_ref) });
+        cif_args.push(unsafe { transmute(static_class) });
     }
 
     // remaining args
