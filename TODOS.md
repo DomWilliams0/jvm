@@ -1,4 +1,4 @@
-# TODOs (163)
+# TODOs (162)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -62,11 +62,10 @@
    * `// TODO add array lookup with enum constants for common symbols like Object, or perfect hashing`
    * `// TODO cache this`
    * `// TODO newtype VmRef should handle equality`
- * [src/class/object.rs](src/class/object.rs) (7)
+ * [src/class/object.rs](src/class/object.rs) (6)
    * `// TODO arrays should live on the GC java heap`
    * `// TODO arrays should be specialised and not hold massive DataValues`
    * `// TODO mutex only needed in edge case, try with atomic op first`
-   * `// TODO just allocate an object instead of this unsafeness`
    * `// TODO limit array length to i32::MAX somewhere`
    * `// TODO do this without all the allocations`
    * `// TODO not quite correct toString`
