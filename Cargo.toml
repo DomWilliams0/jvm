@@ -22,13 +22,13 @@ dirs = "3.0"
 libloading = "0.7"
 libffi = "1.0"
 smallvec = { version = "1.6", features = ["union"] }
-zip = { version = "0.5", optional = true }
+rc-zip = { version = "0.0", optional = true }
 
 [build-dependencies]
 zip = "0.5"
 walkdir = "2.3"
 
 [features]
-default = []
+default = ["miri"]
 log-class-loading = []
-miri = ["zip"]
+miri = ["rc-zip"]
