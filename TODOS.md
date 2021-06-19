@@ -1,4 +1,4 @@
-# TODOs (162)
+# TODOs (163)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -58,14 +58,15 @@
    * `// TODO wait for other thread to finish loading`
    * `// TODO record that this loader is an initiating loader`
    * `// TODO get thread interpreter and current class automatically`
-   * `let bytes = std::fs::read(path).expect("io error"); // TODO java.lang.IOError`
+   * `Err(FindClassError::Io(err)) => panic!("io error: {}", err), // TODO java.lang.IOError`
    * `// TODO add array lookup with enum constants for common symbols like Object, or perfect hashing`
    * `// TODO cache this`
    * `// TODO newtype VmRef should handle equality`
- * [src/class/object.rs](src/class/object.rs) (6)
+ * [src/class/object.rs](src/class/object.rs) (7)
    * `// TODO arrays should live on the GC java heap`
    * `// TODO arrays should be specialised and not hold massive DataValues`
    * `// TODO mutex only needed in edge case, try with atomic op first`
+   * `// TODO just allocate an object instead of this unsafeness`
    * `// TODO limit array length to i32::MAX somewhere`
    * `// TODO do this without all the allocations`
    * `// TODO not quite correct toString`
@@ -177,9 +178,9 @@
    * `// TODO implement fillInStackTrace`
  * [src/properties.rs](src/properties.rs) (5)
    * `// TODO these properties are not all correct`
-   * `prop!("java.home", dirs::data_dir()); // TODO`
+   * `prop!("java.home", java_home.into()); // TODO`
    * `prop!("java.specification.version", "TODO"); // TODO get from Configuration class?`
-   * `prop!("java.library.path", "."); // TODO`
+   * `prop!("java.library.path", library_path.into()); // TODO`
    * `prop!("java.ext.dirs", "."); // TODO`
  * [src/storage.rs](src/storage.rs) (5)
    * `// TODO field storage should be inline in VmRef<Object>`

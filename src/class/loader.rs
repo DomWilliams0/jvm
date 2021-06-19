@@ -13,7 +13,7 @@ use crate::alloc::{vmref_ptr, InternedString, VmRef};
 use crate::class::class::Class;
 use crate::class::object::Object;
 use crate::class::ClassType;
-use crate::classpath::ClassPath;
+use crate::classpath::{ClassPath, FindClassError};
 use crate::error::{Throwables, VmResult};
 use crate::interpreter::Frame;
 use crate::thread;
@@ -101,7 +101,7 @@ impl ClassLoader {
         // TODO register class "package" with loader (https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-5.html#jvms-5.3)
 
         // load class
-        let loaded = match cafebabe::load_from_buffer(&bytes) {
+        let loaded = match cafebabe::load_from_buffer(bytes) {
             Ok(cls) => cls,
             Err(err) => {
                 // TODO actually instantiate exceptions
@@ -145,7 +145,7 @@ impl ClassLoader {
                 }
                 Some(ArrayType::Reference(elem)) => {
                     // load element class first
-                    let elem_cls = self.load_class_caused_by(elem, loader.clone(), &class_name)?;
+                    let elem_cls = self.load_class_caused_by(elem, loader.clone(), class_name)?;
 
                     // use same loader for this array class
                     loader = elem_cls.loader().clone();
@@ -255,16 +255,11 @@ impl ClassLoader {
     fn find_boot_class(&self, class_name: &str) -> VmResult<Vec<u8>> {
         trace!("looking for class {}", class_name);
 
-        let path = self
-            .bootclasspath
-            .find(class_name)
-            .ok_or(Throwables::NoClassDefFoundError)?;
-
-        trace!("found class at {}", path.display());
-
-        let bytes = std::fs::read(path).expect("io error"); // TODO java.lang.IOError
-
-        Ok(bytes)
+        match self.bootclasspath.find(class_name) {
+            Ok(bytes) => Ok(bytes),
+            Err(FindClassError::NotFound) => Err(Throwables::NoClassDefFoundError),
+            Err(FindClassError::Io(err)) => panic!("io error: {}", err), // TODO java.lang.IOError
+        }
     }
 
     pub(crate) fn init_primitives(&self, classes: Box<[VmRef<Class>]>) {

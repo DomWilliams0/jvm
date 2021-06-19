@@ -13,6 +13,28 @@ pub struct SystemProperty(Cow<'static, str>);
 
 impl Default for SystemProperties {
     fn default() -> Self {
+        Self::new(
+            dirs::data_dir(),
+            std::env::temp_dir(),
+            whoami::distro(),
+            whoami::username(),
+            dirs::home_dir(),
+            std::env::current_dir().ok(),
+            ".",
+        )
+    }
+}
+
+impl SystemProperties {
+    pub fn new(
+        java_home: impl Into<SystemProperty>,
+        tmp_dir: impl Into<SystemProperty>,
+        distro: String,
+        username: String,
+        home_dir: impl Into<SystemProperty>,
+        current_dir: impl Into<SystemProperty>,
+        library_path: impl Into<SystemProperty>,
+    ) -> Self {
         let mut map = HashMap::with_capacity(64);
 
         macro_rules! prop {
@@ -25,7 +47,7 @@ impl Default for SystemProperties {
         prop!("java.version", JAVA_VERSION);
         prop!("java.vendor", "GNU Classpath");
         prop!("java.vendor.url", "https://www.gnu.org/software/classpath/");
-        prop!("java.home", dirs::data_dir()); // TODO
+        prop!("java.home", java_home.into()); // TODO
         prop!("java.vm.specification.version", JAVA_VM_SPEC_VERSION);
         prop!("java.vm.specification.vendor", "Oracle America, Inc");
         prop!(
@@ -39,25 +61,23 @@ impl Default for SystemProperties {
         prop!("java.specification.vendor", JAVA_SPEC_VERSION);
         prop!("java.specification.name", "Oracle America, Inc");
         prop!("java.class.version", CLASS_VERSION);
-        prop!("java.library.path", "."); // TODO
-        prop!("java.io.tmpdir", std::env::temp_dir());
+        prop!("java.library.path", library_path.into()); // TODO
+        prop!("java.io.tmpdir", tmp_dir.into());
         prop!("java.compiler", "N/A");
         prop!("java.ext.dirs", "."); // TODO
         prop!("os.name", std::env::consts::OS);
         prop!("os.arch", std::env::consts::ARCH);
-        prop!("os.version", whoami::distro());
+        prop!("os.version", distro);
         prop!("file.separator", std::path::MAIN_SEPARATOR.to_string());
         prop!("path.separator", ":");
         prop!("line.separator", if cfg!(windows) { "\r\n" } else { "\n" });
-        prop!("user.name", whoami::username());
-        prop!("user.home", dirs::home_dir());
-        prop!("user.dir", std::env::current_dir().ok());
+        prop!("user.name", username);
+        prop!("user.home", home_dir.into());
+        prop!("user.dir", current_dir.into());
 
         SystemProperties(map)
     }
-}
 
-impl SystemProperties {
     pub fn get(&self, key: &str) -> Option<&SystemProperty> {
         self.0.get(key)
     }

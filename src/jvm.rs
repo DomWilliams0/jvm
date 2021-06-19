@@ -194,6 +194,27 @@ impl JvmArgs {
 
         Ok(jvm_args)
     }
+
+    #[cfg(feature = "miri")]
+    pub fn miri_in_memory() -> Self {
+        Self {
+            properties: SystemProperties::new(
+                "",
+                "",
+                "miri".to_string(),
+                "miri".to_string(),
+                "",
+                "",
+                "lib/classpath",
+            ),
+            bootclasspath: Arc::new(ClassPath::from_colon_separated("share/classpath")),
+            userclasspath: Arc::new(ClassPath::default()),
+            args: JvmArgsPersist {
+                main: "Nop".to_string(),
+                no_system_classloader: false,
+            },
+        }
+    }
 }
 
 impl JvmGlobalState {

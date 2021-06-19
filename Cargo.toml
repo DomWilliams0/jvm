@@ -3,8 +3,7 @@ name = "jvm"
 version = "0.1.0"
 authors = ["Dom Williams <me@domwillia.ms>"]
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+build = "build.rs"
 
 [dependencies]
 cafebabe = { path = "cafebabe" }
@@ -23,7 +22,13 @@ dirs = "3.0"
 libloading = "0.7"
 libffi = "1.0"
 smallvec = { version = "1.6", features = ["union"] }
+zip = { version = "0.5", optional = true }
+
+[build-dependencies]
+zip = "0.5"
+walkdir = "2.3"
 
 [features]
 default = []
 log-class-loading = []
+miri = ["zip"]
