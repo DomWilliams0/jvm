@@ -8,6 +8,7 @@ use log::*;
 use region::{Allocation, Protection};
 use smallvec::SmallVec;
 
+use crate::types::DataType;
 use std::io::Cursor;
 
 const BACKING_CAPACITY: usize = 4096 * 16;
@@ -34,12 +35,13 @@ impl NativeThunks {
         method: &Method,
         fn_ptr: usize,
     ) -> Result<NativeThunkHandle, InterpreterError> {
-        let handle = self.allocate(method)?;
+        let handle = self.allocate()?;
 
-        emit_thunk(method, handle.as_slice(), fn_ptr)?;
+        emit_thunk(method.args(), handle.as_slice(), fn_ptr)?;
         Ok(handle)
     }
-    fn allocate(&mut self, _method: &Method) -> Result<NativeThunkHandle, InterpreterError> {
+
+    fn allocate(&mut self) -> Result<NativeThunkHandle, InterpreterError> {
         let alloc = self.backing.iter_mut().find_map(|b| b.allocate());
         if let Some((ptr, len)) = alloc {
             return Ok(NativeThunkHandle(ptr, len));
@@ -78,8 +80,17 @@ impl NativeThunkHandle {
         jclass_or_object: VmRef<T>,
         args: FunctionArgs,
     ) -> u64 {
+        self.invoke_inner(jnienv, vmref_into_raw(jclass_or_object) as *const (), args)
+    }
+
+    fn invoke_inner(
+        &self,
+        jnienv: *const JNIEnv,
+        jclass_or_object: *const (),
+        args: FunctionArgs,
+    ) -> u64 {
         let mut arg_refs: SmallVec<[u64; 8]> =
-            smallvec::smallvec![jnienv as u64, vmref_into_raw(jclass_or_object) as u64];
+            smallvec::smallvec![jnienv as u64, jclass_or_object as u64];
 
         for arg in args.as_refs() {
             let val = unsafe { *(arg as *const u64) };
@@ -135,9 +146,9 @@ enum IntRegisterSize {
     U64,
 }
 
-fn emit_thunk(method: &Method, out: &mut [u8], fn_ptr: usize) -> std::io::Result<()> {
+fn emit_thunk(args: &[DataType], out: &mut [u8], fn_ptr: usize) -> std::io::Result<()> {
     let cursor = Cursor::new(out);
-    r#impl::emit_thunk(method, cursor, fn_ptr)
+    r#impl::emit_thunk(args, cursor, fn_ptr)
 }
 
 #[cfg(all(target_arch = "x86_64", unix))]
@@ -149,7 +160,7 @@ mod r#impl {
     use std::io::{Cursor, Write};
 
     pub fn emit_thunk(
-        method: &Method,
+        args: &[DataType],
         mut cursor: Cursor<&mut [u8]>,
         fn_ptr: usize,
     ) -> std::io::Result<()> {
@@ -160,7 +171,7 @@ mod r#impl {
         // mov    rsi, [rax+8h] ; jobject/jclass
         cursor.write_all(&[0x48, 0x8B, 0x38, 0x48, 0x8B, 0x70, 0x08])?;
 
-        if !method.args().is_empty() {
+        if !args.is_empty() {
             // add    rax,0x10
             cursor.write_all(&[0x48, 0x83, 0xC0, 0x10])?;
         }
@@ -174,7 +185,7 @@ mod r#impl {
         // TODO float registers
 
         use PrimitiveDataType::*;
-        for (i, arg) in method.args().iter().enumerate() {
+        for (i, arg) in args.iter().enumerate() {
             let int_type = match arg {
                 DataType::Primitive(Float) | DataType::Primitive(Double) => {
                     unimplemented!("float args")
@@ -255,5 +266,68 @@ mod r#impl {
                 (R9, U64) => cursor.write_all(&[0x4c, 0x8b, 0x48, offset]),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::alloc::{vmref_alloc_object, vmref_from_raw};
+    use crate::jni::sys::jobject;
+    use crate::thread::JvmThreadState;
+    use crate::types::{DataValue, PrimitiveDataType};
+    use cafebabe::mutf8::mstr;
+    use std::mem::ManuallyDrop;
+
+    static FAKE_JNIENV: () = ();
+    static FAKE_JCLASS: () = ();
+
+    extern "C" fn call_me(
+        jnienv: *const (),
+        jclass: *const (),
+        a: i64,
+        b: i16,
+        c: i32,
+        d: i8,
+    ) -> u32 {
+        assert!(std::ptr::eq(jnienv, &FAKE_JNIENV));
+        assert!(std::ptr::eq(jclass, &FAKE_JCLASS));
+        assert_eq!(a, 0x11223344_aabbccdd);
+        assert_eq!(b, -12345);
+        assert_eq!(c, 7);
+        assert_eq!(d, 108);
+        123
+    }
+
+    #[test]
+    fn native_thunk_int_params() {
+        let mut thunks = NativeThunks::default();
+        let thunk = thunks.allocate().expect("alloc thunk");
+        emit_thunk(
+            &[
+                DataType::Primitive(PrimitiveDataType::Long),
+                DataType::Primitive(PrimitiveDataType::Short),
+                DataType::Primitive(PrimitiveDataType::Int),
+                DataType::Primitive(PrimitiveDataType::Byte),
+            ],
+            thunk.as_slice(),
+            call_me as usize,
+        )
+        .expect("emit thunk");
+
+        let mut args = [
+            DataValue::Long(0x11223344_aabbccdd),
+            DataValue::Short(-12345),
+            DataValue::Int(7),
+            DataValue::Byte(108),
+        ];
+        let args = FunctionArgs::from(&mut args[..]);
+
+        let ret = thunk.invoke_inner(
+            &FAKE_JNIENV as *const _ as *const _,
+            &FAKE_JCLASS as *const _ as *const _,
+            args,
+        );
+        assert_eq!(ret, 123);
     }
 }
