@@ -20,7 +20,7 @@ clap = "2.33"
 whoami = "1.1"
 dirs = "3.0"
 libloading = "0.7"
-libffi = "1.0"
+region = "3.0"
 smallvec = { version = "1.6", features = ["union"] }
 rc-zip = { version = "0.0", optional = true }
 

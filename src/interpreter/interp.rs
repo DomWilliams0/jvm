@@ -1,4 +1,4 @@
-use crate::alloc::{vmref_from_raw, vmref_into_raw, VmRef};
+use crate::alloc::{vmref_from_raw, VmRef};
 use log::*;
 
 use crate::error::{Throwable, Throwables};
@@ -6,13 +6,12 @@ use crate::interpreter::frame::{Frame, FrameStack, JavaFrame, NativeFrame, Nativ
 use crate::interpreter::insn::{get_insn, InstructionBlob, PostExecuteAction};
 use crate::thread;
 
-use crate::class::{Class, FunctionArgs, Method, NativeFunction};
+use crate::class::{FunctionArgs, Method, NativeFunction};
 use crate::interpreter::InterpreterError;
 
-use crate::jni::sys::JNIEnv;
 use crate::types::{DataType, DataValue, PrimitiveDataType, ReturnType};
 use cafebabe::AccessFlags;
-use smallvec::SmallVec;
+
 use std::cell::{RefCell, RefMut};
 
 use std::fmt::{Debug, Formatter};
@@ -229,7 +228,7 @@ impl Interpreter {
 
             // for jni calls we need the method reference
             let method = match (&func, &native.inner) {
-                (NativeFunction::Jni(_), NativeFrameInner::Method { method, .. }) => {
+                (NativeFunction::Jni { .. }, NativeFrameInner::Method { method, .. }) => {
                     Some(method.clone())
                 }
                 _ => None,
@@ -239,33 +238,24 @@ impl Interpreter {
             drop(state);
 
             // go native!! best of luck
-            let result = match (func, method) {
-                (NativeFunction::Internal(func), _) => {
+            let result = match func {
+                NativeFunction::Internal(func) => {
                     // internal native call, just call it
                     func(args)
                 }
-                (NativeFunction::Jni(ptr), Some(method)) => {
-                    let (cif, code) = build_jni_cif(ptr, &method);
+                NativeFunction::Jni { trampoline, .. } => {
+                    let method = method.unwrap(); // always populated above
+                    let trampoline = trampoline.expect("trampoline not initialized");
 
-                    // arguments are passed to libffi by reference, so the jnienv and possibly
-                    // static class args need to live on the stack during the call
-                    let jni = thread.jni_env();
                     let cls_ref = if method.flags().is_static() {
-                        let cls = method.class().clone();
-                        vmref_into_raw(cls)
+                        method.class().clone()
                     } else {
-                        std::ptr::null()
+                        todo!("instance method")
                     };
+                    let jni_ref = thread.jni_env();
 
-                    let cif_args = build_jni_cif_args(&method, &args, &jni, &cls_ref);
-
-                    trace!(
-                        "calling jni function {:?} with {} args",
-                        method.name(),
-                        cif_args.len()
-                    );
-                    let raw_ret: u64 = unsafe { cif.call(code, cif_args.as_slice()) };
-
+                    debug!("invoking jni function {}", method);
+                    let raw_result = trampoline.invoke(jni_ref, cls_ref, args);
                     // check exception
                     let thread = thread::get();
                     if let Some(exc) = thread.exception() {
@@ -273,8 +263,9 @@ impl Interpreter {
                     } else {
                         match method.return_type() {
                             ReturnType::Returns(ty) => {
-                                let val = unsafe { DataValue::from_raw_return_value(raw_ret, ty) };
-                                trace!("jni function returned {:#x} == {:?}", raw_ret, val);
+                                let val =
+                                    unsafe { DataValue::from_raw_return_value(raw_result, ty) };
+                                trace!("jni function returned {:#x} == {:?}", raw_result, val);
                                 Ok(Some(val))
                             }
                             _ => {
@@ -284,11 +275,10 @@ impl Interpreter {
                         }
                     }
                 }
-                (NativeFunction::JniDirect(_), _) => {
+                NativeFunction::JniDirect(_) => {
                     // jni direct functions are called differently
                     unreachable!("direct jni functions are called differently")
                 }
-                (NativeFunction::Jni(_), None) => unreachable!(), // set above
             };
 
             let return_value = match result {
@@ -414,72 +404,6 @@ impl Default for Interpreter {
             state: RefCell::new(InterpreterState {
                 frames: FrameStack::new(),
             }),
-        }
-    }
-}
-
-fn build_jni_cif(func: usize, method: &Method) -> (libffi::middle::Cif, libffi::middle::CodePtr) {
-    use libffi::middle::Type;
-
-    let mut cif_builder = libffi::middle::Builder::new().arg(Type::pointer()); // JNIEnv
-
-    if method.flags().is_static() {
-        cif_builder = cif_builder.arg(Type::pointer()); // jclass
-    }
-
-    let cif = cif_builder
-        .args(method.args().iter().map(Into::into))
-        .res(match method.return_type() {
-            ReturnType::Void => Type::void(),
-            ReturnType::Returns(ty) => ty.into(),
-        })
-        .into_cif();
-
-    let code = libffi::middle::CodePtr(func as *mut _);
-
-    (cif, code)
-}
-
-/// static_class: null if not static
-fn build_jni_cif_args(
-    method: &Method,
-    args: &FunctionArgs,
-    jni_env: &*const JNIEnv,
-    static_class: &*const Class,
-) -> SmallVec<[libffi::middle::Arg; 6]> {
-    use std::mem::transmute;
-
-    let mut cif_args = SmallVec::new();
-
-    // jnienv as first arg
-    cif_args.push(unsafe { transmute(jni_env) });
-
-    debug_assert_eq!(!static_class.is_null(), method.flags().is_static());
-    if !static_class.is_null() {
-        // add class as `this` param for static methods
-        cif_args.push(unsafe { transmute(static_class) });
-    }
-
-    // remaining args
-    cif_args.extend(args.as_refs().map(|ptr| unsafe { transmute(ptr) }));
-    cif_args
-}
-
-impl<'a> From<&DataType<'a>> for libffi::middle::Type {
-    fn from(ty: &DataType<'a>) -> Self {
-        use libffi::middle::Type;
-        use PrimitiveDataType::*;
-        match ty {
-            DataType::Primitive(Boolean) => Type::u8(),
-            DataType::Primitive(Byte) => Type::i8(),
-            DataType::Primitive(Short) => Type::i16(),
-            DataType::Primitive(Int) => Type::i32(),
-            DataType::Primitive(Long) => Type::i64(),
-            DataType::Primitive(Char) => Type::u16(),
-            DataType::Primitive(Float) => Type::f32(),
-            DataType::Primitive(Double) => Type::f64(),
-            DataType::ReturnAddress => Type::usize(),
-            DataType::Reference(_) => Type::pointer(),
         }
     }
 }

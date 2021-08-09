@@ -9,7 +9,7 @@ use crate::class::{Class, ClassType};
 
 // TODO combine repetetive errors for different data types
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug)]
 pub enum InterpreterError {
     #[error("Incomplete instruction at byte {0}")]
     IncompleteInstruction(usize),
@@ -116,6 +116,12 @@ pub enum InterpreterError {
         name: MString,
         desc: MString,
     },
+
+    #[error("Native allocation failed: {0}")]
+    NativeAllocation(#[from] region::Error),
+
+    #[error("Emitting asm for trampoline failed: {0}")]
+    IoEmittingAsm(#[from] std::io::Error),
 }
 
 impl From<Throwables> for InterpreterError {

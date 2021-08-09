@@ -13,7 +13,7 @@ use crate::class::null;
 use crate::class::{ClassLoader, WhichLoader};
 use crate::classpath::ClassPath;
 use crate::error::ResultExt;
-use crate::interpreter::{Frame, InstructionLookupTable};
+use crate::interpreter::{Frame, InstructionLookupTable, NativeThunks};
 use crate::jit::{JitClient, JitThread};
 use crate::jni::NativeLibraries;
 use crate::properties::SystemProperties;
@@ -37,6 +37,7 @@ pub struct JvmGlobalState {
     jit: JitClient,
     properties: SystemProperties,
     native_libraries: Mutex<NativeLibraries>,
+    native_thunks: Mutex<NativeThunks>,
 }
 
 #[derive(Default, Debug)]
@@ -80,6 +81,7 @@ impl Jvm {
             jit: jit_client,
             properties: args.properties,
             native_libraries: Mutex::new(NativeLibraries::default()),
+            native_thunks: Mutex::new(NativeThunks::default()),
         });
 
         let jvm = Jvm {
@@ -236,5 +238,9 @@ impl JvmGlobalState {
 
     pub(crate) fn native_libraries_mut(&self) -> impl DerefMut<Target = NativeLibraries> + '_ {
         self.native_libraries.lock()
+    }
+
+    pub(crate) fn native_thunks_mut(&self) -> impl DerefMut<Target = NativeThunks> + '_ {
+        self.native_thunks.lock()
     }
 }

@@ -1,4 +1,4 @@
-# TODOs (163)
+# TODOs (167)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -135,6 +135,11 @@
    * `// TODO catch this at verification time`
    * `// TODO pass these into execute()`
    * `// TODO better handling of interpreter error`
+ * [src/interpreter/native.rs](src/interpreter/native.rs) (4)
+   * `// TODO support freeing of thunks when a class is unloaded, and reuse it`
+   * `// TODO size depends on number of args to pass`
+   * `// TODO float registers`
+   * `let register = int_registers.next().expect("TODO: stack spillover");`
  * [src/jit/mod.rs](src/jit/mod.rs) (4)
    * `// TODO reorganise into modules`
    * `// TODO actually compile`

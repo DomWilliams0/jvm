@@ -19,7 +19,7 @@ use crate::class::object::Object;
 use crate::class::{ClassLoader, WhichLoader};
 use crate::constant_pool::RuntimeConstantPool;
 use crate::error::{Throwable, Throwables, VmResult};
-use crate::interpreter::{Frame, InterpreterError};
+use crate::interpreter::{Frame, InterpreterError, NativeThunkHandle};
 use crate::jni::NativeLibraries;
 use crate::storage::{
     FieldDataType, FieldId, FieldStorage, FieldStorageLayout, FieldStorageLayoutBuilder,
@@ -136,7 +136,11 @@ pub enum NativeFunction {
     /// JNI style C function called directly from native, like JNI_OnLoad
     JniDirect(usize),
 
-    Jni(usize),
+    Jni {
+        ptr: usize,
+        /// Populated on first use
+        trampoline: Option<NativeThunkHandle>,
+    },
 }
 
 #[derive(Debug)]
@@ -154,6 +158,9 @@ pub struct Method {
     code: MethodCode,
     attributes: Vec<attribute::OwnedAttribute>,
 }
+
+unsafe impl Sync for Method {}
+unsafe impl Send for Method {}
 
 pub enum MethodLookupResult {
     Found(VmRef<Method>),
@@ -1328,7 +1335,10 @@ impl Class {
         debug!("found native method at {:?}", ptr);
 
         // bind method
-        *guard = NativeCode::Bound(NativeFunction::Jni(ptr as usize));
+        *guard = NativeCode::Bound(NativeFunction::Jni {
+            ptr: ptr as usize,
+            trampoline: None,
+        });
         Ok(())
     }
 
@@ -1514,6 +1524,24 @@ impl FieldSearchType {
     }
 }
 
+impl NativeFunction {
+    pub fn ensure_native_trampoline(&mut self, method: &Method) -> Result<(), InterpreterError> {
+        let (fn_ptr, trampoline) = match self {
+            NativeFunction::Jni { ptr, trampoline } if trampoline.is_none() => (*ptr, trampoline),
+            _ => return Ok(()),
+        };
+
+        trace!("generating native trampoline for method {}", method);
+
+        let thread = thread::get();
+        let mut allocator = thread.global().native_thunks_mut();
+
+        let handle = allocator.new_for_method(method, fn_ptr)?;
+        *trampoline = Some(handle);
+        Ok(())
+    }
+}
+
 impl PartialEq for NativeFunction {
     fn eq(&self, other: &Self) -> bool {
         use NativeFunction::*;
@@ -1529,7 +1557,7 @@ impl Debug for NativeFunction {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let ptr = match self {
             NativeFunction::Internal(f) => f as *const _ as usize,
-            NativeFunction::JniDirect(f) | NativeFunction::Jni(f) => *f,
+            NativeFunction::JniDirect(f) | NativeFunction::Jni { ptr: f, .. } => *f,
         };
         write!(f, "NativeFunction({:#x})", ptr)
     }

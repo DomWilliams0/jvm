@@ -291,7 +291,7 @@ impl Frame {
             }
 
             MethodCode::Native(native) => {
-                let state = &*native.lock();
+                let state = &mut *native.lock();
                 match state {
                     NativeCode::Unbound => {
                         unreachable!("native method {} has not been bound", method,);
@@ -305,6 +305,8 @@ impl Frame {
                     NativeCode::Bound(function) => {
                         // code.ensure_compiled()
                         //     .expect("failed to compile trampoline");
+
+                        function.ensure_native_trampoline(&method)?;
 
                         let args = args.collect();
                         Ok(Frame::Native(NativeFrame {
