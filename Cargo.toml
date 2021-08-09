@@ -29,6 +29,6 @@ zip = "0.5"
 walkdir = "2.3"
 
 [features]
-default = ["miri"]
+default = []
 log-class-loading = []
 miri = ["rc-zip"]
