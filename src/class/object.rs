@@ -256,7 +256,7 @@ impl Object {
         ObjectFieldPrinter(self)
     }
 
-    pub fn string_value(&self) -> Option<String> {
+    pub fn string_value_utf8(&self) -> Option<String> {
         if self.class.name().as_bytes() == b"java/lang/String" {
             if let Some(DataValue::Reference(chars)) = self.find_instance_field(
                 "value".as_mstr(),
@@ -376,7 +376,7 @@ impl Debug for Object {
             write!(f, "{}@{:#x}", self.class.name(), ptr)?;
 
             // helpful for debugging
-            if let Some(s) = self.string_value() {
+            if let Some(s) = self.string_value_utf8() {
                 write!(f, " ({:?})", s)?;
             }
             Ok(())

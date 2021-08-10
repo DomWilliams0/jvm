@@ -13,7 +13,7 @@ pub fn vm_map_library_name(mut args: FunctionArgs) -> Result<Option<DataValue>, 
     let dll = arg.as_reference().expect("string expected");
 
     let dll_path = dll
-        .string_value()
+        .string_value_utf8()
         .map(|s| {
             #[cfg(unix)]
             return format!("lib{}.so", s);
@@ -33,7 +33,7 @@ pub fn vm_native_load(mut args: FunctionArgs) -> Result<Option<DataValue>, VmRef
     let lib_name = args.take(1);
     let lib_name = lib_name
         .as_reference()
-        .and_then(|obj| obj.string_value())
+        .and_then(|obj| obj.string_value_utf8())
         .expect("not a string");
 
     let thread = thread::get();

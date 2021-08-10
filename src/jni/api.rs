@@ -340,7 +340,7 @@ mod javavm {
 mod jnienv {
     #![allow(non_snake_case, unused_variables)]
     use crate::alloc::{vmref_from_raw, vmref_increment, vmref_into_raw, vmref_ptr, VmRef};
-    use crate::class::{Class, WhichLoader};
+    use crate::class::{Class, Object, WhichLoader};
 
     use crate::jni::api::{JniFieldId, JniMethodId};
     use crate::jni::sys::*;
@@ -350,7 +350,7 @@ mod jnienv {
     use cafebabe::mutf8::mstr;
     use cafebabe::MethodAccessFlags;
     use log::*;
-    use std::ffi::CStr;
+    use std::ffi::{CStr, CString};
     use std::mem::ManuallyDrop;
     use std::ptr;
 
@@ -1767,18 +1767,42 @@ mod jnienv {
 
     pub extern "C" fn GetStringUTFChars(
         env: *mut JNIEnv,
-        arg2: jstring,
-        arg3: *mut jboolean,
+        string: jstring,
+        is_copy: *mut jboolean,
     ) -> *const ::std::os::raw::c_char {
-        todo!("GetStringUTFChars")
+        trace!("GetStringUTFChars({:?})", string);
+        let obj = unsafe { as_vmref::<Object>(string) };
+
+        let chars = {
+            // TODO this is gross
+            let utf8 = obj.string_value_utf8().expect("not a string");
+            let mutf8 = mstr::from_utf8(utf8.as_bytes())
+                .into_owned()
+                .into_boxed_mutf8_bytes()
+                .into_vec();
+            let cstring = unsafe { CString::from_vec_unchecked(mutf8) };
+            cstring.into_raw()
+        };
+
+        // TODO store bytes in string directly?
+
+        if !is_copy.is_null() {
+            unsafe {
+                // always copy lmao
+                *is_copy = JNI_TRUE as u8;
+            }
+        }
+
+        chars as *const _
     }
 
     pub extern "C" fn ReleaseStringUTFChars(
         env: *mut JNIEnv,
-        arg2: jstring,
-        arg3: *const ::std::os::raw::c_char,
+        string: jstring,
+        utf: *const ::std::os::raw::c_char,
     ) {
-        todo!("ReleaseStringUTFChars")
+        trace!("ReleaseStringUTFChars({:?})", string);
+        let _cstring = unsafe { CString::from_raw(utf as *mut _) };
     }
 
     pub extern "C" fn GetArrayLength(env: *mut JNIEnv, arg2: jarray) -> jsize {

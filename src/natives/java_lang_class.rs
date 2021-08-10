@@ -15,7 +15,7 @@ pub fn vm_get_primitive_class(
     let str = args.take(0).into_reference().unwrap();
 
     let prim_type = str
-        .string_value()
+        .string_value_utf8()
         .and_then(|str| str.parse::<PrimitiveDataType>().ok())
         .expect("invalid primitive type");
 

@@ -8,8 +8,10 @@ use log::*;
 use region::{Allocation, Protection};
 use smallvec::SmallVec;
 
-use crate::types::DataType;
+use crate::types::{DataType, DataValue};
+use itertools::repeat_n;
 use std::io::Cursor;
+use std::mem::transmute_copy;
 
 const BACKING_CAPACITY: usize = 4096 * 16;
 
@@ -74,6 +76,7 @@ impl NativeThunkHandle {
         unsafe { std::slice::from_raw_parts_mut(self.0, self.1) }
     }
 
+    /// Returns *RAW UNINTERPRETED RETURN VALUE*
     pub fn invoke<T>(
         &self,
         jnienv: *const JNIEnv,
@@ -89,12 +92,31 @@ impl NativeThunkHandle {
         jclass_or_object: *const (),
         args: FunctionArgs,
     ) -> u64 {
-        let mut arg_refs: SmallVec<[u64; 8]> =
+        let mut native_args: SmallVec<[u64; 8]> =
             smallvec::smallvec![jnienv as u64, jclass_or_object as u64];
 
-        for arg in args.as_refs() {
-            let val = unsafe { *(arg as *const u64) };
-            arg_refs.push(val);
+        native_args.extend(repeat_n(0, args.len()));
+
+        for (arg, arg_out) in args.take_all().zip(&mut native_args[2..]) {
+            // squidge all arg types into a u64, which will be read correctly by thunk
+            let mut val = 0u64;
+
+            unsafe {
+                match arg {
+                    DataValue::Boolean(arg) => val = transmute_copy(&arg),
+                    DataValue::Byte(arg) => val = transmute_copy(&arg),
+                    DataValue::Short(arg) => val = transmute_copy(&arg),
+                    DataValue::Int(arg) => val = transmute_copy(&arg),
+                    DataValue::Long(arg) => val = transmute_copy(&arg),
+                    DataValue::Char(arg) => val = transmute_copy(&arg),
+                    DataValue::Float(arg) => val = transmute_copy(&arg),
+                    DataValue::Double(arg) => val = transmute_copy(&arg),
+                    DataValue::Reference(arg) => val = vmref_into_raw(arg) as u64,
+                    DataValue::VmDataClass(_) | DataValue::ReturnAddress(_) => unreachable!(),
+                }
+            }
+
+            *arg_out = val;
         }
 
         let ret: u64;
@@ -105,7 +127,7 @@ impl NativeThunkHandle {
                 "mov {ret}, rax",
                 thunk = in(reg) self.0,
                 ret = out(reg) ret,
-                in("rax") arg_refs.as_ptr(),
+                in("rax") native_args.as_ptr(),
                 options(nostack, nomem)
             );
         }
@@ -153,7 +175,6 @@ fn emit_thunk(args: &[DataType], out: &mut [u8], fn_ptr: usize) -> std::io::Resu
 
 #[cfg(all(target_arch = "x86_64", unix))]
 mod r#impl {
-    use crate::class::Method;
     use crate::interpreter::native::{IntRegister, IntRegisterSize};
     use crate::types::{DataType, PrimitiveDataType};
     use std::array::IntoIter;
