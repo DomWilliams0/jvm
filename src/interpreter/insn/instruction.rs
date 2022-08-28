@@ -433,18 +433,9 @@ impl Aaload {
 
 impl Aastore {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        let frame = interp.current_frame_mut();
-
-        // pop reference value first
-        let value = frame.pop_reference_value()?;
-
-        // pop reference type array and idx
-        let (array, idx) =
-            frame.pop_arrayref_and_idx(|cls| matches!(cls.class_type(), ClassType::Normal))?;
-
-        // TODO assignment compatibility check
-        array.array_set_unchecked(idx, value);
-        Ok(PostExecuteAction::Continue)
+        do_array_store(interp, |cls| {
+            matches!(cls.class_type(), ClassType::Normal | ClassType::Array(_))
+        })
     }
 }
 
@@ -655,24 +646,33 @@ impl Caload {
     }
 }
 
+fn do_array_store(
+    interp: &mut InterpreterState,
+    array_check: impl FnOnce(&VmRef<Class>) -> bool,
+) -> ExecuteResult {
+    let frame = interp.current_frame_mut();
+
+    // pop value
+    let value = frame.pop_value()?;
+    // TODO check value type, throw if bad
+
+    // pop reference type array and idx
+    let (array, idx) = frame.pop_arrayref_and_idx(array_check)?;
+
+    // TODO actually bounds check
+    // TODO assignment compatibility check
+    array.array_set_unchecked(idx, value);
+    Ok(PostExecuteAction::Continue)
+}
+
 impl Castore {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        let frame = interp.current_frame_mut();
-
-        // pop value
-        let value = frame.pop_value()?;
-        debug_assert!(value.is_int());
-
-        // pop reference type array and idx
-        let (array, idx) = frame.pop_arrayref_and_idx(|cls| {
+        do_array_store(interp, |cls| {
             matches!(
                 cls.class_type(),
                 ClassType::Primitive(PrimitiveDataType::Char)
             )
-        })?;
-
-        array.array_set_unchecked(idx, value);
-        Ok(PostExecuteAction::Continue)
+        })
     }
 }
 
@@ -746,7 +746,12 @@ impl Daload {
 
 impl Dastore {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Dastore")
+        do_array_store(interp, |cls| {
+            matches!(
+                cls.class_type(),
+                ClassType::Primitive(PrimitiveDataType::Double)
+            )
+        })
     }
 }
 
@@ -958,7 +963,12 @@ impl Faload {
 
 impl Fastore {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Fastore")
+        do_array_store(interp, |cls| {
+            matches!(
+                cls.class_type(),
+                ClassType::Primitive(PrimitiveDataType::Float)
+            )
+        })
     }
 }
 
@@ -1343,7 +1353,12 @@ impl Iand {
 
 impl Iastore {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Iastore")
+        do_array_store(interp, |cls| {
+            matches!(
+                cls.class_type(),
+                ClassType::Primitive(PrimitiveDataType::Int)
+            )
+        })
     }
 }
 
@@ -2244,7 +2259,12 @@ impl Land {
 
 impl Lastore {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Lastore")
+        do_array_store(interp, |cls| {
+            matches!(
+                cls.class_type(),
+                ClassType::Primitive(PrimitiveDataType::Long)
+            )
+        })
     }
 }
 
@@ -2758,7 +2778,12 @@ impl Saload {
 
 impl Sastore {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Sastore")
+        do_array_store(interp, |cls| {
+            matches!(
+                cls.class_type(),
+                ClassType::Primitive(PrimitiveDataType::Short)
+            )
+        })
     }
 }
 

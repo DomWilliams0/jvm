@@ -328,9 +328,15 @@ impl ClassLoader {
         element_type: VmRef<Class>,
         loader: WhichLoader,
     ) -> VmResult<VmRef<Class>> {
-        debug_assert!(matches!(element_type.class_type(), ClassType::Normal));
+        let array_cls_name = match element_type.class_type() {
+            ClassType::Primitive(p) => unreachable!(
+                "reference array class expects non-primitive element type but got [{:?}",
+                p
+            ),
+            ClassType::Array(_) => format!("[{}", element_type.name()),
+            ClassType::Normal => format!("[L{};", element_type.name()),
+        };
 
-        let array_cls_name = format!("[L{};", element_type.name());
         self.load_class(&array_cls_name.to_mstr(), loader)
     }
 
