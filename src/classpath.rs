@@ -67,30 +67,33 @@ impl ClassPath {
         Self(classpath.split(':').map(PathBuf::from).collect())
     }
 
-    pub fn find(&self, class_name: &str) -> Result<Vec<u8>, FindClassError> {
-        self.0
-            .iter()
-            .find_map(|dir| {
-                let mut file = dir.join(class_name);
-                file.set_extension("class");
+    pub fn find(&self, class_name: &str) -> Option<PathBuf> {
+        self.0.iter().find_map(|dir| {
+            let mut file = dir.join(class_name);
+            file.set_extension("class");
 
-                #[cfg(feature = "miri")]
-                {
-                    classpath_zip::read_file(&*file.as_path())
-                        .map(|opt| opt.map_err(FindClassError::Io))
-                }
+            #[cfg(feature = "miri")]
+            {
+                classpath_zip::read_file(&*file.as_path())
+                    .map(|opt| opt.map_err(FindClassError::Io))
+            }
 
-                #[cfg(not(feature = "miri"))]
-                {
-                    trace!("checking {}", file.display());
-                    if file.is_file() {
-                        trace!("found class at {}", file.display());
-                        Some(std::fs::read(file).map_err(FindClassError::Io))
-                    } else {
-                        None
-                    }
+            #[cfg(not(feature = "miri"))]
+            {
+                trace!("checking {}", file.display());
+                if file.is_file() {
+                    trace!("found class at {}", file.display());
+                    Some(file)
+                } else {
+                    None
                 }
-            })
+            }
+        })
+    }
+
+    pub fn find_and_load(&self, class_name: &str) -> Result<Vec<u8>, FindClassError> {
+        self.find(class_name)
+            .map(|file| std::fs::read(file).map_err(FindClassError::Io))
             .unwrap_or(Err(FindClassError::NotFound))
     }
 }

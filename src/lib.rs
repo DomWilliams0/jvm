@@ -1,4 +1,4 @@
-#![feature(c_variadic, asm)]
+#![feature(c_variadic, get_mut_unchecked)]
 #![allow(dead_code)]
 
 pub use self::jvm::{Jvm, JvmArgs};

@@ -10,6 +10,7 @@ use smallvec::SmallVec;
 
 use crate::types::{DataType, DataValue};
 use itertools::repeat_n;
+use std::arch::asm;
 use std::io::Cursor;
 use std::mem::transmute_copy;
 

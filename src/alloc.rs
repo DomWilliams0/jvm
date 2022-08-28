@@ -2,7 +2,7 @@ use crate::class::Object;
 use crate::error::{Throwable, Throwables, VmResult};
 
 use cafebabe::mutf8::MString;
-use std::mem::ManuallyDrop;
+use std::mem::{ManuallyDrop, MaybeUninit};
 use std::sync::{Arc, Weak};
 
 // TODO gc arena

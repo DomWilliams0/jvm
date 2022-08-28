@@ -1,4 +1,4 @@
-# TODOs (169)
+# TODOs (173)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -93,13 +93,15 @@
    * `// TODO long and double are wide`
    * `// TODO generic helper methods for popping up to 3 types from stack`
    * `// TODO move these to extension trait on operandstack`
- * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (37)
+ * [src/interpreter/insn/instruction.rs](src/interpreter/insn/instruction.rs) (39)
    * `// TODO operand stack pop then verify might be wrong - only pop if its the right type?`
    * `/// TODO might be possible to continue with resolved methods/fields state instead of replay`
    * `// TODO better handling of interpreter error`
    * `// TODO some 2s are signed`
-   * `// TODO assignment compatibility check`
    * `// TODO sign extended?`
+   * `// TODO check value type, throw if bad`
+   * `// TODO actually bounds check`
+   * `// TODO assignment compatibility check`
    * `// TODO value set conversion`
    * `// TODO narrow float to int properly`
    * `// TODO is probably wrong`
@@ -177,6 +179,9 @@
    * `// TODO this is definitely wrong`
  * [src/natives/java_lang_vmclassloader.rs](src/natives/java_lang_vmclassloader.rs) (1)
    * `// TODO vm_get_primitive_class`
+ * [src/natives/java_lang_vmruntime.rs](src/natives/java_lang_vmruntime.rs) (2)
+   * `// TODO borrow version of classpath`
+   * `// TODO non utf8 paths?`
  * [src/natives/java_lang_vmsystem.rs](src/natives/java_lang_vmsystem.rs) (3)
    * `// TODO dont unwrap`
    * `// TODO check elements really are assignable`

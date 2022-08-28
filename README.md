@@ -21,7 +21,7 @@ A nightly rust compiler is required for variadic functions in the JNI interface.
 
 * Download, build and install [GNU Classpath](https://www.gnu.org/software/classpath/faq/faq.html#faq3_5)
     * I had luck with the following commands: `CFLAGS="-w" ./configure --enable-load-library=yes --with-glibj=flat --enable-jni=yes --disable-gjdoc && make && make install`
-    * I also had to install `antlr` 3.5.2 and downgrade to a JDK that still has `javah` (OpenJDK 8)
+    * I also had to install `antlr` 3.5.2, `gconf` 2.6.0 and downgrade to a JDK that still has `javah` (OpenJDK 8)
 * Find/compile a **simple** `.java` file into a `.class`
 * `cargo run -- <class name> --Xbootclasspath <colon separated list of paths to system classes> --cp <colon separated list of paths for non-system classes>`
     * Example: `cargo run -- com.me.MyClass --Xbootclasspath /gnuclasspath:../java --cp ../java`. This will (try to) run the main method of `../java/com/me/MyClass.class`

@@ -121,3 +121,9 @@ impl From<Option<PathBuf>> for SystemProperty {
         p.unwrap_or_else(PathBuf::new).into()
     }
 }
+
+impl AsRef<str> for SystemProperty {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}

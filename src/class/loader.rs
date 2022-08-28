@@ -255,7 +255,7 @@ impl ClassLoader {
     fn find_boot_class(&self, class_name: &str) -> VmResult<Vec<u8>> {
         trace!("looking for class {}", class_name);
 
-        match self.bootclasspath.find(class_name) {
+        match self.bootclasspath.find_and_load(class_name) {
             Ok(bytes) => Ok(bytes),
             Err(FindClassError::NotFound) => Err(Throwables::NoClassDefFoundError),
             Err(FindClassError::Io(err)) => panic!("io error: {}", err), // TODO java.lang.IOError

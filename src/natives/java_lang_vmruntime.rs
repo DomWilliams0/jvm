@@ -1,9 +1,12 @@
 use crate::alloc::{vmref_alloc_object, VmRef};
 use crate::class::{FunctionArgs, Object};
+use crate::classpath::ClassPath;
 use crate::error::Throwable;
 use crate::jni::NativeLibrary;
 use crate::thread;
+use crate::thread::JvmThreadState;
 use crate::types::DataValue;
+use std::path::PathBuf;
 
 pub fn vm_map_library_name(mut args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     #[cfg(not(any(unix, windows)))]
@@ -12,16 +15,23 @@ pub fn vm_map_library_name(mut args: FunctionArgs) -> Result<Option<DataValue>, 
     let arg = args.take(0);
     let dll = arg.as_reference().expect("string expected");
 
-    let dll_path = dll
+    let mut dll_path = dll
         .string_value_utf8()
-        .map(|s| {
-            #[cfg(unix)]
-            return format!("lib{}.so", s);
-
-            #[cfg(windows)]
-            return format!("{}.dll", s);
-        })
+        .and_then(|s| libloading::library_filename(s).into_string().ok())
         .expect("java/lang/String expected");
+
+    let thread = thread::get();
+    if let Some(path_str) = thread.global().properties().get("java.library.path") {
+        // TODO borrow version of classpath
+        let cp = ClassPath::from_colon_separated(path_str.as_ref());
+        if let Some(found) = cp.find(&dll_path) {
+            // TODO non utf8 paths?
+            dll_path = found
+                .to_str()
+                .expect("non utf8 path to native library")
+                .to_owned();
+        }
+    }
 
     match vmref_alloc_object(|| Object::new_string_utf8(&dll_path)) {
         Ok(o) => Ok(Some(DataValue::Reference(o))),

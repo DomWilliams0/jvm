@@ -13,7 +13,7 @@ use cafebabe::{
     attribute, AccessFlags, ClassAccessFlags, ClassError, FieldAccessFlags, MethodAccessFlags,
 };
 
-use crate::alloc::{vmref_eq, vmref_is_null, InternedString, NativeString, VmRef};
+use crate::alloc::{vmref_eq, vmref_is_null, InternedString, NativeString, VmRef, WeakVmRef};
 use crate::class::loader::current_thread;
 use crate::class::object::Object;
 use crate::class::{ClassLoader, WhichLoader};
@@ -42,7 +42,9 @@ pub struct Class {
     /// java/lang/Class instance, initially NULL (!!!) because java/lang/Class hasn't been loaded,
     /// but is updated before any class is initialised and it is needed
     /// TODO weak reference for cyclic reference?
-    class_object: VmRef<Object>,
+    class_object: MaybeUninit<VmRef<Object>>,
+    #[cfg(debug_assertions)]
+    class_object_init: bool,
 
     /// Only None for java/lang/Object
     super_class: Option<VmRef<Class>>,
@@ -232,6 +234,7 @@ impl Class {
             }
             Err(ClassError::NoSuper) if name.as_bytes() == b"java/lang/Object" => {
                 // the one exception, no super class expected
+                trace!("no super class expected for java.lang.Object");
                 None
             }
             Err(e) => {
@@ -567,7 +570,7 @@ impl Class {
         static_fields_layout: FieldStorageLayout,
         static_fields_values: FieldStorage,
     ) -> VmRef<Class> {
-        debug_assert!(super_class.is_none() == (name.as_bytes() == b"java/lang/Object"));
+        assert!(super_class.is_none() == (name.as_bytes() == b"java/lang/Object"));
 
         let mut vm_class = VmRef::new(Self {
             name,
@@ -576,7 +579,9 @@ impl Class {
             source_file,
             state: LockedClassState::default(),
             loader,
-            class_object: unsafe { VmRef::from_raw(std::ptr::null()) },
+            class_object: MaybeUninit::uninit(),
+            #[cfg(debug_assertions)]
+            class_object_init: false,
             super_class,
             interfaces,
             methods,
@@ -952,8 +957,11 @@ impl Class {
 
     pub fn class_object(&self) -> &VmRef<Object> {
         // safety: java/lang/Class is loaded and this is populated before any class is initialised
-        debug_assert!(!vmref_is_null(&self.class_object));
-        &self.class_object
+        #[cfg(debug_assertions)]
+        {
+            assert!(self.class_object_init);
+        }
+        unsafe { self.class_object.assume_init_ref() }
     }
 
     /// class_cls: java/lang/Class class to be instantiated in this method
@@ -968,12 +976,13 @@ impl Class {
 
         // point class_object field to class instance
         // TODO use Arc::get_mut_unchecked instead when stable
-        {
-            let self_mut = unsafe { &mut *(Arc::as_ptr(self) as *const _ as *mut Class) };
-            assert!(vmref_is_null(&self_mut.class_object));
-
-            let dummy = std::mem::replace(&mut self_mut.class_object, cls_object);
-            std::mem::forget(dummy); // dont run the destructor of the null pointer
+        unsafe {
+            let self_mut = Arc::get_mut_unchecked(self);
+            #[cfg(debug_assertions)]
+            {
+                assert!(!std::mem::replace(&mut self_mut.class_object_init, true));
+            }
+            self_mut.class_object.write(cls_object);
         }
     }
 
@@ -1890,5 +1899,18 @@ mod tests {
             long.as_ref(),
             cstring(b"Java_my_package_Cool_doThings_1lol__ILjava_lang_Obj_000eact_2_3J\0")
         )
+    }
+
+    #[test]
+    fn wtf() {
+        let super_class: Option<VmRef<Class>> = None;
+        let name: InternedString = MString::from_utf8(b"java/lang/Object");
+
+        if super_class.is_none() != (name.as_bytes() == b"java/lang/Object") {
+            panic!(
+                "super class is required or otherwise must be Object (super={:?}, name={:?})",
+                super_class, name
+            );
+        }
     }
 }
