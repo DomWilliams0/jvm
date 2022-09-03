@@ -2178,7 +2178,16 @@ impl Ishl {
 
 impl Ishr {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Ishr")
+        let frame = interp.current_frame_mut();
+
+        let (value, mut shift_by) = frame.pop_2_ints()?;
+        shift_by &= 0x1f; // low 5 bits only
+
+        let result = value.wrapping_shr(shift_by as u32);
+        trace!("{} >> {} => {}", value, shift_by, result);
+
+        frame.operand_stack.push(DataValue::Int(result));
+        Ok(PostExecuteAction::Continue)
     }
 }
 
