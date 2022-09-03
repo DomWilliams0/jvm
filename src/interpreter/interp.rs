@@ -63,6 +63,12 @@ impl InterpreterState {
         self.frames.top_java_mut().expect("no java frame").0
     }
 
+    /// Pc returned is for the next instruction
+    pub fn current_frame_mut_with_next_pc(&mut self) -> (&mut JavaFrame, usize) {
+        let (frame, pc) = self.frames.top_java_mut().expect("no java frame");
+        (frame, *pc)
+    }
+
     pub fn current_frame_mut_checked(&mut self) -> Option<&mut JavaFrame> {
         self.frames.top_java_mut().map(|(frame, _)| frame)
     }

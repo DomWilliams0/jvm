@@ -2270,7 +2270,13 @@ impl Ixor {
 
 impl Jsr {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Jsr")
+        let (frame, pc) = interp.current_frame_mut_with_next_pc();
+
+        // push pc of next instruction to stack
+        frame.operand_stack.push(DataValue::ReturnAddress(pc));
+
+        // relative jmp to arg
+        Ok(PostExecuteAction::Jmp(self.0 as i32))
     }
 }
 
@@ -2828,7 +2834,15 @@ impl Putstatic {
 
 impl Ret {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Ret")
+        let frame = interp.current_frame_mut();
+        let local_var = frame.local_vars.load(self.0 as usize)?;
+
+        let addr = match local_var {
+            DataValue::ReturnAddress(addr) => addr,
+            var => unreachable!("expected returnAddress for ret but got {:?}", var),
+        };
+
+        Ok(PostExecuteAction::JmpAbsolute(addr))
     }
 }
 
