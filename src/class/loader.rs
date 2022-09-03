@@ -244,6 +244,11 @@ impl ClassLoader {
             ArrayType::Reference(elem) => self.load_class_caused_by(elem, loader, name)?,
         };
 
+        debug!(
+            "do_load_array_class: array={:?}, elem_cls={:?}",
+            array, elem_cls
+        );
+
         // array classloader = element classloader
         let elem_loader = elem_cls.loader();
 

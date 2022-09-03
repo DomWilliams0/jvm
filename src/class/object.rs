@@ -79,13 +79,12 @@ impl Object {
             _ => unreachable!(),
         };
 
-        let elem_type = match elem_cls.class_type().clone() {
-            ClassType::Primitive(prim) => DataType::Primitive(prim),
-            ClassType::Normal => DataType::Reference(Cow::Owned(elem_cls.name().to_owned())),
-            ClassType::Array(_) => unreachable!(),
+        let default_value = match elem_cls.class_type() {
+            ClassType::Primitive(prim) => prim.default_value(),
+            ClassType::Normal | ClassType::Array(_) => DataValue::Reference(null()),
         };
 
-        Self::new_array_with_elements(array_cls, repeat_n(elem_type.default_value(), len))
+        Self::new_array_with_elements(array_cls, repeat_n(default_value, len))
     }
 
     pub(crate) fn new_array_with_elements(

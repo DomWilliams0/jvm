@@ -1,4 +1,4 @@
-# TODOs (173)
+# TODOs (176)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -70,8 +70,10 @@
    * `// TODO limit array length to i32::MAX somewhere`
    * `// TODO do this without all the allocations`
    * `// TODO not quite correct toString`
- * [src/classpath.rs](src/classpath.rs) (1)
+ * [src/classpath.rs](src/classpath.rs) (3)
    * `// TODO enum for path type, zip/jar or directory`
+   * `// TODO awful, fix this`
+   * `// TODO fix in miri`
  * [src/constant_pool.rs](src/constant_pool.rs) (3)
    * `// TODO store interned string instance here`
    * `// TODO method and field refs should be resolved vtable indices instead of loads of strings`
@@ -159,8 +161,9 @@
  * [src/jni/library.rs](src/jni/library.rs) (2)
    * `// TODO call JNI_OnUnload in Drop`
    * `// TODO does this work on windows too?`
- * [src/jvm.rs](src/jvm.rs) (5)
+ * [src/jvm.rs](src/jvm.rs) (6)
    * `// TODO "catch" any exception during init, and log it properly with stacktrace etc`
+   * `// TODO static initializer is not run?`
    * `// TODO populate String[] args`
    * `// TODO wait for threads to die, unintialise TLS, assert this is the last ref to global state`
    * `// TODO standard jvm args`

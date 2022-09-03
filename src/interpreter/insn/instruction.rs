@@ -608,7 +608,12 @@ impl Athrow {
 
 impl Baload {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Baload")
+        do_array_load(interp, |cls| {
+            matches!(
+                cls.class_type(),
+                ClassType::Primitive(PrimitiveDataType::Boolean)
+            )
+        })
     }
 }
 
@@ -630,19 +635,12 @@ impl Bipush {
 
 impl Caload {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        let frame = interp.current_frame_mut();
-
-        // pop reference type array and idx
-        let (array, idx) = frame.pop_arrayref_and_idx(|cls| {
+        do_array_load(interp, |cls| {
             matches!(
                 cls.class_type(),
                 ClassType::Primitive(PrimitiveDataType::Char)
             )
-        })?;
-
-        let value = array.array_get_unchecked(idx);
-        frame.operand_stack.push(value);
-        Ok(PostExecuteAction::Continue)
+        })
     }
 }
 
@@ -662,6 +660,20 @@ fn do_array_store(
     // TODO actually bounds check
     // TODO assignment compatibility check
     array.array_set_unchecked(idx, value);
+    Ok(PostExecuteAction::Continue)
+}
+
+fn do_array_load(
+    interp: &mut InterpreterState,
+    array_check: impl FnOnce(&VmRef<Class>) -> bool,
+) -> ExecuteResult {
+    let frame = interp.current_frame_mut();
+
+    // pop reference type array and idx
+    let (array, idx) = frame.pop_arrayref_and_idx(array_check)?;
+
+    let value = array.array_get_unchecked(idx);
+    frame.operand_stack.push(value);
     Ok(PostExecuteAction::Continue)
 }
 
@@ -740,7 +752,12 @@ impl Dadd {
 
 impl Daload {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Daload")
+        do_array_load(interp, |cls| {
+            matches!(
+                cls.class_type(),
+                ClassType::Primitive(PrimitiveDataType::Double)
+            )
+        })
     }
 }
 
@@ -957,7 +974,12 @@ impl Fadd {
 
 impl Faload {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Faload")
+        do_array_load(interp, |cls| {
+            matches!(
+                cls.class_type(),
+                ClassType::Primitive(PrimitiveDataType::Float)
+            )
+        })
     }
 }
 
@@ -1341,7 +1363,12 @@ impl Iadd {
 
 impl Iaload {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Iaload")
+        do_array_load(interp, |cls| {
+            matches!(
+                cls.class_type(),
+                ClassType::Primitive(PrimitiveDataType::Int)
+            )
+        })
     }
 }
 
@@ -2247,7 +2274,12 @@ impl Ladd {
 
 impl Laload {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Laload")
+        do_array_load(interp, |cls| {
+            matches!(
+                cls.class_type(),
+                ClassType::Primitive(PrimitiveDataType::Long)
+            )
+        })
     }
 }
 
@@ -2772,7 +2804,12 @@ impl Return {
 
 impl Saload {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Saload")
+        do_array_load(interp, |cls| {
+            matches!(
+                cls.class_type(),
+                ClassType::Primitive(PrimitiveDataType::Short)
+            )
+        })
     }
 }
 

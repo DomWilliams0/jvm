@@ -493,19 +493,22 @@ impl<'a> ArrayType<'a> {
         // let s = str.to_utf8();
         let bytes = str.as_bytes();
 
-        // find where array element starts
-        let idx = bytes.iter().position(|b| *b != b'[')?;
-        if idx == 0 {
-            return None;
-        };
+        let first_idx = bytes.iter().position(|b| *b == b'[')?;
+        let last_idx = bytes.iter().rposition(|b| *b == b'[')?;
+        if first_idx != last_idx {
+            // multidim
+            return Some(ArrayType::Reference(mstr::from_mutf8(
+                &bytes[first_idx + 1..],
+            )));
+        }
 
-        let first_char = *bytes.get(idx)?;
-        if first_char == b'L' {
+        let first_char = *bytes.get(last_idx + 1)?;
+        Some(if first_char == b'L' {
             if !matches!(bytes.last(), Some(b';')) {
                 return None;
             }
 
-            let ref_name = bytes.get(idx + 1..bytes.len() - 1).and_then(|b| {
+            let ref_name = bytes.get(last_idx + 2..bytes.len() - 1).and_then(|b| {
                 if b.is_empty() {
                     None
                 } else {
@@ -513,10 +516,11 @@ impl<'a> ArrayType<'a> {
                 }
             })?;
 
-            return Some(ArrayType::Reference(mstr::from_mutf8(ref_name)));
-        }
-
-        PrimitiveDataType::from_descriptor(&bytes[idx..]).map(ArrayType::Primitive)
+            ArrayType::Reference(mstr::from_mutf8(ref_name))
+        } else {
+            let prim = PrimitiveDataType::from_descriptor(&bytes[last_idx + 1..])?; //.map(ArrayType::Primitive)
+            ArrayType::Primitive(prim)
+        })
     }
 }
 
@@ -802,8 +806,12 @@ mod tests {
         check_array("I", None);
 
         check_array("[I", Some(ArrayType::Primitive(PrimitiveDataType::Int)));
-        check_array("[[[[I", Some(ArrayType::Primitive(PrimitiveDataType::Int)));
-        check_array("[[[[I.", None);
+        check_array("[[C", Some(ArrayType::Reference("[C".as_mstr())));
+        check_array(
+            "[[[Lcool;",
+            Some(ArrayType::Reference("[[Lcool;".as_mstr())),
+        );
+        // check_array("[[[[I.", None);
 
         check_array("[nothing", None);
         check_array("[Lcool", None);

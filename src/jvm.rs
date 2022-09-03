@@ -119,6 +119,8 @@ impl Jvm {
             .load_class(&self.args.main.to_mstr(), loader)
             .throw()?;
 
+        // TODO static initializer is not run?
+
         // find main method
         let main_method = main_class
             .find_callable_method(
