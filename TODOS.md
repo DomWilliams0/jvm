@@ -1,4 +1,4 @@
-# TODOs (176)
+# TODOs (175)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -24,7 +24,7 @@
    * `// TODO actually intern strings`
    * `// TODO methods on VmRef newtype`
    * `// TODO oom error`
- * [src/class/class.rs](src/class/class.rs) (23)
+ * [src/class/class.rs](src/class/class.rs) (22)
    * `// TODO when a ClassLoader is dropped, ensure all native libraries associated with it are freed too`
    * `/// TODO weak reference for cyclic reference?`
    * `// TODO store dimensions`
@@ -39,7 +39,6 @@
    * `// TODO Every array type implements the interfaces Cloneable and java.io.Serializable.`
    * `// TODO ensure there is only 1`
    * `// TODO also this check, wtf does it mean:`
-   * `todo!("instanceof for arrays") // TODO`
    * `// TODO use Arc::get_mut_unchecked instead when stable`
    * `// TODO initialise final static fields from ConstantValue attrs`
    * `// TODO wrap exception here and return the proper type`

@@ -76,11 +76,18 @@ pub fn init_bootstrap_classes(classloader: &ClassLoader) -> VmResult<()> {
         ),
         Preload::with_natives(
             "java/lang/VMObject",
-            &[(
-                "clone",
-                "(Ljava/lang/Cloneable;)Ljava/lang/Object;",
-                java_lang_vmobject::vm_clone,
-            )],
+            &[
+                (
+                    "clone",
+                    "(Ljava/lang/Cloneable;)Ljava/lang/Object;",
+                    java_lang_vmobject::vm_clone,
+                ),
+                (
+                    "getClass",
+                    "(Ljava/lang/Object;)Ljava/lang/Class;",
+                    java_lang_vmobject::vm_get_class,
+                ),
+            ],
         ),
         Preload::new("[Ljava/lang/Class;"),
         Preload::with_natives(

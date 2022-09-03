@@ -13,3 +13,9 @@ pub fn vm_clone(mut args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throw
 
     Ok(Some(DataValue::Reference(clone)))
 }
+
+pub fn vm_get_class(mut args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    let obj = args.take(0).into_reference().unwrap();
+    let obj_cls = obj.class().ok_or(Throwables::NullPointerException)?;
+    Ok(Some(DataValue::Reference(obj_cls.class_object().clone())))
+}
