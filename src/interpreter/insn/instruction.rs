@@ -422,8 +422,9 @@ impl Aaload {
         let frame = interp.current_frame_mut();
 
         // pop reference type array and idx
-        let (array, idx) =
-            frame.pop_arrayref_and_idx(|cls| matches!(cls.class_type(), ClassType::Normal))?;
+        let (array, idx) = frame.pop_arrayref_and_idx(|cls| {
+            matches!(cls.class_type(), ClassType::Normal | ClassType::Array(_))
+        })?;
 
         let value = array.array_get_unchecked(idx);
         frame.operand_stack.push(value);

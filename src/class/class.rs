@@ -869,7 +869,8 @@ impl Class {
     pub fn is_instance_of(self: &VmRef<Class>, other: &VmRef<Class>) -> bool {
         if vmref_eq(self, other) {
             return true;
-        };
+        }
+
         match self.class_type() {
             ClassType::Normal => {
                 debug_assert!(!self.is_interface());
@@ -885,7 +886,7 @@ impl Class {
                 });
                 found
             }
-            ClassType::Array(_) => {
+            ClassType::Array(elem_cls) => {
                 /*If S is an array type SC[], that is, an array of components of type SC, then:
                     If T is a class type, then T must be Object.
                     If T is an interface type, then T must be one of the interfaces implemented by arrays (JLS §4.10.3).
@@ -893,7 +894,26 @@ impl Class {
                         TC and SC are the same primitive type.
                         TC and SC are reference types, and type SC can be cast to TC by these run-time rules.
                 */
-                todo!("instanceof for arrays") // TODO
+
+                match other.class_type() {
+                    ClassType::Normal if other.is_interface() => {
+                        todo!("instanceof(array, interface type)")
+                    }
+                    ClassType::Normal => other.name() == "Ljava/lang/Object;".as_mstr(),
+                    ClassType::Array(other_elem) => {
+                        if let Some(arr_prim) = elem_cls.class_type().as_primitive() {
+                            if let Some(other_prim) = other_elem.class_type().as_primitive() {
+                                return arr_prim == other_prim;
+                            }
+
+                            return false;
+                        } else {
+                            assert!(!elem_cls.class_type.is_array());
+                            elem_cls.is_instance_of(other_elem)
+                        }
+                    }
+                    ClassType::Primitive(_) => false,
+                }
             }
 
             ClassType::Primitive(_) => unreachable!(),
@@ -1517,6 +1537,13 @@ impl MethodLookupResult {
 impl ClassType {
     pub fn is_array(&self) -> bool {
         matches!(self, Self::Array(_))
+    }
+
+    pub fn as_primitive(&self) -> Option<PrimitiveDataType> {
+        match self {
+            Self::Primitive(p) => Some(*p),
+            _ => None,
+        }
     }
     pub fn array_class(&self) -> Option<&VmRef<Class>> {
         match self {
