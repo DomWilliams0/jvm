@@ -99,6 +99,12 @@ impl Jvm {
             return Err(e);
         }
 
+        // init vmthread
+        if let Err(e) = thread::init_main_vmthread() {
+            error!("failed to init main vmthread: {:?}", e);
+            return Err(JvmError::ExceptionThrown(e.into()));
+        }
+
         Ok(jvm)
     }
 

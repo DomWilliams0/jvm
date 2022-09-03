@@ -1,4 +1,4 @@
-# TODOs (175)
+# TODOs (179)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -24,7 +24,7 @@
    * `// TODO actually intern strings`
    * `// TODO methods on VmRef newtype`
    * `// TODO oom error`
- * [src/class/class.rs](src/class/class.rs) (22)
+ * [src/class/class.rs](src/class/class.rs) (23)
    * `// TODO when a ClassLoader is dropped, ensure all native libraries associated with it are freed too`
    * `/// TODO weak reference for cyclic reference?`
    * `// TODO store dimensions`
@@ -39,6 +39,7 @@
    * `// TODO Every array type implements the interfaces Cloneable and java.io.Serializable.`
    * `// TODO ensure there is only 1`
    * `// TODO also this check, wtf does it mean:`
+   * `// TODO this is basically copied from getstatic, reuse instruction impl if possible`
    * `// TODO use Arc::get_mut_unchecked instead when stable`
    * `// TODO initialise final static fields from ConstantValue attrs`
    * `// TODO wrap exception here and return the proper type`
@@ -188,6 +189,8 @@
    * `// TODO dont unwrap`
    * `// TODO check elements really are assignable`
    * `// TODO remove bounds check here, we just checked it explicitly`
+ * [src/natives/java_lang_vmthread.rs](src/natives/java_lang_vmthread.rs) (1)
+   * `// TODO volatile field!`
  * [src/natives/java_lang_vmthrowable.rs](src/natives/java_lang_vmthrowable.rs) (1)
    * `// TODO implement fillInStackTrace`
  * [src/properties.rs](src/properties.rs) (5)
@@ -202,8 +205,10 @@
    * `// TODO phantom generic type to tag this as Static or Instance fields`
    * `#[derive(Debug)] // TODO fieldstorage better debug impl`
    * `// TODO test this once structure is settled`
- * [src/thread.rs](src/thread.rs) (1)
+ * [src/thread.rs](src/thread.rs) (3)
    * `exception: RefCell<Option<VmRef<Throwable /* TODO vmobject */>>>,`
+   * `return_value: RefCell<Option<DataValue>>, // TODO really needed?`
+   * `// set_field("vmdata", DataValue::Reference(todo!()))?; // TODO vmthread struct`
  * [src/types.rs](src/types.rs) (4)
    * `// TODO more efficient packing of data values`
    * `// TODO does boolean conversions count as widening`

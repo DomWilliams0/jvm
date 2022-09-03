@@ -129,8 +129,19 @@ pub fn init_bootstrap_classes(classloader: &ClassLoader) -> VmResult<()> {
                 ),
             ],
         ),
+        Preload::with_natives(
+            "java/lang/VMThread",
+            &[(
+                "currentThread",
+                "()Ljava/lang/Thread;",
+                java_lang_vmthread::vm_current_thread,
+            )],
+        ),
         Preload::new("[I"),
         Preload::new("java/util/HashMap"),
+        Preload::new("java/lang/ThreadGroup"),
+        Preload::new("java/lang/Thread"),
+        Preload::new("java/lang/InheritableThreadLocal"),
     ];
 
     for preload in preload.iter() {

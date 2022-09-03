@@ -908,7 +908,29 @@ impl Dup {
 
 impl Dup2 {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Dup2")
+        let frame = interp.current_frame_mut();
+
+        // peek top operand
+        let obj = frame
+            .operand_stack
+            .peek()
+            .ok_or(InterpreterError::NoOperand)?
+            .clone();
+
+        if !obj.is_wide() {
+            // dup second from top too
+            let second_obj = frame
+                .operand_stack
+                .peek_at(1)
+                .ok_or(InterpreterError::NoOperand)?
+                .clone();
+
+            frame.operand_stack.push(second_obj);
+        }
+
+        frame.operand_stack.push(obj);
+
+        Ok(PostExecuteAction::Continue)
     }
 }
 
@@ -2318,13 +2340,17 @@ impl Lcmp {
 
 impl Lconst0 {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Lconst0")
+        let frame = interp.current_frame_mut();
+        frame.operand_stack.push(DataValue::Long(0));
+        Ok(PostExecuteAction::Continue)
     }
 }
 
 impl Lconst1 {
     fn execute(&self, interp: &mut InterpreterState) -> ExecuteResult {
-        todo!("instruction Lconst1")
+        let frame = interp.current_frame_mut();
+        frame.operand_stack.push(DataValue::Long(1));
+        Ok(PostExecuteAction::Continue)
     }
 }
 

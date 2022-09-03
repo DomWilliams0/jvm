@@ -866,6 +866,31 @@ impl Class {
         self.find_field_recursive(name, desc, FieldSearchType::Static)
     }
 
+    pub fn get_static_field(
+        self: &VmRef<Class>,
+        name: &'static str,
+        desc: &'static str,
+    ) -> DataValue {
+        // TODO this is basically copied from getstatic, reuse instruction impl if possible
+        let name = mstr::from_literal(name);
+        let desc = DataType::from_descriptor(mstr::from_literal(desc)).expect("bad descriptor");
+
+        // get field id
+        let found = self
+            .find_static_field_recursive(name, &desc)
+            .expect("field not found");
+
+        let (storage_class, field_id) = match found {
+            FoundField::InThisClass(id) => (self.clone(), id),
+            FoundField::InOtherClass(id, cls) => (cls, id),
+        };
+
+        self.ensure_init().expect("init failed");
+
+        // get field value
+        storage_class.static_fields().ensure_get(field_id)
+    }
+
     pub fn is_instance_of(self: &VmRef<Class>, other: &VmRef<Class>) -> bool {
         if vmref_eq(self, other) {
             return true;

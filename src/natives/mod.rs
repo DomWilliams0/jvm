@@ -10,6 +10,7 @@ pub mod java_lang_vmclassloader;
 pub mod java_lang_vmobject;
 pub mod java_lang_vmruntime;
 pub mod java_lang_vmsystem;
+pub mod java_lang_vmthread;
 pub mod java_lang_vmthrowable;
 
 pub mod gnu_classpath_vmstackwalker;

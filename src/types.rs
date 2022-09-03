@@ -258,7 +258,7 @@ impl DataValue {
     }
 
     pub fn is_int(&self) -> bool {
-        matches!(self, DataValue::Int(_))
+        matches!(self, DataValue::Int(_) | DataValue::Boolean(_))
     }
 
     pub fn is_float(&self) -> bool {

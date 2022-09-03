@@ -26,6 +26,7 @@ pub enum Throwables {
     UnsupportedClassVersionError,
     OutOfMemoryError,
     NullPointerException,
+    NoSuchFieldError,
     Other(&'static str),
 }
 
@@ -65,6 +66,7 @@ impl Throwables {
             Throwables::UnsupportedClassVersionError => "java/lang/UnsupportedClassVersionError",
             Throwables::OutOfMemoryError => "java/lang/OutOfMemoryError",
             Throwables::NullPointerException => "java/lang/NullPointerException",
+            Throwables::NoSuchFieldError => "java/lang/NoSuchFieldError",
             Throwables::Other(s) => s,
         }
     }
