@@ -113,6 +113,14 @@ pub fn init_bootstrap_classes(classloader: &ClassLoader) -> VmResult<()> {
                 java_lang_vmclassloader::vm_get_primitive_class,
             )],
         ),
+        Preload::with_natives(
+            "java/lang/VMClass",
+            &[(
+                "forName",
+                "(Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;",
+                java_lang_vmclass::vm_for_name,
+            )],
+        ),
         Preload::new("java/lang/System"),
         Preload::with_natives(
             "java/lang/VMRuntime",

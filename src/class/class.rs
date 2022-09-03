@@ -1640,6 +1640,7 @@ impl<'a> FunctionArgs<'a> {
         self.0.len()
     }
 
+    /// Reverse order
     pub fn take_all(self) -> impl Iterator<Item = DataValue> + 'a {
         self.0
             .iter_mut()

@@ -1,4 +1,4 @@
-# TODOs (179)
+# TODOs (180)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -180,6 +180,8 @@
    * `// TODO this is definitely wrong`
  * [src/natives/java_lang_float.rs](src/natives/java_lang_float.rs) (1)
    * `// TODO this is definitely wrong`
+ * [src/natives/java_lang_vmclass.rs](src/natives/java_lang_vmclass.rs) (1)
+   * `// TODO pass in cause for loading`
  * [src/natives/java_lang_vmclassloader.rs](src/natives/java_lang_vmclassloader.rs) (1)
    * `// TODO vm_get_primitive_class`
  * [src/natives/java_lang_vmruntime.rs](src/natives/java_lang_vmruntime.rs) (2)
