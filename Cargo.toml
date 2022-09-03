@@ -2,33 +2,36 @@
 name = "jvm"
 version = "0.1.0"
 authors = ["Dom Williams <me@domwillia.ms>"]
-edition = "2018"
+edition = "2021"
 build = "build.rs"
 
 [dependencies]
 cafebabe = { path = "cafebabe" }
 thiserror = "1.0"
 log = "0.4"
-env_logger = "0.8"
+env_logger = "0.9"
 itertools = "0.10"
-parking_lot = "0.11"
+parking_lot = "0.12"
 lazy_static = "1.4"
 num_enum = "0.5"
-strum = "0.21"
-strum_macros = "0.21"
-clap = "2.33"
+strum = "0.24"
+strum_macros = "0.24"
+clap = "3.2"
 whoami = "1.1"
-dirs = "3.0"
+dirs = "4.0"
 libloading = "0.7"
 region = "3.0"
-smallvec = { version = "1.6", features = ["union"] }
+smallvec = { version = "1.9", features = ["specialization"] }
 rc-zip = { version = "0.0", optional = true }
 
 [build-dependencies]
-zip = "0.5"
+zip = "0.6"
 walkdir = "2.3"
 
 [features]
 default = []
 log-class-loading = []
 miri = ["rc-zip"]
+
+[profile.dev]
+opt-level = 2

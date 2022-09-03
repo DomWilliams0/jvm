@@ -376,7 +376,11 @@ impl Debug for Object {
 
             // helpful for debugging
             if let Some(s) = self.string_value_utf8() {
-                write!(f, " ({:?})", s)?;
+                if s.len() > 128 {
+                    write!(f, " ({:?} (truncated)", &s[..s.ceil_char_boundary(128)])?;
+                } else {
+                    write!(f, " ({:?})", s)?;
+                }
             }
             Ok(())
         }

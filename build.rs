@@ -41,6 +41,11 @@ fn main() {
             Ok(d) => d,
         };
 
+        let path = dent.path();
+        match path.extension().and_then(|s| s.to_str()) {
+            Some("class" | "so") => {}
+            _ => continue,
+        }
         let metadata = dent.metadata().expect("failed to get metadata");
         let zip_path = dent
             .path()

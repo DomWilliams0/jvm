@@ -13,7 +13,7 @@ use cafebabe::{
     attribute, AccessFlags, ClassAccessFlags, ClassError, FieldAccessFlags, MethodAccessFlags,
 };
 
-use crate::alloc::{vmref_eq, vmref_is_null, InternedString, NativeString, VmRef, WeakVmRef};
+use crate::alloc::{vmref_eq, InternedString, NativeString, VmRef, WeakVmRef};
 use crate::class::loader::current_thread;
 use crate::class::object::Object;
 use crate::class::{ClassLoader, WhichLoader};
@@ -1699,6 +1699,7 @@ impl AsRef<CStr> for MangledMethodNameLong {
 mod tests {
     use super::*;
     use crate::{Jvm, JvmArgs};
+    use cafebabe::mutf8::MString;
     use std::path::PathBuf;
 
     fn test_jvm() -> Jvm {

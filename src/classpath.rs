@@ -15,13 +15,14 @@ mod classpath_zip {
     use std::ffi::OsStr;
     use std::io::Cursor;
     use std::io::Read;
+    use std::ops::DerefMut;
     use std::path::Path;
 
     const CLASSPATH_ZIP: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/classpath.zip"));
 
     static ARCHIVE: Mutex<Option<Archive>> = parking_lot::const_mutex(None);
 
-    pub fn read_file(path: &Path) -> Option<Result<Vec<u8>, std::io::Error>> {
+    fn archive() -> impl DerefMut<Target = Archive> {
         let mut guard = ARCHIVE.lock();
         if guard.is_none() {
             log::debug!("parsing classpath zip");
@@ -32,7 +33,17 @@ mod classpath_zip {
             *guard = Some(archive);
         }
 
-        let archive = guard.as_mut().unwrap(); // definitely initialized now
+        guard.as_mut().unwrap() // definitely initialized now
+    }
+
+    pub fn file_exists(path: &Path) -> bool {
+        let archive = archive();
+
+        archive.by_name(&*path.to_string_lossy()).is_some()
+    }
+
+    pub fn read_file(path: &Path) -> Option<Result<Vec<u8>, std::io::Error>> {
+        let archive = archive();
 
         let ret = if let Some(entry) = archive.by_name(&*path.to_string_lossy()) {
             let mut reader = entry.reader(|offset| {
@@ -74,8 +85,12 @@ impl ClassPath {
 
             #[cfg(feature = "miri")]
             {
-                classpath_zip::read_file(&*file.as_path())
-                    .map(|opt| opt.map_err(FindClassError::Io))
+                // TODO awful, fix this
+                if matches!(classpath_zip::read_file(&*file.as_path()), Some(Ok(_))) {
+                    Some(file.as_path().to_owned())
+                } else {
+                    None
+                }
             }
 
             #[cfg(not(feature = "miri"))]
@@ -93,6 +108,7 @@ impl ClassPath {
 
     pub fn find_and_load(&self, class_name: &str) -> Result<Vec<u8>, FindClassError> {
         self.find(class_name)
+            // TODO fix in miri
             .map(|file| std::fs::read(file).map_err(FindClassError::Io))
             .unwrap_or(Err(FindClassError::NotFound))
     }
