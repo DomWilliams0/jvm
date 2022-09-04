@@ -9,7 +9,7 @@ use log::{error, trace};
 use smallvec::SmallVec;
 
 pub fn vm_for_name(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
-    let (loader, initialize, mut name) = args.destructure::<(VmRef<Object>, bool, String)>()?;
+    let (mut name, initialize, loader) = args.destructure::<(String, bool, VmRef<Object>)>()?;
 
     trace!(
         "VMClass.forName({:?}, {:?}, {:?})",

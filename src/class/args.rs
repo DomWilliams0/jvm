@@ -14,11 +14,11 @@ struct ArgTaker<'a, 'b>(&'a mut FunctionArgs<'b>, usize);
 
 impl<'a, 'b> ArgTaker<'a, 'b> {
     fn take_next(&mut self) -> Result<DataValue, Throwables> {
+        self.1 -= 1;
         let val = self
             .0
             .try_take(self.1)
             .ok_or(Throwables::Other("java/lang/InternalError"))?;
-        self.1 += 1;
         Ok(val)
     }
 }
@@ -48,13 +48,13 @@ impl Arg for String {
 // -----
 impl<A: Arg> Args for (A,) {
     fn try_from(args: &mut FunctionArgs) -> Result<Self, Throwables> {
-        let mut taker = ArgTaker(args, 0);
+        let mut taker = ArgTaker(args, 1);
         Ok((taker.take_next().and_then(|v| A::convert(v))?,))
     }
 }
 impl<A: Arg, B: Arg> Args for (A, B) {
     fn try_from(args: &mut FunctionArgs) -> Result<Self, Throwables> {
-        let mut taker = ArgTaker(args, 0);
+        let mut taker = ArgTaker(args, 2);
         Ok((
             taker.take_next().and_then(|v| A::convert(v))?,
             taker.take_next().and_then(|v| B::convert(v))?,
@@ -63,7 +63,7 @@ impl<A: Arg, B: Arg> Args for (A, B) {
 }
 impl<A: Arg, B: Arg, C: Arg> Args for (A, B, C) {
     fn try_from(args: &mut FunctionArgs) -> Result<Self, Throwables> {
-        let mut taker = ArgTaker(args, 0);
+        let mut taker = ArgTaker(args, 3);
         Ok((
             taker.take_next().and_then(|v| A::convert(v))?,
             taker.take_next().and_then(|v| B::convert(v))?,
@@ -73,7 +73,7 @@ impl<A: Arg, B: Arg, C: Arg> Args for (A, B, C) {
 }
 impl<A: Arg, B: Arg, C: Arg, D: Arg> Args for (A, B, C, D) {
     fn try_from(args: &mut FunctionArgs) -> Result<Self, Throwables> {
-        let mut taker = ArgTaker(args, 0);
+        let mut taker = ArgTaker(args, 4);
         Ok((
             taker.take_next().and_then(|v| A::convert(v))?,
             taker.take_next().and_then(|v| B::convert(v))?,
@@ -84,7 +84,7 @@ impl<A: Arg, B: Arg, C: Arg, D: Arg> Args for (A, B, C, D) {
 }
 impl<A: Arg, B: Arg, C: Arg, D: Arg, E: Arg> Args for (A, B, C, D, E) {
     fn try_from(args: &mut FunctionArgs) -> Result<Self, Throwables> {
-        let mut taker = ArgTaker(args, 0);
+        let mut taker = ArgTaker(args, 5);
         Ok((
             taker.take_next().and_then(|v| A::convert(v))?,
             taker.take_next().and_then(|v| B::convert(v))?,
@@ -97,7 +97,7 @@ impl<A: Arg, B: Arg, C: Arg, D: Arg, E: Arg> Args for (A, B, C, D, E) {
 
 impl<A: Arg, B: Arg, C: Arg, D: Arg, E: Arg, F: Arg> Args for (A, B, C, D, E, F) {
     fn try_from(args: &mut FunctionArgs) -> Result<Self, Throwables> {
-        let mut taker = ArgTaker(args, 0);
+        let mut taker = ArgTaker(args, 6);
         Ok((
             taker.take_next().and_then(|v| A::convert(v))?,
             taker.take_next().and_then(|v| B::convert(v))?,
@@ -123,7 +123,7 @@ mod tests {
     use itertools::Itertools;
 
     fn mk_args<const N: usize>(args: [DataValue; N]) -> FunctionArgs<'static> {
-        let owned = args.into_iter().collect_vec().into_boxed_slice();
+        let owned = args.into_iter().rev().collect_vec().into_boxed_slice();
         let leaked = Box::leak(owned);
         FunctionArgs::from(leaked)
     }

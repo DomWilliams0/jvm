@@ -38,7 +38,7 @@ pub fn vm_map_library_name(args: FunctionArgs) -> Result<Option<DataValue>, VmRe
 }
 
 pub fn vm_native_load(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
-    let (class_loader, lib_name) = args.destructure::<(VmRef<Object>, String)>()?;
+    let (lib_name, class_loader) = args.destructure::<(String, VmRef<Object>)>()?;
 
     let thread = thread::get();
     let jvm = thread.global();

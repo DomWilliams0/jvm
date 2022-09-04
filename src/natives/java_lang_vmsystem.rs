@@ -10,8 +10,8 @@ pub fn vm_identity_hashcode(args: FunctionArgs) -> Result<Option<DataValue>, VmR
     Ok(Some(DataValue::Int(hash)))
 }
 pub fn vm_array_copy(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
-    let (len, dst_start, dst, src_start, src) =
-        args.destructure::<(i32, i32, VmRef<Object>, i32, VmRef<Object>)>()?;
+    let (src, src_start, dst, dst_start, len) =
+        args.destructure::<(VmRef<Object>, i32, VmRef<Object>, i32, i32)>()?;
 
     let (src_end, src_overflowed) = src_start.overflowing_add(len);
     let (dst_end, dst_overflowed) = dst_start.overflowing_add(len);
