@@ -30,6 +30,9 @@ mod classpath_zip {
                 .read_zip_with_size(CLASSPATH_ZIP.len() as u64)
                 .expect("failed to read classpath zip");
             log::debug!("done!");
+            for e in archive.entries() {
+                log::debug!(" * {:?}", e.name());
+            }
             *guard = Some(archive);
         }
 
