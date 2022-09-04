@@ -692,6 +692,22 @@ impl Class {
         // then superifaces if not yet found
         self.find_maximally_specific_method(name, desc, flags, antiflags)
     }
+
+    pub fn find_constructors(
+        &self,
+        flags: MethodAccessFlags,
+        antiflags: MethodAccessFlags,
+    ) -> impl Iterator<Item = (usize, VmRef<Method>)> + '_ {
+        // TODO search in super classes too?
+
+        self.methods.iter().enumerate().filter_map(move |(i, m)| {
+            (m.flags.contains(flags)
+                && (m.flags - antiflags) == m.flags
+                && m.is_instance_initializer())
+            .then(|| (i, m.clone()))
+        })
+    }
+
     /// Looks in superinterfaces only
     pub fn find_maximally_specific_method(
         &self,

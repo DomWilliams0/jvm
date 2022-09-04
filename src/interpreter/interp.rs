@@ -6,7 +6,7 @@ use crate::interpreter::frame::{Frame, FrameStack, JavaFrame, NativeFrame, Nativ
 use crate::interpreter::insn::{get_insn, InstructionBlob, PostExecuteAction};
 use crate::thread;
 
-use crate::class::{FunctionArgs, Method, NativeFunction};
+use crate::class::{Class, FunctionArgs, Method, NativeFunction};
 use crate::interpreter::InterpreterError;
 
 use crate::types::{DataType, DataValue, PrimitiveDataType, ReturnType};
@@ -80,6 +80,17 @@ impl InterpreterState {
                 inner: NativeFrameInner::Method { method, .. },
                 ..
             }) => Some(method),
+            _ => None,
+        }
+    }
+
+    pub fn current_class(&self) -> Option<&VmRef<Class>> {
+        match self.frames.top()? {
+            Frame::Java(frame) => Some(&frame.class),
+            Frame::Native(NativeFrame {
+                inner: NativeFrameInner::Method { class, .. },
+                ..
+            }) => Some(class),
             _ => None,
         }
     }

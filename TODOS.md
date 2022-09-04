@@ -1,4 +1,4 @@
-# TODOs (182)
+# TODOs (183)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -24,7 +24,7 @@
    * `// TODO actually intern strings`
    * `// TODO methods on VmRef newtype`
    * `// TODO oom error`
- * [src/class/class.rs](src/class/class.rs) (23)
+ * [src/class/class.rs](src/class/class.rs) (24)
    * `// TODO when a ClassLoader is dropped, ensure all native libraries associated with it are freed too`
    * `/// TODO weak reference for cyclic reference?`
    * `// TODO store dimensions`
@@ -37,6 +37,7 @@
    * `// TODO no need to iterate interfaces when looking for instance fields, add separate iterator method`
    * `// TODO do verification first to throw ClassFormatErrors, then this should not throw any classformaterrors`
    * `// TODO Every array type implements the interfaces Cloneable and java.io.Serializable.`
+   * `// TODO search in super classes too?`
    * `// TODO ensure there is only 1`
    * `// TODO also this check, wtf does it mean:`
    * `// TODO this is basically copied from getstatic, reuse instruction impl if possible`

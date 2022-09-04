@@ -115,12 +115,20 @@ pub fn init_bootstrap_classes(classloader: &ClassLoader) -> VmResult<()> {
         ),
         Preload::with_natives(
             "java/lang/VMClass",
-            &[(
-                "forName",
-                "(Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;",
-                java_lang_vmclass::vm_for_name,
-            )],
+            &[
+                (
+                    "forName",
+                    "(Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;",
+                    java_lang_vmclass::vm_for_name,
+                ),
+                (
+                    "getDeclaredConstructors",
+                    "(Ljava/lang/Class;Z)[Ljava/lang/reflect/Constructor;",
+                    java_lang_vmclass::vm_get_declared_constructors,
+                ),
+            ],
         ),
+        Preload::with_natives("java/lang/reflect/VMConstructor", &[]),
         Preload::new("java/lang/System"),
         Preload::with_natives(
             "java/lang/VMRuntime",
@@ -150,6 +158,7 @@ pub fn init_bootstrap_classes(classloader: &ClassLoader) -> VmResult<()> {
         Preload::new("java/lang/ThreadGroup"),
         Preload::new("java/lang/Thread"),
         Preload::new("java/lang/InheritableThreadLocal"),
+        Preload::new("java/lang/reflect/Constructor"),
     ];
 
     for preload in preload.iter() {

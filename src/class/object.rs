@@ -76,7 +76,7 @@ impl Object {
     pub(crate) fn new_array(array_cls: VmRef<Class>, len: usize) -> Self {
         let elem_cls = match array_cls.class_type() {
             ClassType::Array(elem) => elem,
-            _ => unreachable!(),
+            _ => unreachable!("not an array class"),
         };
 
         let default_value = match elem_cls.class_type() {
@@ -114,7 +114,6 @@ impl Object {
 
         // alloc string instance
         let (string_instance, string_class) = tls.exec_helper().instantiate("java/lang/String")?;
-        let fields = string_instance.fields().unwrap();
 
         // alloc char array
         let char_array_cls = classloader.get_primitive_array(PrimitiveDataType::Char);

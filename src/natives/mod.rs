@@ -6,6 +6,7 @@ use crate::types::DataValue;
 pub mod java_lang_class;
 pub mod java_lang_double;
 pub mod java_lang_float;
+pub mod java_lang_reflect_vmconstructor;
 pub mod java_lang_vmclass;
 pub mod java_lang_vmclassloader;
 pub mod java_lang_vmobject;
