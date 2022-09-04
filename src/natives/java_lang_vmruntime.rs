@@ -7,16 +7,15 @@ use crate::thread;
 
 use crate::types::DataValue;
 
-pub fn vm_map_library_name(mut args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+pub fn vm_map_library_name(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     #[cfg(not(any(unix, windows)))]
     compile_error!("unsupported target");
 
-    let arg = args.take(0);
-    let dll = arg.as_reference().expect("string expected");
+    let (dll_path_str,) = args.destructure::<(String,)>()?;
 
-    let mut dll_path = dll
-        .string_value_utf8()
-        .and_then(|s| libloading::library_filename(s).into_string().ok())
+    let mut dll_path = libloading::library_filename(&dll_path_str)
+        .into_string()
+        .ok()
         .expect("java/lang/String expected");
 
     let thread = thread::get();
@@ -38,12 +37,8 @@ pub fn vm_map_library_name(mut args: FunctionArgs) -> Result<Option<DataValue>, 
     }
 }
 
-pub fn vm_native_load(mut args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
-    let lib_name = args.take(1);
-    let lib_name = lib_name
-        .as_reference()
-        .and_then(|obj| obj.string_value_utf8())
-        .expect("not a string");
+pub fn vm_native_load(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    let (class_loader, lib_name) = args.destructure::<(VmRef<Object>, String)>()?;
 
     let thread = thread::get();
     let jvm = thread.global();
@@ -54,8 +49,6 @@ pub fn vm_native_load(mut args: FunctionArgs) -> Result<Option<DataValue>, VmRef
         log::debug!("native library {:?} is already loaded", lib_name);
         1
     } else {
-        let class_loader = args.take(0).into_reference().expect("not an object");
-
         log::debug!("loading native library {:?}", lib_name);
 
         let lib = NativeLibrary::load(&lib_name);

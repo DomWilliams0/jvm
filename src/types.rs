@@ -577,21 +577,21 @@ macro_rules! impl_data_value_type {
             }
         }
 
-        impl TryInto<$ty> for DataValue {
-            type Error = ();
+        impl TryFrom<DataValue> for $ty {
+            type Error = DataValue;
 
-            fn try_into(self) -> Result<$ty, Self::Error> {
-                if let Self::$variant(v) = self {
+            fn try_from(val: DataValue) -> Result<$ty, Self::Error> {
+                if let DataValue::$variant(v) = val {
                     Ok(v)
                 } else {
-                    Err(())
+                    Err(val)
                 }
             }
         }
     };
 }
 
-impl_data_value_type!(bool, Boolean);
+// impl_data_value_type!(bool, Boolean); // custom
 impl_data_value_type!(i8, Byte);
 impl_data_value_type!(i16, Short);
 impl_data_value_type!(i32, Int);
@@ -599,6 +599,25 @@ impl_data_value_type!(i64, Long);
 impl_data_value_type!(u16, Char);
 impl_data_value_type!(f32, Float);
 impl_data_value_type!(f64, Double);
+impl_data_value_type!(VmRef<Object>, Reference);
+
+impl From<bool> for DataValue {
+    fn from(v: bool) -> Self {
+        Self::Boolean(v)
+    }
+}
+
+impl TryFrom<DataValue> for bool {
+    type Error = DataValue;
+
+    fn try_from(val: DataValue) -> Result<bool, Self::Error> {
+        match val {
+            DataValue::Boolean(b) => Ok(b),
+            DataValue::Int(i) => Ok(i == 1),
+            val => Err(val),
+        }
+    }
+}
 
 impl<'a> MethodSignature<'a> {
     pub fn from_descriptor(descriptor: &'a mstr) -> Self {
@@ -736,12 +755,6 @@ impl FromStr for PrimitiveDataType {
             "long" => PrimitiveDataType::Long,
             _ => return Err(()),
         })
-    }
-}
-
-impl From<VmRef<Object>> for DataValue {
-    fn from(o: VmRef<Object>) -> Self {
-        Self::Reference(o)
     }
 }
 

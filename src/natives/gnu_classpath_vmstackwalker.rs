@@ -40,8 +40,8 @@ pub fn vm_get_class_context(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<
     Ok(Some(DataValue::Reference(array)))
 }
 
-pub fn vm_get_classloader(mut args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
-    let class_obj = args.take(0).into_reference().unwrap();
+pub fn vm_get_classloader(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    let (class_obj,) = args.destructure::<(VmRef<Object>,)>()?;
 
     let (vmdata, _) = class_obj.vmdata();
     let vmdata = vmdata.expect("vmdata not set");

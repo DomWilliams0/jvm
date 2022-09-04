@@ -8,9 +8,9 @@ use cafebabe::mutf8::StrExt;
 use cafebabe::MethodAccessFlags;
 
 pub fn vm_systemproperties_preinit(
-    mut args: FunctionArgs,
+    args: FunctionArgs,
 ) -> Result<Option<DataValue>, VmRef<Throwable>> {
-    let props = args.take(0).into_reference().unwrap();
+    let (props,) = args.destructure::<(VmRef<Object>,)>()?;
     // TODO actually do preInit
 
     let thread = thread::get();

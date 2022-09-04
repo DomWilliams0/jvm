@@ -1632,8 +1632,13 @@ impl<'a> From<&'a mut [DataValue]> for FunctionArgs<'a> {
 
 impl<'a> FunctionArgs<'a> {
     pub fn take(&mut self, idx: usize) -> DataValue {
-        let val = self.0.get_mut(idx).unwrap(); // verified
-        std::mem::replace(val, DataValue::Boolean(false))
+        self.try_take(idx)
+            .expect("bad arg index, should have been verified")
+    }
+
+    pub fn try_take(&mut self, idx: usize) -> Option<DataValue> {
+        let val = self.0.get_mut(idx)?;
+        Some(std::mem::replace(val, DataValue::Boolean(false)))
     }
 
     pub fn len(&self) -> usize {

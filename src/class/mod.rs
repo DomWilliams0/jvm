@@ -5,6 +5,7 @@ pub use class::{
 pub use loader::{ClassLoader, WhichLoader};
 pub use object::{null, Object, ObjectStorage};
 
+mod args;
 mod class;
 mod loader;
 mod object;

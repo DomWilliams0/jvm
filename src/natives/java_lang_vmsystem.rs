@@ -1,21 +1,17 @@
 use crate::alloc::{vmref_eq, VmRef};
-use crate::class::FunctionArgs;
+use crate::class::{FunctionArgs, Object};
 use crate::error::{Throwable, Throwables};
 use crate::types::DataValue;
 use log::*;
 
-pub fn vm_identity_hashcode(mut args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
-    // TODO dont unwrap
-    let obj = args.take(0).into_reference().unwrap();
+pub fn vm_identity_hashcode(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    let (obj,) = args.destructure::<(VmRef<Object>,)>()?;
     let hash = obj.identity_hashcode();
     Ok(Some(DataValue::Int(hash)))
 }
-pub fn vm_array_copy(mut args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
-    let src = args.take(4).into_reference().unwrap();
-    let src_start = args.take(3).as_int().unwrap();
-    let dst = args.take(2).into_reference().unwrap();
-    let dst_start = args.take(1).as_int().unwrap();
-    let len = args.take(0).as_int().unwrap();
+pub fn vm_array_copy(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    let (len, dst_start, dst, src_start, src) =
+        args.destructure::<(i32, i32, VmRef<Object>, i32, VmRef<Object>)>()?;
 
     let (src_end, src_overflowed) = src_start.overflowing_add(len);
     let (dst_end, dst_overflowed) = dst_start.overflowing_add(len);

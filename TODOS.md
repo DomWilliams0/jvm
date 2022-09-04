@@ -183,15 +183,15 @@
    * `// TODO this is definitely wrong`
  * [src/natives/java_lang_float.rs](src/natives/java_lang_float.rs) (1)
    * `// TODO this is definitely wrong`
- * [src/natives/java_lang_vmclass.rs](src/natives/java_lang_vmclass.rs) (1)
+ * [src/natives/java_lang_vmclass.rs](src/natives/java_lang_vmclass.rs) (2)
+   * `// TODO put this into helper`
    * `// TODO pass in cause for loading`
  * [src/natives/java_lang_vmclassloader.rs](src/natives/java_lang_vmclassloader.rs) (1)
    * `// TODO vm_get_primitive_class`
  * [src/natives/java_lang_vmruntime.rs](src/natives/java_lang_vmruntime.rs) (2)
    * `// TODO borrow version of classpath`
    * `// TODO non utf8 paths?`
- * [src/natives/java_lang_vmsystem.rs](src/natives/java_lang_vmsystem.rs) (3)
-   * `// TODO dont unwrap`
+ * [src/natives/java_lang_vmsystem.rs](src/natives/java_lang_vmsystem.rs) (2)
    * `// TODO check elements really are assignable`
    * `// TODO remove bounds check here, we just checked it explicitly`
  * [src/natives/java_lang_vmthread.rs](src/natives/java_lang_vmthread.rs) (1)

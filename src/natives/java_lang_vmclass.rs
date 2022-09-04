@@ -1,15 +1,16 @@
 use crate::alloc::VmRef;
-use crate::class::{null, FunctionArgs, WhichLoader};
+use crate::class::{FunctionArgs, Object, WhichLoader};
 use crate::error::{Throwable, Throwables};
 use crate::thread;
 use crate::types::DataValue;
 use cafebabe::mutf8::mstr;
-use itertools::Itertools;
+
 use log::{error, trace};
 use smallvec::SmallVec;
 
-pub fn vm_for_name(mut args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
-    let (loader, initialize, name) = args.take_all().next_tuple().unwrap(); // verified
+pub fn vm_for_name(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    let (loader, initialize, mut name) = args.destructure::<(VmRef<Object>, bool, String)>()?;
+
     trace!(
         "VMClass.forName({:?}, {:?}, {:?})",
         name,
@@ -17,14 +18,10 @@ pub fn vm_for_name(mut args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Th
         loader
     );
 
-    let mut name_str: String = name
-        .as_reference()
-        .and_then(|r| r.string_value_utf8())
-        .ok_or(Throwables::NullPointerException)?;
-
+    // TODO put this into helper
     // convert from java.lang.xyz to java/lang/xyz
     let mut byte_indices = SmallVec::<[_; 8]>::new();
-    for (i, c) in name_str.char_indices() {
+    for (i, c) in name.char_indices() {
         if c == '.' {
             byte_indices.push(i);
         }
@@ -32,27 +29,16 @@ pub fn vm_for_name(mut args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Th
 
     // safety: hasn't changed
     unsafe {
-        let bytes = name_str.as_bytes_mut();
+        let bytes = name.as_bytes_mut();
         for i in byte_indices {
             *bytes.get_unchecked_mut(i) = b'/';
         }
     }
 
-    let initialize = match initialize {
-        DataValue::Int(i) => i == 1,
-        DataValue::Boolean(b) => b,
-        _ => unreachable!(), // verified
-    };
-
-    let loader = match loader {
-        DataValue::Reference(r) => {
-            if r.is_null() {
-                WhichLoader::Bootstrap
-            } else {
-                WhichLoader::User(r)
-            }
-        }
-        _ => unreachable!(), // verified
+    let loader = if loader.is_null() {
+        WhichLoader::Bootstrap
+    } else {
+        WhichLoader::User(loader)
     };
 
     let state = thread::get();
@@ -60,7 +46,7 @@ pub fn vm_for_name(mut args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Th
     let loaded = state
         .global()
         .class_loader()
-        .load_class(&mstr::from_utf8(name_str.as_bytes()), loader)
+        .load_class(&mstr::from_utf8(name.as_bytes()), loader)
         .map_err(|e| {
             error!("failed to load class: {:?}", e);
             Throwables::ClassNotFoundException

@@ -3,8 +3,8 @@ use crate::class::{FunctionArgs, Object};
 use crate::error::{Throwable, Throwables};
 use crate::types::DataValue;
 
-pub fn vm_clone(mut args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
-    let obj = args.take(0).into_reference().unwrap();
+pub fn vm_clone(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    let (obj,) = args.destructure::<(VmRef<Object>,)>()?;
     let obj_cls = obj.class().ok_or(Throwables::NullPointerException)?;
 
     let storage = obj.storage().clone();
@@ -14,8 +14,8 @@ pub fn vm_clone(mut args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throw
     Ok(Some(DataValue::Reference(clone)))
 }
 
-pub fn vm_get_class(mut args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
-    let obj = args.take(0).into_reference().unwrap();
+pub fn vm_get_class(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    let (obj,) = args.destructure::<(VmRef<Object>,)>()?;
     let obj_cls = obj.class().ok_or(Throwables::NullPointerException)?;
     Ok(Some(DataValue::Reference(obj_cls.class_object().clone())))
 }
