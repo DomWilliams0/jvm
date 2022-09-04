@@ -2384,7 +2384,7 @@ impl Ldc {
                 }
 
                 // create string instance
-                let string_instance = vmref_alloc_object(|| Object::new_string(s.as_mstr()))?;
+                let string_instance = Object::new_string(s.as_mstr())?;
 
                 // TODO natively intern new string instance
                 DataValue::Reference(string_instance)

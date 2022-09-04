@@ -4,19 +4,19 @@ use std::mem::MaybeUninit;
 use std::sync::Arc;
 
 use log::*;
-use parking_lot::RwLock;
 
-use crate::alloc::{vmref_alloc_object, VmRef};
+use crate::alloc::VmRef;
 
-use crate::class::{null, FieldSearchType, Object};
-use crate::error::{Throwable, Throwables, VmResult};
-use crate::interpreter::{Frame, Interpreter};
+use crate::class::Object;
+use crate::error::{Throwable, VmResult};
+use crate::exec_helper::ExecHelper;
+use crate::interpreter::Interpreter;
 use crate::jni::sys::JNIEnv;
 use crate::jvm::JvmGlobalState;
 use crate::types::DataValue;
-use crate::JvmError;
+
 use cafebabe::mutf8::StrExt;
-use cafebabe::MethodAccessFlags;
+
 use std::thread::ThreadId;
 
 /// Each thread has its own in TLS
@@ -82,60 +82,30 @@ pub fn initialise(state: Arc<JvmThreadState>) -> bool {
 pub fn init_main_vmthread() -> VmResult<()> {
     let state = get();
     let classloader = state.global().class_loader();
+    let helper = state.exec_helper();
 
     // find root threadgroup
     let threadgroup_cls = classloader.get_bootstrap_class("java/lang/ThreadGroup");
     let root_threadgroup = threadgroup_cls.get_static_field("root", "Ljava/lang/ThreadGroup;");
 
-    // create thread instance
-    let thread_cls = classloader.get_bootstrap_class("java/lang/Thread");
-    let thread_constructor = thread_cls
-        .find_instance_constructor("(Ljava/lang/VMThread;Ljava/lang/String;IZ)V".as_mstr())
-        .ok_or(Throwables::Other("java/lang/NoSuchMethodError"))?;
-    let thread_instance = vmref_alloc_object(|| Ok(Object::new(thread_cls)))?;
-
     // create vmthread instance
-    let vmthread_cls = classloader.get_bootstrap_class("java/lang/VMThread");
-    let vmthread_instance = vmref_alloc_object(|| Ok(Object::new(vmthread_cls)))?;
+    let (vmthread_instance, _) = helper.instantiate("java/lang/VMThread")?;
 
-    // invoke thread constructor
-    {
-        let interp = state.interpreter();
-        let frame = Frame::new_with_args(
-            thread_constructor,
-            [
-                DataValue::Reference(thread_instance.clone()),   // this
-                DataValue::Reference(vmthread_instance.clone()), // vmthread
-                DataValue::Reference(vmref_alloc_object(|| Object::new_string_utf8("main"))?), // name
-                DataValue::Int(5),         // priority
-                DataValue::Boolean(false), // daemon
-            ]
-            .into_iter()
-            .rev(), // args are in reverse order
-        )
-        .unwrap();
-
-        if let Err(exc) = interp.execute_frame(frame) {
-            let exc_name = exc.class_name;
-            state.set_exception(exc);
-            error!("failed to create thread instance");
-            return Err(Throwables::Other(exc_name)); // unsure this is fine
-        }
-    }
+    // create thread instance
+    let thread_instance = helper.instantiate_and_invoke_constructor(
+        "java/lang/Thread",
+        "(Ljava/lang/VMThread;Ljava/lang/String;IZ)V",
+        [
+            DataValue::Reference(vmthread_instance.clone()), // vmthread
+            DataValue::Reference(Object::new_string_utf8("main")?), // name
+            DataValue::Int(5),                               // priority
+            DataValue::Boolean(false),                       // daemon
+        ]
+        .into_iter(),
+    )?;
 
     // touch up vmthread fields
-    let set_field = |obj: &Object, name: &'static str, value: DataValue| -> VmResult<()> {
-        let name = name.to_mstr();
-        let datatype = value.data_type();
-        trace!("setting vmthread field {:?} to {:?}", name, value);
-        let field_id = obj
-            .find_field_in_this_only(name.as_ref(), &datatype, FieldSearchType::Instance)
-            .ok_or(Throwables::Other("java/lang/NoSuchFieldError"))?;
-
-        obj.fields().unwrap().ensure_set(field_id, value);
-        Ok(())
-    };
-    set_field(
+    helper.set_instance_field(
         &vmthread_instance,
         "thread",
         DataValue::Reference(thread_instance.clone()),
@@ -144,57 +114,23 @@ pub fn init_main_vmthread() -> VmResult<()> {
     state.set_vmthread(vmthread_instance);
 
     // attach to thread group
-    {
-        let threadgroup_add = threadgroup_cls.find_callable_method(
-            "addThread".as_mstr(),
-            "(Ljava/lang/Thread;)V".as_mstr(),
-            MethodAccessFlags::empty(),
-        )?;
-        let interp = state.interpreter();
-        let frame = Frame::new_with_args(
-            threadgroup_add,
-            [
-                root_threadgroup.clone(),                      // this
-                DataValue::Reference(thread_instance.clone()), // thread
-            ]
-            .into_iter()
-            .rev(), // args are in reverse order
-        )
-        .unwrap();
+    helper.invoke_instance_method(
+        root_threadgroup.clone(),
+        threadgroup_cls,
+        "addThread",
+        "(Ljava/lang/Thread;)V",
+        once(DataValue::Reference(thread_instance.clone())),
+    )?;
 
-        if let Err(exc) = interp.execute_frame(frame) {
-            let exc_name = exc.class_name;
-            state.set_exception(exc);
-            error!("failed to add thread to thread group");
-            return Err(Throwables::Other(exc_name));
-        }
-
-        set_field(&thread_instance.clone(), "group", root_threadgroup)?;
-    }
+    helper.set_instance_field(&thread_instance, "group", root_threadgroup)?;
 
     // inheritable thread local is required apparently
-    {
-        let inheritablelocal_cls =
-            classloader.get_bootstrap_class("java/lang/InheritableThreadLocal");
-        let inheritable_local_newchildthread = inheritablelocal_cls.find_callable_method(
-            "newChildThread".as_mstr(),
-            "(Ljava/lang/Thread;)V".as_mstr(),
-            MethodAccessFlags::STATIC,
-        )?;
-        let interp = state.interpreter();
-        let frame = Frame::new_with_args(
-            inheritable_local_newchildthread,
-            once(DataValue::Reference(thread_instance)),
-        )
-        .unwrap();
-
-        if let Err(exc) = interp.execute_frame(frame) {
-            let exc_name = exc.class_name;
-            state.set_exception(exc);
-            error!("failed to add thread to InheritableThreadLocal");
-            return Err(Throwables::Other(exc_name));
-        }
-    }
+    helper.invoke_static_method(
+        "java/lang/InheritableThreadLocal",
+        "newChildThread",
+        "(Ljava/lang/Thread;)V",
+        once(DataValue::Reference(thread_instance)),
+    )?;
 
     Ok(())
 }
@@ -322,5 +258,9 @@ impl JvmThreadState {
             "java/lang/VMThread".as_mstr()
         );
         self.jvm_thread.replace(Some(vm_thread));
+    }
+
+    pub fn exec_helper(&self) -> ExecHelper {
+        ExecHelper::new(self)
     }
 }

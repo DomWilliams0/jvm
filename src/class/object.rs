@@ -97,11 +97,11 @@ impl Object {
         Self::with_storage(array_cls, ObjectStorage::Array(Mutex::new(data)))
     }
 
-    pub(crate) fn new_string(contents: &mstr) -> VmResult<Object> {
-        Self::new_string_utf8(&*contents.to_utf8())
+    pub(crate) fn new_string(contents: &mstr) -> VmResult<VmRef<Object>> {
+        Self::new_string_utf8(&contents.to_utf8())
     }
 
-    pub(crate) fn new_string_utf8(contents: &str) -> VmResult<Object> {
+    pub(crate) fn new_string_utf8(contents: &str) -> VmResult<VmRef<Object>> {
         // encode for java/lang/String
         let utf16 = contents.encode_utf16().collect_vec();
         let string_length = utf16.len();
@@ -113,8 +113,7 @@ impl Object {
         let classloader = tls.global().class_loader();
 
         // alloc string instance
-        let string_class = classloader.get_bootstrap_class("java/lang/String");
-        let string_instance = Object::new(string_class);
+        let (string_instance, string_class) = tls.exec_helper().instantiate("java/lang/String")?;
         let fields = string_instance.fields().unwrap();
 
         // alloc char array
@@ -130,23 +129,20 @@ impl Object {
             }
         }
 
-        let set_field = |name: &'static str, value: DataValue| -> VmResult<()> {
-            let name = name.to_mstr();
-            let datatype = value.data_type();
-            trace!("setting string field {:?} to {:?}", name, value);
-            let field_id = string_instance
-                .find_field_in_this_only(name.as_ref(), &datatype, FieldSearchType::Instance)
-                .ok_or(Throwables::Other("java/lang/NoSuchFieldError"))?;
-
-            fields.ensure_set(field_id, value);
-            Ok(())
-        };
-
-        set_field("value", DataValue::Reference(char_array))?;
-        set_field("count", DataValue::Int(string_length as i32))?;
+        tls.exec_helper().set_instance_field(
+            &string_instance,
+            "value",
+            DataValue::Reference(char_array),
+        )?;
+        tls.exec_helper().set_instance_field(
+            &string_instance,
+            "count",
+            DataValue::Int(string_length as i32),
+        )?;
 
         Ok(string_instance)
     }
+
     pub fn is_null(&self) -> bool {
         VmRef::ptr_eq(&self.class, &NULL.class)
     }

@@ -31,8 +31,8 @@ pub fn vm_systemproperties_preinit(
         log::debug!("setting property {:?} => {:?}", key, val);
 
         // alloc jvm string
-        let key = vmref_alloc_object(|| Object::new_string(&key.to_mstr())).expect("bad key");
-        let val = vmref_alloc_object(|| Object::new_string(&val.to_mstr())).expect("bad value");
+        let key = Object::new_string(&key.to_mstr()).expect("bad key");
+        let val = Object::new_string(&val.to_mstr()).expect("bad value");
 
         // make frame for method call
         //                           2    1      0 (this)

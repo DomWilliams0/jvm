@@ -1,4 +1,4 @@
-# TODOs (180)
+# TODOs (182)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -84,6 +84,9 @@
    * `// TODO reference to class instead of name`
    * `// TODO reference to cause`
    * `// TODO backtrace`
+ * [src/exec_helper.rs](src/exec_helper.rs) (2)
+   * `// TODO class arg should be a trait for either class name &str or class reference`
+   * `.unwrap(); // TODO handle exc`
  * [src/interpreter/error.rs](src/interpreter/error.rs) (1)
    * `// TODO combine repetetive errors for different data types`
  * [src/interpreter/frame.rs](src/interpreter/frame.rs) (8)

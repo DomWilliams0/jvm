@@ -11,6 +11,7 @@ mod classpath;
 mod constant_pool;
 mod debug;
 mod error;
+mod exec_helper;
 mod interpreter;
 mod jit;
 mod jni;

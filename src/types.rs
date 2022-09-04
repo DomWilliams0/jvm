@@ -739,6 +739,12 @@ impl FromStr for PrimitiveDataType {
     }
 }
 
+impl From<VmRef<Object>> for DataValue {
+    fn from(o: VmRef<Object>) -> Self {
+        Self::Reference(o)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::types::{
