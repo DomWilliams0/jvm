@@ -129,11 +129,11 @@ impl<'c> ClassFile<'c> {
         self.interfaces.len()
     }
 
-    pub fn fields(&self) -> impl ExactSizeIterator<Item = &FieldInfo> {
+    pub fn fields(&self) -> impl Iterator<Item = &FieldInfo> + ExactSizeIterator {
         self.fields.iter()
     }
 
-    pub fn methods(&self) -> impl ExactSizeIterator<Item = &MethodInfo> {
+    pub fn methods(&self) -> impl Iterator<Item = &MethodInfo>+ExactSizeIterator {
         self.methods.iter()
     }
     pub fn attribute<A: Attribute>(&self) -> ClassResult<A> {

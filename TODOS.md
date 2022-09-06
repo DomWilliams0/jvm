@@ -1,4 +1,4 @@
-# TODOs (183)
+# TODOs (182)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -187,8 +187,6 @@
  * [src/natives/java_lang_vmclass.rs](src/natives/java_lang_vmclass.rs) (2)
    * `// TODO put this into helper`
    * `// TODO pass in cause for loading`
- * [src/natives/java_lang_vmclassloader.rs](src/natives/java_lang_vmclassloader.rs) (1)
-   * `// TODO vm_get_primitive_class`
  * [src/natives/java_lang_vmruntime.rs](src/natives/java_lang_vmruntime.rs) (2)
    * `// TODO borrow version of classpath`
    * `// TODO non utf8 paths?`

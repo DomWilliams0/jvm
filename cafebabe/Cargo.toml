@@ -6,6 +6,10 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[[bin]]
+name = "find_native"
+path = "src/find_native.rs"
+
 [dependencies]
 thiserror = "1.0"
 byte = "0.2"
@@ -13,3 +17,9 @@ log = "0.4"
 num_enum = "0.5"
 bitflags = "1.2"
 mutf8 = { git = "https://github.com/DomWilliams0/mutf8" }
+
+glob = { version = "0.3", optional = true }
+itertools = { version = "0.10", optional = true }
+
+[features]
+find_native_bin = ["glob", "itertools"]
