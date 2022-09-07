@@ -570,12 +570,16 @@ impl<'a> From<Option<&'a DataValue>> for ReturnType<'static> {
 }
 
 macro_rules! impl_data_value_type {
-    ($ty:ty, $variant:ident) => {
+    (@from $ty:ty, $variant:ident) => {
         impl From<$ty> for DataValue {
             fn from(v: $ty) -> Self {
                 Self::$variant(v)
             }
         }
+    };
+
+    ($ty:ty, $variant:ident) => {
+        impl_data_value_type!(@from $ty, $variant);
 
         impl TryFrom<DataValue> for $ty {
             type Error = DataValue;
@@ -591,21 +595,15 @@ macro_rules! impl_data_value_type {
     };
 }
 
-// impl_data_value_type!(bool, Boolean); // custom
+impl_data_value_type!(@from bool, Boolean); // custom
 impl_data_value_type!(i8, Byte);
 impl_data_value_type!(i16, Short);
 impl_data_value_type!(i32, Int);
 impl_data_value_type!(i64, Long);
-impl_data_value_type!(u16, Char);
+impl_data_value_type!(@from u16, Char); // custom
 impl_data_value_type!(f32, Float);
 impl_data_value_type!(f64, Double);
 impl_data_value_type!(VmRef<Object>, Reference);
-
-impl From<bool> for DataValue {
-    fn from(v: bool) -> Self {
-        Self::Boolean(v)
-    }
-}
 
 impl TryFrom<DataValue> for bool {
     type Error = DataValue;
@@ -614,6 +612,18 @@ impl TryFrom<DataValue> for bool {
         match val {
             DataValue::Boolean(b) => Ok(b),
             DataValue::Int(i) => Ok(i == 1),
+            val => Err(val),
+        }
+    }
+}
+
+impl TryFrom<DataValue> for u16 {
+    type Error = DataValue;
+
+    fn try_from(val: DataValue) -> Result<Self, Self::Error> {
+        match val {
+            DataValue::Char(c) => Ok(c),
+            DataValue::Int(i) => u16::try_from(i).map_err(|_| val),
             val => Err(val),
         }
     }

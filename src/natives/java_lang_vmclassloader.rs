@@ -17,17 +17,12 @@ pub fn load_class(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>
 }
 
 pub fn get_primitive_class(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
-    let (str,) = args.destructure::<(String,)>()?;
+    let (chr,) = args.destructure::<(u16,)>()?;
 
-    let prim_type = str
-        .parse::<PrimitiveDataType>()
-        .expect("invalid primitive type");
-
-    let cls = thread::get()
-        .global()
-        .class_loader()
-        .get_primitive(prim_type);
-    Ok(Some(DataValue::Reference(cls.class_object().to_owned())))
+    Ok(PrimitiveDataType::from_char(chr as u8).map(|ty| {
+        let cls = thread::get().global().class_loader().get_primitive(ty);
+        DataValue::Reference(cls.class_object().to_owned())
+    }))
 }
 
 pub fn find_loaded_class(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
