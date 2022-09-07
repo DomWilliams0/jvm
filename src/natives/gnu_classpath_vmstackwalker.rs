@@ -38,6 +38,7 @@ pub fn get_class_context(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Thr
     Ok(Some(DataValue::Reference(array)))
 }
 
+/// (Ljava/lang/Class;)Ljava/lang/ClassLoader;
 pub fn get_class_loader(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     let (class_obj,) = args.destructure::<(VmRef<Object>,)>()?;
 

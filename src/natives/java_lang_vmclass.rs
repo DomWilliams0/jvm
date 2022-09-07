@@ -10,58 +10,72 @@ use log::{error, trace};
 use smallvec::SmallVec;
 use std::iter::once;
 
+/// (Ljava/lang/Class;Ljava/lang/Object;)Z
 pub fn is_instance(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     todo!("native method java_lang_vmclass::is_instance")
 }
 
+/// (Ljava/lang/Class;Ljava/lang/Class;)Z
 pub fn is_assignable_from(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     todo!("native method java_lang_vmclass::is_assignable_from")
 }
 
+/// (Ljava/lang/Class;)Z
 pub fn is_interface(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     todo!("native method java_lang_vmclass::is_interface")
 }
 
+/// (Ljava/lang/Class;)Z
 pub fn is_primitive(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     todo!("native method java_lang_vmclass::is_primitive")
 }
 
+/// (Ljava/lang/Class;)Ljava/lang/String;
 pub fn get_name(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     todo!("native method java_lang_vmclass::get_name")
 }
 
+/// (Ljava/lang/Class;)Ljava/lang/Class;
 pub fn get_superclass(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     todo!("native method java_lang_vmclass::get_superclass")
 }
 
+/// (Ljava/lang/Class;)[Ljava/lang/Class;
 pub fn get_interfaces(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     todo!("native method java_lang_vmclass::get_interfaces")
 }
 
+/// (Ljava/lang/Class;)Ljava/lang/Class;
 pub fn get_component_type(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     todo!("native method java_lang_vmclass::get_component_type")
 }
 
+/// (Ljava/lang/Class;Z)I
 pub fn get_modifiers(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     todo!("native method java_lang_vmclass::get_modifiers")
 }
 
+/// (Ljava/lang/Class;)Ljava/lang/Class;
 pub fn get_declaring_class(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     todo!("native method java_lang_vmclass::get_declaring_class")
 }
 
+/// (Ljava/lang/Class;Z)[Ljava/lang/Class;
 pub fn get_declared_classes(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     todo!("native method java_lang_vmclass::get_declared_classes")
 }
 
+/// (Ljava/lang/Class;Z)[Ljava/lang/reflect/Field;
 pub fn get_declared_fields(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     todo!("native method java_lang_vmclass::get_declared_fields")
 }
 
+/// (Ljava/lang/Class;Z)[Ljava/lang/reflect/Method;
 pub fn get_declared_methods(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     todo!("native method java_lang_vmclass::get_declared_methods")
 }
 
+/// (Ljava/lang/Class;Z)[Ljava/lang/reflect/Constructor;
 pub fn get_declared_constructors(
     args: FunctionArgs,
 ) -> Result<Option<DataValue>, VmRef<Throwable>> {
@@ -125,10 +139,12 @@ pub fn get_declared_constructors(
     Ok(Some(DataValue::Reference(arr)))
 }
 
+/// (Ljava/lang/Class;)Ljava/lang/ClassLoader;
 pub fn get_class_loader(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     todo!("native method java_lang_vmclass::get_class_loader")
 }
 
+/// (Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;
 pub fn for_name(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     let (mut name, initialize, loader) = args.destructure::<(String, bool, VmRef<Object>)>()?;
 
@@ -180,42 +196,52 @@ pub fn for_name(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable
     Ok(Some(DataValue::Reference(loaded.class_object().clone())))
 }
 
+/// (Ljava/lang/Class;)Z
 pub fn is_array(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     todo!("native method java_lang_vmclass::is_array")
 }
 
+/// (Ljava/lang/Throwable;)V
 pub fn throw_exception(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     todo!("native method java_lang_vmclass::throw_exception")
 }
 
+/// (Ljava/lang/Class;)[Ljava/lang/annotation/Annotation;
 pub fn get_declared_annotations(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     todo!("native method java_lang_vmclass::get_declared_annotations")
 }
 
+/// (Ljava/lang/Class;)Ljava/lang/Class;
 pub fn get_enclosing_class(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     todo!("native method java_lang_vmclass::get_enclosing_class")
 }
 
+/// (Ljava/lang/Class;)Ljava/lang/reflect/Constructor;
 pub fn get_enclosing_constructor(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     todo!("native method java_lang_vmclass::get_enclosing_constructor")
 }
 
+/// (Ljava/lang/Class;)Ljava/lang/reflect/Method;
 pub fn get_enclosing_method(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     todo!("native method java_lang_vmclass::get_enclosing_method")
 }
 
+/// (Ljava/lang/Class;)Ljava/lang/String;
 pub fn get_class_signature(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     todo!("native method java_lang_vmclass::get_class_signature")
 }
 
+/// (Ljava/lang/Class;)Z
 pub fn is_anonymous_class(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     todo!("native method java_lang_vmclass::is_anonymous_class")
 }
 
+/// (Ljava/lang/Class;)Z
 pub fn is_local_class(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     todo!("native method java_lang_vmclass::is_local_class")
 }
 
+/// (Ljava/lang/Class;)Z
 pub fn is_member_class(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     todo!("native method java_lang_vmclass::is_member_class")
 }

@@ -60,7 +60,7 @@ mod nice {
 
             s
         };
-        format!("{rust}::{final_cls}_{method}")
+        format!("{rust}::{method}")
     }
 
     impl Collect {
@@ -133,14 +133,6 @@ mod nice {
 
         // preload
         {
-            //          Preload::with_natives(
-            //          "gnu/classpath/VMSystemProperties",
-            //          &[(
-            //          "preInit",
-            //          "(Ljava/util/Properties;)V",
-            //          gnu_classpath_vmsystemproperties::preinit,
-            //          )],
-            //          ),
             let mut f = File::create(out.join("preload.txt"))?;
             for (cls, methods) in &collect
                 .methods
@@ -162,9 +154,7 @@ mod nice {
                     let rust = rust_method_name(&cls, &m.name);
                     write!(
                         &mut f,
-                        r#"
-                        ("{}", "{}", {}),
-                "#,
+                        r#"("{}", "{}", {}),"#,
                         m.name, m.desc, rust
                     )?;
                 }
@@ -187,8 +177,7 @@ mod nice {
                 let mut f = File::create(buf)?;
                 write!(
                     &mut f,
-                    r#"
-use crate::alloc::VmRef;
+                    r#"use crate::alloc::VmRef;
 use crate::class::FunctionArgs;
 use crate::error::Throwable;
 use crate::types::DataValue;
@@ -202,12 +191,12 @@ use crate::types::DataValue;
                     write!(
                         &mut f,
                         r#"
+/// {}
 pub fn {}(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {{
     todo!("native method {}")
 }}
-
-                "#,
-                        name, fq_name
+"#,
+                        m.desc, name, fq_name
                     )?;
                 }
             }

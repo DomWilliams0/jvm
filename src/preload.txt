@@ -365,10 +365,10 @@ Preload::with_natives(
 Preload::with_natives(
 "java/nio/MappedByteBufferImpl",
 &[
-("unmapImpl", "()V", java_nio_mappedbytebufferimpl::mappedbytebufferimpl_unmap_impl),
-("isLoadedImpl", "()Z", java_nio_mappedbytebufferimpl::mappedbytebufferimpl_is_loaded_impl),
-("loadImpl", "()V", java_nio_mappedbytebufferimpl::mappedbytebufferimpl_load_impl),
-("forceImpl", "()V", java_nio_mappedbytebufferimpl::mappedbytebufferimpl_force_impl),
+("unmapImpl", "()V", java_nio_mappedbytebufferimpl::unmap_impl),
+("isLoadedImpl", "()Z", java_nio_mappedbytebufferimpl::is_loaded_impl),
+("loadImpl", "()V", java_nio_mappedbytebufferimpl::load_impl),
+("forceImpl", "()V", java_nio_mappedbytebufferimpl::force_impl),
 ]),
 Preload::with_natives(
 "java/nio/VMDirectByteBuffer",
@@ -390,7 +390,7 @@ Preload::with_natives(
 Preload::with_natives(
 "java/util/concurrent/atomic/AtomicLong",
 &[
-("VMSupportsCS8", "()Z", java_util_concurrent_atomic_atomiclong::atomiclong__v_m_supports_c_s8),
+("VMSupportsCS8", "()Z", java_util_concurrent_atomic_atomiclong::_v_m_supports_c_s8),
 ]),
 Preload::with_natives(
 "sun/misc/Unsafe",

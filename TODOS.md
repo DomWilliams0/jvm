@@ -1,4 +1,4 @@
-# TODOs (182)
+# TODOs (177)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -176,14 +176,6 @@
    * `// TODO generic -D arg collection`
  * [src/natives/gnu_classpath_vmsystemproperties.rs](src/natives/gnu_classpath_vmsystemproperties.rs) (1)
    * `// TODO actually do preInit`
- * [src/natives/java_lang_class.rs](src/natives/java_lang_class.rs) (2)
-   * `// TODO actually register natives`
-   * `// TODO get actual assertion status`
- * [src/natives/java_lang_double.rs](src/natives/java_lang_double.rs) (2)
-   * `// TODO this is definitely wrong`
-   * `// TODO this is definitely wrong`
- * [src/natives/java_lang_float.rs](src/natives/java_lang_float.rs) (1)
-   * `// TODO this is definitely wrong`
  * [src/natives/java_lang_vmclass.rs](src/natives/java_lang_vmclass.rs) (2)
    * `// TODO put this into helper`
    * `// TODO pass in cause for loading`
