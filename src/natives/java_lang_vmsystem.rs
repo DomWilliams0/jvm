@@ -2,14 +2,43 @@ use crate::alloc::{vmref_eq, VmRef};
 use crate::class::{FunctionArgs, Object};
 use crate::error::{Throwable, Throwables};
 use crate::types::DataValue;
-use log::*;
+use log::trace;
 
-pub fn vm_identity_hashcode(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+pub fn set_in(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    todo!("native method java_lang_vmsystem::set_in")
+}
+
+pub fn set_out(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    todo!("native method java_lang_vmsystem::set_out")
+}
+
+pub fn set_err(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    todo!("native method java_lang_vmsystem::set_err")
+}
+
+pub fn current_time_millis(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    todo!("native method java_lang_vmsystem::current_time_millis")
+}
+
+pub fn nano_time(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    todo!("native method java_lang_vmsystem::nano_time")
+}
+
+pub fn environ(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    todo!("native method java_lang_vmsystem::environ")
+}
+
+pub fn getenv(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    todo!("native method java_lang_vmsystem::getenv")
+}
+
+pub fn identity_hash_code(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     let (obj,) = args.destructure::<(VmRef<Object>,)>()?;
     let hash = obj.identity_hashcode();
     Ok(Some(DataValue::Int(hash)))
 }
-pub fn vm_array_copy(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+
+pub fn arraycopy(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     let (src, src_start, dst, dst_start, len) =
         args.destructure::<(VmRef<Object>, i32, VmRef<Object>, i32, i32)>()?;
 

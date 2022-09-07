@@ -4,10 +4,53 @@ use crate::classpath::ClassPath;
 use crate::error::Throwable;
 use crate::jni::NativeLibrary;
 use crate::thread;
-
 use crate::types::DataValue;
 
-pub fn vm_map_library_name(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+pub fn available_processors(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    todo!("native method java_lang_vmruntime::available_processors")
+}
+
+pub fn free_memory(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    todo!("native method java_lang_vmruntime::free_memory")
+}
+
+pub fn total_memory(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    todo!("native method java_lang_vmruntime::total_memory")
+}
+
+pub fn max_memory(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    todo!("native method java_lang_vmruntime::max_memory")
+}
+
+pub fn gc(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    todo!("native method java_lang_vmruntime::gc")
+}
+
+pub fn run_finalization(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    todo!("native method java_lang_vmruntime::run_finalization")
+}
+
+pub fn run_finalization_for_exit(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    todo!("native method java_lang_vmruntime::run_finalization_for_exit")
+}
+
+pub fn trace_instructions(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    todo!("native method java_lang_vmruntime::trace_instructions")
+}
+
+pub fn trace_method_calls(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    todo!("native method java_lang_vmruntime::trace_method_calls")
+}
+
+pub fn run_finalizers_on_exit(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    todo!("native method java_lang_vmruntime::run_finalizers_on_exit")
+}
+
+pub fn exit(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    todo!("native method java_lang_vmruntime::exit")
+}
+
+pub fn map_library_name(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     #[cfg(not(any(unix, windows)))]
     compile_error!("unsupported target");
 
@@ -37,7 +80,7 @@ pub fn vm_map_library_name(args: FunctionArgs) -> Result<Option<DataValue>, VmRe
     }
 }
 
-pub fn vm_native_load(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+pub fn native_load(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     let (lib_name, class_loader) = args.destructure::<(String, VmRef<Object>)>()?;
 
     let thread = thread::get();

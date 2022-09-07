@@ -7,9 +7,7 @@ use crate::types::DataValue;
 use cafebabe::mutf8::StrExt;
 use cafebabe::MethodAccessFlags;
 
-pub fn vm_systemproperties_preinit(
-    args: FunctionArgs,
-) -> Result<Option<DataValue>, VmRef<Throwable>> {
+pub fn pre_init(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     let (props,) = args.destructure::<(VmRef<Object>,)>()?;
     // TODO actually do preInit
 

@@ -5,9 +5,7 @@ use crate::interpreter::FrameInfo;
 use crate::thread;
 use crate::types::DataValue;
 
-// TODO native impls for other VMStackWalker methods
-
-pub fn vm_get_class_context(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+pub fn get_class_context(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     let thread = thread::get();
 
     // collect classes
@@ -40,7 +38,7 @@ pub fn vm_get_class_context(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<
     Ok(Some(DataValue::Reference(array)))
 }
 
-pub fn vm_get_classloader(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+pub fn get_class_loader(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     let (class_obj,) = args.destructure::<(VmRef<Object>,)>()?;
 
     let (vmdata, _) = class_obj.vmdata();

@@ -39,7 +39,27 @@ mod nice {
         if final_cls.starts_with("vm") {
             final_cls.insert(2, '_');
         }
-        let method = method.to_lowercase();
+        let method = {
+            let mut s = String::new();
+            let mut left = method;
+            loop {
+                // preInit
+                let next = match left.chars().position(|c| c.is_uppercase()) {
+                    None => {
+                        s.push_str(left);
+                        break
+                    },
+                    Some(i) => i,
+                };
+
+                s.extend(left.chars().take(next));
+                s.push('_');
+                s.extend(left.chars().nth(next).unwrap().to_lowercase());
+                left = &left[next+1..];
+            }
+
+            s
+        };
         format!("{rust}::{final_cls}_{method}")
     }
 
@@ -107,7 +127,7 @@ mod nice {
                 .collect_vec();
 
             for cls in classes {
-                write!(&mut f, "mod {};\n", cls_to_rustfile(&cls))?;
+                write!(&mut f, "pub mod {};\n", cls_to_rustfile(&cls))?;
             }
         }
 
@@ -118,7 +138,7 @@ mod nice {
             //          &[(
             //          "preInit",
             //          "(Ljava/util/Properties;)V",
-            //          gnu_classpath_vmsystemproperties::vm_systemproperties_preinit,
+            //          gnu_classpath_vmsystemproperties::preinit,
             //          )],
             //          ),
             let mut f = File::create(out.join("preload.txt"))?;
@@ -149,7 +169,7 @@ mod nice {
                     )?;
                 }
 
-                write!(&mut f, "],")?;
+                write!(&mut f, "]),")?;
             }
         }
 
@@ -183,7 +203,7 @@ use crate::types::DataValue;
                         &mut f,
                         r#"
 pub fn {}(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {{
-    todo!("native method {}");
+    todo!("native method {}")
 }}
 
                 "#,
@@ -215,8 +235,8 @@ pub fn {}(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {{
         #[test]
         fn method_name() {
             assert_eq!(
-                rust_method_name("gnu/classpath/VMSystemProperties", "preInit"),
-                "gnu_classpath_vmsystemproperties::vm_systemproperties_preinit"
+                rust_method_name("gnu/classpath/VMSystemProperties", "preInitNice"),
+                "gnu_classpath_vmsystemproperties::pre_init_nice"
             )
         }
     }

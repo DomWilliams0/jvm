@@ -3,7 +3,13 @@ use crate::class::{FunctionArgs, Object};
 use crate::error::{Throwable, Throwables};
 use crate::types::DataValue;
 
-pub fn vm_clone(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+pub fn get_class(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    let (obj,) = args.destructure::<(VmRef<Object>,)>()?;
+    let obj_cls = obj.class().ok_or(Throwables::NullPointerException)?;
+    Ok(Some(DataValue::Reference(obj_cls.class_object().clone())))
+}
+
+pub fn clone(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
     let (obj,) = args.destructure::<(VmRef<Object>,)>()?;
     let obj_cls = obj.class().ok_or(Throwables::NullPointerException)?;
 
@@ -14,8 +20,14 @@ pub fn vm_clone(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable
     Ok(Some(DataValue::Reference(clone)))
 }
 
-pub fn vm_get_class(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
-    let (obj,) = args.destructure::<(VmRef<Object>,)>()?;
-    let obj_cls = obj.class().ok_or(Throwables::NullPointerException)?;
-    Ok(Some(DataValue::Reference(obj_cls.class_object().clone())))
+pub fn notify(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    todo!("native method java_lang_vmobject::notify")
+}
+
+pub fn notify_all(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    todo!("native method java_lang_vmobject::notify_all")
+}
+
+pub fn wait(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    todo!("native method java_lang_vmobject::wait")
 }

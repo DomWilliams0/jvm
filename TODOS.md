@@ -24,6 +24,8 @@
    * `// TODO actually intern strings`
    * `// TODO methods on VmRef newtype`
    * `// TODO oom error`
+ * [src/bootstrap.rs](src/bootstrap.rs) (1)
+   * `// TODO remove class name from start of native methods`
  * [src/class/class.rs](src/class/class.rs) (24)
    * `// TODO when a ClassLoader is dropped, ensure all native libraries associated with it are freed too`
    * `/// TODO weak reference for cyclic reference?`
@@ -172,8 +174,6 @@
    * `// TODO wait for threads to die, unintialise TLS, assert this is the last ref to global state`
    * `// TODO standard jvm args`
    * `// TODO generic -D arg collection`
- * [src/natives/gnu_classpath_vmstackwalker.rs](src/natives/gnu_classpath_vmstackwalker.rs) (1)
-   * `// TODO native impls for other VMStackWalker methods`
  * [src/natives/gnu_classpath_vmsystemproperties.rs](src/natives/gnu_classpath_vmsystemproperties.rs) (1)
    * `// TODO actually do preInit`
  * [src/natives/java_lang_class.rs](src/natives/java_lang_class.rs) (2)
