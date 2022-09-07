@@ -14,6 +14,7 @@ use cafebabe::AccessFlags;
 use crate::alloc::{vmref_alloc_object, vmref_ptr, VmRef};
 use crate::class::class::{Class, ClassType, FieldSearchType, SuperIteration};
 use crate::error::{Throwables, VmResult};
+use crate::exec_helper::ExecHelperStandalone;
 use crate::monitor::{Monitor, MonitorGuard};
 use crate::storage::{FieldId, FieldStorage};
 use crate::thread;
@@ -128,12 +129,12 @@ impl Object {
             }
         }
 
-        tls.exec_helper().set_instance_field(
+        ExecHelperStandalone.set_instance_field(
             &string_instance,
             "value",
             DataValue::Reference(char_array),
         )?;
-        tls.exec_helper().set_instance_field(
+        ExecHelperStandalone.set_instance_field(
             &string_instance,
             "count",
             DataValue::Int(string_length as i32),
@@ -340,7 +341,7 @@ impl Debug for ObjectFieldPrinter<'_> {
 
                 result = write!(
                     f,
-                    "\n * {} ({:?} {:?}) => {:?}",
+                    "\n * {} (desc={:?} flags={:?}) => {:?}",
                     field.name(),
                     field.desc(),
                     field.flags(),

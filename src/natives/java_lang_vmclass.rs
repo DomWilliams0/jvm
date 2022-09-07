@@ -51,8 +51,15 @@ pub fn get_component_type(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Th
 }
 
 /// (Ljava/lang/Class;Z)I
-pub fn get_modifiers(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
-    todo!("native method java_lang_vmclass::get_modifiers")
+pub fn get_modifiers(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    let (class_obj, ignore_inner) = args.destructure::<(VmRef<Object>, bool)>()?;
+    assert!(
+        ignore_inner,
+        "todo: parse inner classes attribute in cafebabe"
+    );
+
+    let class = class_obj.class().expect("not a class");
+    Ok(Some(DataValue::Int(class.flags().bits() as i32)))
 }
 
 /// (Ljava/lang/Class;)Ljava/lang/Class;
@@ -125,15 +132,7 @@ pub fn get_declared_constructors(
                 )
                 .map(DataValue::from)
         }),
-        || {
-            state
-                .interpreter()
-                .state_mut()
-                .current_class()
-                .unwrap()
-                .loader()
-                .clone()
-        },
+        Some(&state),
     )?;
 
     Ok(Some(DataValue::Reference(arr)))

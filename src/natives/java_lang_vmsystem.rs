@@ -1,7 +1,8 @@
 use crate::alloc::{vmref_eq, VmRef};
-use crate::class::{FunctionArgs, Object};
-use crate::error::{Throwable, Throwables};
+use crate::class::{Class, ClassType, FunctionArgs, Object};
+use crate::error::{Throwable, Throwables, VmResult};
 use crate::types::DataValue;
+use cafebabe::mutf8::StrExt;
 use log::trace;
 
 /// (Ljava/io/InputStream;)V
@@ -79,17 +80,46 @@ pub fn arraycopy(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwabl
         .ok_or(Throwables::NullPointerException)?;
 
     // array check
-    let (src_ty, dst_ty) = src_cls
-        .class_type()
-        .array_class()
-        .zip(dst_cls.class_type().array_class())
-        .ok_or(Throwables::Other("java/lang/ArrayStoreException"))?;
+    let check_elem_types = || -> Option<(&VmRef<Class>, &VmRef<Class>)> {
+        let (src_ty, dst_ty) = src_cls
+            .class_type()
+            .array_class()
+            .zip(dst_cls.class_type().array_class())?;
 
-    // TODO check elements really are assignable
-    assert!(
-        vmref_eq(src_ty, dst_ty),
-        "array element assignability check needed"
-    );
+        trace!("arraycopy: {} -> {}", src_ty.name(), dst_ty.name());
+
+        let success = if vmref_eq(src_ty, dst_ty) {
+            true
+        } else {
+            match (src_ty.class_type(), dst_ty.class_type()) {
+                (ClassType::Array(_), _) | (_, ClassType::Array(_)) => {
+                    unreachable!("nested arrays?")
+                }
+
+                (ClassType::Primitive(a), ClassType::Primitive(b)) => a == b,
+                (ClassType::Normal, ClassType::Normal) => {
+                    // succeed if one is object
+                    if src_ty.name() == "java/lang/Object".as_mstr()
+                        || dst_ty.name() == "java/lang/Object".as_mstr()
+                    {
+                        true
+                    } else {
+                        todo!(
+                            "check superclasses for assignment of {} = {}",
+                            dst_ty.name(),
+                            src_ty.name()
+                        )
+                    }
+                }
+                _ => false,
+            }
+        };
+
+        success.then_some((src_ty, dst_ty))
+    };
+
+    let (src_ty, dst_ty) =
+        check_elem_types().ok_or(Throwables::Other("java/lang/ArrayStoreException"))?;
 
     // get array contents
     let src_arr = src.array_unchecked();

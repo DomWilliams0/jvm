@@ -636,6 +636,10 @@ impl Class {
         )
     }
 
+    pub fn find_method_by_id(&self, id: i32) -> Option<VmRef<Method>> {
+        self.methods.get(id as usize).cloned()
+    }
+
     pub fn find_callable_method(
         &self,
         name: &mstr,

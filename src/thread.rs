@@ -9,7 +9,7 @@ use crate::alloc::VmRef;
 
 use crate::class::Object;
 use crate::error::{Throwable, VmResult};
-use crate::exec_helper::ExecHelper;
+use crate::exec_helper::{ExecHelper, ExecHelperStandalone};
 use crate::interpreter::Interpreter;
 use crate::jni::sys::JNIEnv;
 use crate::jvm::JvmGlobalState;
@@ -105,7 +105,7 @@ pub fn init_main_vmthread() -> VmResult<()> {
     )?;
 
     // touch up vmthread fields
-    helper.set_instance_field(
+    ExecHelperStandalone.set_instance_field(
         &vmthread_instance,
         "thread",
         DataValue::Reference(thread_instance.clone()),
@@ -122,7 +122,7 @@ pub fn init_main_vmthread() -> VmResult<()> {
         once(DataValue::Reference(thread_instance.clone())),
     )?;
 
-    helper.set_instance_field(&thread_instance, "group", root_threadgroup)?;
+    ExecHelperStandalone.set_instance_field(&thread_instance, "group", root_threadgroup)?;
 
     // inheritable thread local is required apparently
     helper.invoke_static_method(

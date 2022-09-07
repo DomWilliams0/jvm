@@ -1,7 +1,14 @@
 use crate::alloc::VmRef;
-use crate::class::FunctionArgs;
-use crate::error::Throwable;
+use crate::class::{FunctionArgs, Object};
+use crate::error::{Throwable, Throwables};
+use crate::exec_helper::ArrayType;
+use crate::thread;
 use crate::types::DataValue;
+use cafebabe::mutf8::mstr;
+use log::warn;
+use std::path::{Path, PathBuf};
+
+// TODO non utf8 paths?
 
 /// (Ljava/lang/String;)J
 pub fn last_modified(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
@@ -19,8 +26,32 @@ pub fn create(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
 }
 
 /// (Ljava/lang/String;)[Ljava/lang/String;
-pub fn list(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
-    todo!("native method java_io_vmfile::list")
+pub fn list(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    // TODO ensure synchronised
+    let (path,) = args.destructure::<(String,)>()?;
+    let path = Path::new(&path);
+
+    let thread = thread::get();
+    let helper = thread.exec_helper();
+
+    let mut output = Vec::new();
+    for e in path.read_dir().map_err(|_| Throwables::IoError)? {
+        let e = e.map_err(|_| Throwables::IoError)?;
+        output.push(Object::new_string_utf8(&e.path().to_string_lossy()).map(DataValue::Reference));
+    }
+
+    let arr = helper.collect_array(
+        ArrayType::Reference(
+            thread
+                .global()
+                .class_loader()
+                .get_bootstrap_class("java/lang/String"),
+        ),
+        output.into_iter(),
+        Some(&thread),
+    )?;
+
+    Ok(Some(arr.into()))
 }
 
 /// (Ljava/lang/String;Ljava/lang/String;)Z
@@ -34,8 +65,9 @@ pub fn length(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
 }
 
 /// (Ljava/lang/String;)Z
-pub fn exists(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
-    todo!("native method java_io_vmfile::exists")
+pub fn exists(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    let (path,) = args.destructure::<(String,)>()?;
+    Ok(Some(Path::new(&path).exists().into()))
 }
 
 /// (Ljava/lang/String;)Z
@@ -84,8 +116,9 @@ pub fn set_executable(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwa
 }
 
 /// (Ljava/lang/String;)Z
-pub fn is_file(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
-    todo!("native method java_io_vmfile::is_file")
+pub fn is_file(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    let (path,) = args.destructure::<(String,)>()?;
+    Ok(Some(Path::new(&path).is_file().into()))
 }
 
 /// (Ljava/lang/String;)Z
@@ -109,11 +142,21 @@ pub fn can_execute(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable
 }
 
 /// (Ljava/lang/String;)Z
-pub fn is_directory(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
-    todo!("native method java_io_vmfile::is_directory")
+pub fn is_directory(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    let (path,) = args.destructure::<(String,)>()?;
+    Ok(Some(Path::new(&path).is_dir().into()))
 }
 
 /// (Ljava/lang/String;)Ljava/lang/String;
-pub fn to_canonical_form(_: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
-    todo!("native method java_io_vmfile::to_canonical_form")
+pub fn to_canonical_form(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwable>> {
+    let (path,) = args.destructure::<(String,)>()?;
+    // TODO throw the proper io error
+    let path = Path::new(&path);
+    let res = path.canonicalize().map_err(|err| {
+        warn!("io error canonicalising '{}': {}", path.display(), err);
+        Throwables::IoError
+    })?;
+
+    let string = Object::new_string_utf8(&res.to_string_lossy())?;
+    Ok(Some(string.into()))
 }

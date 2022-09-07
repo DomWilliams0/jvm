@@ -27,6 +27,7 @@ pub enum Throwables {
     OutOfMemoryError,
     NullPointerException,
     NoSuchFieldError,
+    IoError,
     Other(&'static str),
 }
 
@@ -67,6 +68,7 @@ impl Throwables {
             Throwables::OutOfMemoryError => "java/lang/OutOfMemoryError",
             Throwables::NullPointerException => "java/lang/NullPointerException",
             Throwables::NoSuchFieldError => "java/lang/NoSuchFieldError",
+            Throwables::IoError => "java/io/IOError",
             Throwables::Other(s) => s,
         }
     }
