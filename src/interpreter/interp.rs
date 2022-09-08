@@ -73,6 +73,10 @@ impl InterpreterState {
         self.frames.top_java_mut().map(|(frame, _)| frame)
     }
 
+    pub fn current_native_frame_mut(&mut self) -> &mut NativeFrame {
+        self.frames.top_native_mut().expect("no native frame")
+    }
+
     fn current_method(&self) -> Option<&Method> {
         match self.frames.top()? {
             Frame::Java(frame) => Some(&frame.method),

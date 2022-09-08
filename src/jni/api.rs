@@ -349,20 +349,29 @@ mod javavm {
 
 mod jnienv {
     #![allow(non_snake_case, unused_variables)]
-    use crate::alloc::{vmref_from_raw, vmref_increment, vmref_into_raw, vmref_ptr, VmRef};
+    use crate::alloc::{
+        vmref_as_raw, vmref_from_raw, vmref_increment, vmref_into_raw, vmref_is_null, vmref_ptr,
+        VmRef,
+    };
     use crate::class::{Class, Object, WhichLoader};
 
+    use crate::error::{Throwables, VmResult};
+    use crate::exec_helper::ArrayType;
     use crate::jni::api::{JniFieldId, JniMethodId};
     use crate::jni::sys::*;
     use crate::jni::JNI_VERSION;
     use crate::thread;
-    use crate::types::DataType;
+    use crate::types::{DataType, DataValue};
     use cafebabe::mutf8::mstr;
     use cafebabe::MethodAccessFlags;
+    use itertools::repeat_n;
     use log::*;
     use std::ffi::{CStr, CString};
     use std::mem::ManuallyDrop;
+    use std::num::TryFromIntError;
     use std::ptr;
+    use std::ptr::{null, null_mut};
+    use std::sync::Arc;
 
     unsafe fn as_string<'a>(s: *const ::std::os::raw::c_char) -> &'a mstr {
         let cstr = CStr::from_ptr(s);
@@ -371,6 +380,21 @@ mod jnienv {
 
     unsafe fn as_vmref<T>(obj: *const ::std::os::raw::c_void) -> ManuallyDrop<VmRef<T>> {
         ManuallyDrop::new(vmref_from_raw(obj as *const T))
+    }
+
+    /// If true, NPE exception has been raised
+    fn is_null_throwing<T>(ptr: *const T) -> bool {
+        if ptr.is_null() {
+            let t = thread::get();
+            t.set_exception(Throwables::NullPointerException.into());
+            true
+        } else {
+            false
+        }
+    }
+
+    fn jnull<T>() -> *mut T {
+        null_mut()
     }
 
     pub extern "C" fn GetVersion(env: *mut JNIEnv) -> jint {
@@ -488,16 +512,27 @@ mod jnienv {
 
     pub extern "C" fn ThrowNew(
         env: *mut JNIEnv,
-        arg2: jclass,
-        arg3: *const ::std::os::raw::c_char,
+        cls: jclass,
+        msg: *const ::std::os::raw::c_char,
     ) -> jint {
-        trace!("jni::ThrowNew({:?}, {:?})", arg2, arg3);
-        todo!("ThrowNew")
+        trace!("jni::ThrowNew({:?}, {:?})", cls, msg);
+
+        if cls.is_null() || msg.is_null() {
+            return -1;
+        }
+
+        let (class, msg) = unsafe { (as_vmref::<Class>(cls), CStr::from_ptr(msg)) };
+
+        todo!("ThrowNew({:?}, {:?})", class.name(), msg)
     }
 
     pub extern "C" fn ExceptionOccurred(env: *mut JNIEnv) -> jthrowable {
         trace!("jni::ExceptionOccurred()");
-        todo!("ExceptionOccurred")
+        let t = thread::get();
+        match t.exception() {
+            None => jnull(),
+            Some(e) => vmref_into_raw(e) as jthrowable,
+        }
     }
 
     pub extern "C" fn ExceptionDescribe(env: *mut JNIEnv) {
@@ -507,7 +542,8 @@ mod jnienv {
 
     pub extern "C" fn ExceptionClear(env: *mut JNIEnv) {
         trace!("jni::ExceptionClear()");
-        todo!("ExceptionClear")
+        let t = thread::get();
+        t.exception().take();
     }
 
     pub extern "C" fn FatalError(env: *mut JNIEnv, arg2: *const ::std::os::raw::c_char) {
@@ -552,7 +588,7 @@ mod jnienv {
 
     pub extern "C" fn DeleteLocalRef(env: *mut JNIEnv, arg2: jobject) {
         trace!("jni::DeleteLocalRef({:?})", arg2);
-        todo!("DeleteLocalRef")
+        // TODO actually do something
     }
 
     pub extern "C" fn IsSameObject(env: *mut JNIEnv, arg2: jobject, arg3: jobject) -> jboolean {
@@ -560,9 +596,21 @@ mod jnienv {
         todo!("IsSameObject")
     }
 
-    pub extern "C" fn NewLocalRef(env: *mut JNIEnv, arg2: jobject) -> jobject {
-        trace!("jni::NewLocalRef({:?})", arg2);
-        todo!("NewLocalRef")
+    pub extern "C" fn NewLocalRef(env: *mut JNIEnv, obj: jobject) -> jobject {
+        trace!("jni::NewLocalRef({:?})", obj);
+        let obj_ref = unsafe { as_vmref::<Object>(obj) };
+        if vmref_is_null(&obj_ref) {
+            return obj;
+        }
+
+        let t = thread::get();
+        let interpreter = t.interpreter();
+        let mut state = interpreter.state_mut();
+        let frame = state.current_native_frame_mut();
+        frame.add_local_ref(&obj_ref);
+
+        // return same ref
+        obj
     }
 
     pub extern "C" fn EnsureLocalCapacity(env: *mut JNIEnv, arg2: jint) -> jint {
@@ -2255,10 +2303,24 @@ mod jnienv {
 
     pub extern "C" fn NewStringUTF(
         env: *mut JNIEnv,
-        arg2: *const ::std::os::raw::c_char,
+        bytes: *const ::std::os::raw::c_char,
     ) -> jstring {
-        trace!("jni::NewStringUTF({:?})", arg2);
-        todo!("NewStringUTF")
+        trace!("jni::NewStringUTF({:?})", bytes);
+
+        if bytes.is_null() {
+            return jnull();
+        }
+
+        let cstr = unsafe { CStr::from_ptr(bytes) };
+        let mstr = mstr::from_mutf8(cstr.to_bytes());
+
+        match Object::new_string(mstr) {
+            Ok(s) => vmref_into_raw(s) as jstring,
+            Err(err) => {
+                thread::get().set_exception(err.into());
+                jnull()
+            }
+        }
     }
 
     pub extern "C" fn GetStringUTFLength(env: *mut JNIEnv, arg2: jstring) -> jsize {
@@ -2313,12 +2375,34 @@ mod jnienv {
 
     pub extern "C" fn NewObjectArray(
         env: *mut JNIEnv,
-        arg2: jsize,
-        arg3: jclass,
-        arg4: jobject,
+        n: jsize,
+        cls: jclass,
+        default_val: jobject,
     ) -> jobjectArray {
-        trace!("jni::NewObjectArray({:?}, {:?}, {:?})", arg2, arg3, arg4);
-        todo!("NewObjectArray")
+        trace!("jni::NewObjectArray({:?}, {:?}, {:?})", n, cls, default_val);
+
+        if is_null_throwing(cls) {
+            return jnull();
+        }
+        let class = unsafe { as_vmref::<Class>(cls) };
+        let default_val = DataValue::Reference(if default_val.is_null() {
+            crate::class::null()
+        } else {
+            let obj = unsafe { as_vmref::<Object>(default_val) };
+            VmRef::clone(&obj)
+        });
+
+        let t = thread::get();
+        match t.exec_helper().collect_array(
+            ArrayType::Reference(Arc::clone(&class)),
+            repeat_n(Ok(default_val), n as usize),
+        ) {
+            Ok(arr) => vmref_into_raw(arr) as jobjectArray,
+            Err(err) => {
+                t.set_exception(err.into());
+                jnull()
+            }
+        }
     }
 
     pub extern "C" fn GetObjectArrayElement(
@@ -2332,17 +2416,47 @@ mod jnienv {
 
     pub extern "C" fn SetObjectArrayElement(
         env: *mut JNIEnv,
-        arg2: jobjectArray,
-        arg3: jsize,
-        arg4: jobject,
+        arr: jobjectArray,
+        idx: jsize,
+        obj: jobject,
     ) {
         trace!(
             "jni::SetObjectArrayElement({:?}, {:?}, {:?})",
-            arg2,
-            arg3,
-            arg4
+            arr,
+            idx,
+            obj
         );
-        todo!("SetObjectArrayElement")
+
+        let (array_obj, elem_obj) = unsafe { (as_vmref::<Object>(arr), as_vmref::<Object>(obj)) };
+
+        if vmref_is_null(&array_obj) {
+            return;
+        }
+
+        // check type
+        if !array_obj
+            .class_not_null()
+            .can_array_be_assigned_to(&elem_obj)
+        {
+            thread::get().set_exception(Throwables::Other("java/lang/ArrayStoreException").into());
+            return;
+        }
+
+        let mut array_backing = array_obj.array_unchecked();
+        let val = match usize::try_from(idx)
+            .ok()
+            .and_then(|i| array_backing.get_mut(i))
+        {
+            Some(val) => val,
+            None => {
+                thread::get().set_exception(
+                    Throwables::Other("java/lang/ArrayIndexOutOfBoundsException").into(),
+                );
+                return;
+            }
+        };
+
+        *val = DataValue::Reference(VmRef::clone(&elem_obj));
     }
 
     pub extern "C" fn NewBooleanArray(env: *mut JNIEnv, arg2: jsize) -> jbooleanArray {

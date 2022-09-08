@@ -155,10 +155,11 @@
    * `// TODO actually compile`
    * `// TODO return result`
    * `CompileState::NotCompiled => unreachable!("not queued"), // TODO queue here?`
- * [src/jni/api.rs](src/jni/api.rs) (8)
+ * [src/jni/api.rs](src/jni/api.rs) (9)
    * `// TODO get actual env for current thread, rather than a global`
    * `// TODO set exception`
    * `// TODO keep track of global references in jvm or is it ok to leak them like this?`
+   * `// TODO actually do something`
    * `// TODO throw exception instead of panic`
    * `// TODO throw exception instead of panic`
    * `// TODO throw exception instead of panic`
@@ -190,12 +191,11 @@
    * `// TODO volatile field!`
  * [src/natives/java_lang_vmthrowable.rs](src/natives/java_lang_vmthrowable.rs) (1)
    * `// TODO implement fillInStackTrace`
- * [src/properties.rs](src/properties.rs) (5)
+ * [src/properties.rs](src/properties.rs) (4)
    * `// TODO these properties are not all correct`
    * `prop!("java.home", java_home.into()); // TODO`
    * `prop!("java.specification.version", "TODO"); // TODO get from Configuration class?`
    * `prop!("java.library.path", library_path.into()); // TODO`
-   * `prop!("java.ext.dirs", "."); // TODO`
  * [src/storage.rs](src/storage.rs) (5)
    * `// TODO field storage should be inline in VmRef<Object>`
    * `// TODO compact field storage i.e. not using DataValue enum`

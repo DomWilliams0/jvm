@@ -56,7 +56,7 @@ impl SystemProperties {
         );
         prop!("java.vm.version", env!("CARGO_PKG_VERSION"));
         prop!("java.vm.vendor", env!("CARGO_PKG_AUTHORS"));
-        prop!("java.vm.name", "UntitledJvm");
+        prop!("java.vm.name", "DomeJvm");
         prop!("java.specification.version", "TODO"); // TODO get from Configuration class?
         prop!("java.specification.vendor", JAVA_SPEC_VERSION);
         prop!("java.specification.name", "Oracle America, Inc");
@@ -64,7 +64,7 @@ impl SystemProperties {
         prop!("java.library.path", library_path.into()); // TODO
         prop!("java.io.tmpdir", tmp_dir.into());
         prop!("java.compiler", "N/A");
-        prop!("java.ext.dirs", "."); // TODO
+        prop!("java.ext.dirs", "");
         prop!("os.name", std::env::consts::OS);
         prop!("os.arch", std::env::consts::ARCH);
         prop!("os.version", distro);
