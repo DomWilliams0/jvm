@@ -1,4 +1,4 @@
-# TODOs (180)
+# TODOs (177)
  * [cafebabe/src/class.rs](cafebabe/src/class.rs) (3)
    * `// TODO validate combinations`
    * `// TODO detect dups with same name & descriptor`
@@ -176,10 +176,6 @@
    * `// TODO generic -D arg collection`
  * [src/natives/gnu_classpath_vmsystemproperties.rs](src/natives/gnu_classpath_vmsystemproperties.rs) (1)
    * `// TODO actually do preInit`
- * [src/natives/java_io_vmfile.rs](src/natives/java_io_vmfile.rs) (3)
-   * `// TODO non utf8 paths?`
-   * `// TODO ensure synchronised`
-   * `// TODO throw the proper io error`
  * [src/natives/java_lang_reflect_vmconstructor.rs](src/natives/java_lang_reflect_vmconstructor.rs) (1)
    * `let cls = cls.expect("not a class"); // TODO better return value from vmdata()`
  * [src/natives/java_lang_vmclass.rs](src/natives/java_lang_vmclass.rs) (2)

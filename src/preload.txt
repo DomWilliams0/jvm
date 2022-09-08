@@ -66,57 +66,6 @@ Preload::with_natives(
 ("popFrames", "(Ljava/lang/Thread;J)V", gnu_classpath_jdwp_vmvirtualmachine::pop_frames),
 ]),
 Preload::with_natives(
-"java/io/VMConsole",
-&[
-("readPassword", "(Ljava/io/Console;)Ljava/lang/String;", java_io_vmconsole::read_password),
-]),
-Preload::with_natives(
-"java/io/VMFile",
-&[
-("lastModified", "(Ljava/lang/String;)J", java_io_vmfile::last_modified),
-("setReadOnly", "(Ljava/lang/String;)Z", java_io_vmfile::set_read_only),
-("create", "(Ljava/lang/String;)Z", java_io_vmfile::create),
-("list", "(Ljava/lang/String;)[Ljava/lang/String;", java_io_vmfile::list),
-("renameTo", "(Ljava/lang/String;Ljava/lang/String;)Z", java_io_vmfile::rename_to),
-("length", "(Ljava/lang/String;)J", java_io_vmfile::length),
-("exists", "(Ljava/lang/String;)Z", java_io_vmfile::exists),
-("delete", "(Ljava/lang/String;)Z", java_io_vmfile::delete),
-("setLastModified", "(Ljava/lang/String;J)Z", java_io_vmfile::set_last_modified),
-("mkdir", "(Ljava/lang/String;)Z", java_io_vmfile::mkdir),
-("getTotalSpace", "(Ljava/lang/String;)J", java_io_vmfile::get_total_space),
-("getFreeSpace", "(Ljava/lang/String;)J", java_io_vmfile::get_free_space),
-("getUsableSpace", "(Ljava/lang/String;)J", java_io_vmfile::get_usable_space),
-("setReadable", "(Ljava/lang/String;ZZ)Z", java_io_vmfile::set_readable),
-("setWritable", "(Ljava/lang/String;ZZ)Z", java_io_vmfile::set_writable),
-("setExecutable", "(Ljava/lang/String;ZZ)Z", java_io_vmfile::set_executable),
-("isFile", "(Ljava/lang/String;)Z", java_io_vmfile::is_file),
-("canWrite", "(Ljava/lang/String;)Z", java_io_vmfile::can_write),
-("canWriteDirectory", "(Ljava/lang/String;)Z", java_io_vmfile::can_write_directory),
-("canRead", "(Ljava/lang/String;)Z", java_io_vmfile::can_read),
-("canExecute", "(Ljava/lang/String;)Z", java_io_vmfile::can_execute),
-("isDirectory", "(Ljava/lang/String;)Z", java_io_vmfile::is_directory),
-("toCanonicalForm", "(Ljava/lang/String;)Ljava/lang/String;", java_io_vmfile::to_canonical_form),
-]),
-Preload::with_natives(
-"java/io/VMObjectInputStream",
-&[
-("allocateObject", "(Ljava/lang/Class;Ljava/lang/Class;Ljava/lang/reflect/Constructor;)Ljava/lang/Object;", java_io_vmobjectinputstream::allocate_object),
-]),
-Preload::with_natives(
-"java/io/VMObjectStreamClass",
-&[
-("hasClassInitializer", "(Ljava/lang/Class;)Z", java_io_vmobjectstreamclass::has_class_initializer),
-("setDoubleNative", "(Ljava/lang/reflect/Field;Ljava/lang/Object;D)V", java_io_vmobjectstreamclass::set_double_native),
-("setFloatNative", "(Ljava/lang/reflect/Field;Ljava/lang/Object;F)V", java_io_vmobjectstreamclass::set_float_native),
-("setLongNative", "(Ljava/lang/reflect/Field;Ljava/lang/Object;J)V", java_io_vmobjectstreamclass::set_long_native),
-("setIntNative", "(Ljava/lang/reflect/Field;Ljava/lang/Object;I)V", java_io_vmobjectstreamclass::set_int_native),
-("setShortNative", "(Ljava/lang/reflect/Field;Ljava/lang/Object;S)V", java_io_vmobjectstreamclass::set_short_native),
-("setCharNative", "(Ljava/lang/reflect/Field;Ljava/lang/Object;C)V", java_io_vmobjectstreamclass::set_char_native),
-("setByteNative", "(Ljava/lang/reflect/Field;Ljava/lang/Object;B)V", java_io_vmobjectstreamclass::set_byte_native),
-("setBooleanNative", "(Ljava/lang/reflect/Field;Ljava/lang/Object;Z)V", java_io_vmobjectstreamclass::set_boolean_native),
-("setObjectNative", "(Ljava/lang/reflect/Field;Ljava/lang/Object;Ljava/lang/Object;)V", java_io_vmobjectstreamclass::set_object_native),
-]),
-Preload::with_natives(
 "java/lang/VMClass",
 &[
 ("isInstance", "(Ljava/lang/Class;Ljava/lang/Object;)Z", java_lang_vmclass::is_instance),
@@ -156,48 +105,6 @@ Preload::with_natives(
 ("findLoadedClass", "(Ljava/lang/ClassLoader;Ljava/lang/String;)Ljava/lang/Class;", java_lang_vmclassloader::find_loaded_class),
 ]),
 Preload::with_natives(
-"java/lang/VMDouble",
-&[
-("doubleToRawLongBits", "(D)J", java_lang_vmdouble::double_to_raw_long_bits),
-("longBitsToDouble", "(J)D", java_lang_vmdouble::long_bits_to_double),
-("toString", "(DZ)Ljava/lang/String;", java_lang_vmdouble::to_string),
-("initIDs", "()V", java_lang_vmdouble::init_i_ds),
-("parseDouble", "(Ljava/lang/String;)D", java_lang_vmdouble::parse_double),
-]),
-Preload::with_natives(
-"java/lang/VMFloat",
-&[
-("floatToRawIntBits", "(F)I", java_lang_vmfloat::float_to_raw_int_bits),
-("intBitsToFloat", "(I)F", java_lang_vmfloat::int_bits_to_float),
-]),
-Preload::with_natives(
-"java/lang/VMMath",
-&[
-("sin", "(D)D", java_lang_vmmath::sin),
-("cos", "(D)D", java_lang_vmmath::cos),
-("tan", "(D)D", java_lang_vmmath::tan),
-("asin", "(D)D", java_lang_vmmath::asin),
-("acos", "(D)D", java_lang_vmmath::acos),
-("atan", "(D)D", java_lang_vmmath::atan),
-("atan2", "(DD)D", java_lang_vmmath::atan2),
-("exp", "(D)D", java_lang_vmmath::exp),
-("log", "(D)D", java_lang_vmmath::log),
-("sqrt", "(D)D", java_lang_vmmath::sqrt),
-("pow", "(DD)D", java_lang_vmmath::pow),
-("IEEEremainder", "(DD)D", java_lang_vmmath::_i_e_e_eremainder),
-("ceil", "(D)D", java_lang_vmmath::ceil),
-("floor", "(D)D", java_lang_vmmath::floor),
-("rint", "(D)D", java_lang_vmmath::rint),
-("cbrt", "(D)D", java_lang_vmmath::cbrt),
-("cosh", "(D)D", java_lang_vmmath::cosh),
-("expm1", "(D)D", java_lang_vmmath::expm1),
-("hypot", "(DD)D", java_lang_vmmath::hypot),
-("log10", "(D)D", java_lang_vmmath::log10),
-("log1p", "(D)D", java_lang_vmmath::log1p),
-("sinh", "(D)D", java_lang_vmmath::sinh),
-("tanh", "(D)D", java_lang_vmmath::tanh),
-]),
-Preload::with_natives(
 "java/lang/VMObject",
 &[
 ("getClass", "(Ljava/lang/Object;)Ljava/lang/Class;", java_lang_vmobject::get_class),
@@ -205,13 +112,6 @@ Preload::with_natives(
 ("notify", "(Ljava/lang/Object;)V", java_lang_vmobject::notify),
 ("notifyAll", "(Ljava/lang/Object;)V", java_lang_vmobject::notify_all),
 ("wait", "(Ljava/lang/Object;JI)V", java_lang_vmobject::wait),
-]),
-Preload::with_natives(
-"java/lang/VMProcess",
-&[
-("nativeSpawn", "([Ljava/lang/String;[Ljava/lang/String;Ljava/io/File;Z)V", java_lang_vmprocess::native_spawn),
-("nativeReap", "()Z", java_lang_vmprocess::native_reap),
-("nativeKill", "(J)V", java_lang_vmprocess::native_kill),
 ]),
 Preload::with_natives(
 "java/lang/VMRuntime",
@@ -235,13 +135,6 @@ Preload::with_natives(
 &[
 ("arraycopy", "(Ljava/lang/Object;ILjava/lang/Object;II)V", java_lang_vmsystem::arraycopy),
 ("identityHashCode", "(Ljava/lang/Object;)I", java_lang_vmsystem::identity_hash_code),
-("setIn", "(Ljava/io/InputStream;)V", java_lang_vmsystem::set_in),
-("setOut", "(Ljava/io/PrintStream;)V", java_lang_vmsystem::set_out),
-("setErr", "(Ljava/io/PrintStream;)V", java_lang_vmsystem::set_err),
-("currentTimeMillis", "()J", java_lang_vmsystem::current_time_millis),
-("nanoTime", "()J", java_lang_vmsystem::nano_time),
-("environ", "()Ljava/util/List;", java_lang_vmsystem::environ),
-("getenv", "(Ljava/lang/String;)Ljava/lang/String;", java_lang_vmsystem::getenv),
 ]),
 Preload::with_natives(
 "java/lang/VMThread",
@@ -271,11 +164,6 @@ Preload::with_natives(
 ("getMemoryPoolNames", "()[Ljava/lang/String;", java_lang_management_vmmanagementfactory::get_memory_pool_names),
 ("getMemoryManagerNames", "()[Ljava/lang/String;", java_lang_management_vmmanagementfactory::get_memory_manager_names),
 ("getGarbageCollectorNames", "()[Ljava/lang/String;", java_lang_management_vmmanagementfactory::get_garbage_collector_names),
-]),
-Preload::with_natives(
-"java/lang/reflect/VMArray",
-&[
-("createObjectArray", "(Ljava/lang/Class;I)Ljava/lang/Object;", java_lang_reflect_vmarray::create_object_array),
 ]),
 Preload::with_natives(
 "java/lang/reflect/VMConstructor",
@@ -336,56 +224,6 @@ Preload::with_natives(
 ("getProxyClass", "(Ljava/lang/ClassLoader;[Ljava/lang/Class;)Ljava/lang/Class;", java_lang_reflect_vmproxy::get_proxy_class),
 ("getProxyData", "(Ljava/lang/ClassLoader;[Ljava/lang/Class;)Ljava/lang/reflect/Proxy$ProxyData;", java_lang_reflect_vmproxy::get_proxy_data),
 ("generateProxyClass", "(Ljava/lang/ClassLoader;Ljava/lang/reflect/Proxy$ProxyData;)Ljava/lang/Class;", java_lang_reflect_vmproxy::generate_proxy_class),
-]),
-Preload::with_natives(
-"java/net/VMInetAddress",
-&[
-("getLocalHostname", "()Ljava/lang/String;", java_net_vminetaddress::get_local_hostname),
-("lookupInaddrAny", "()[B", java_net_vminetaddress::lookup_inaddr_any),
-("getHostByAddr", "([B)Ljava/lang/String;", java_net_vminetaddress::get_host_by_addr),
-("getHostByName", "(Ljava/lang/String;)[[B", java_net_vminetaddress::get_host_by_name),
-("aton", "(Ljava/lang/String;)[B", java_net_vminetaddress::aton),
-]),
-Preload::with_natives(
-"java/net/VMNetworkInterface",
-&[
-("initIds", "()V", java_net_vmnetworkinterface::init_ids),
-("getVMInterfaces", "()[Ljava/net/VMNetworkInterface;", java_net_vmnetworkinterface::get_v_m_interfaces),
-("isUp", "(Ljava/lang/String;)Z", java_net_vmnetworkinterface::is_up),
-("isLoopback", "(Ljava/lang/String;)Z", java_net_vmnetworkinterface::is_loopback),
-("isPointToPoint", "(Ljava/lang/String;)Z", java_net_vmnetworkinterface::is_point_to_point),
-("supportsMulticast", "(Ljava/lang/String;)Z", java_net_vmnetworkinterface::supports_multicast),
-]),
-Preload::with_natives(
-"java/net/VMURLConnection",
-&[
-("init", "()V", java_net_vmurlconnection::init),
-("guessContentTypeFromBuffer", "([BI)Ljava/lang/String;", java_net_vmurlconnection::guess_content_type_from_buffer),
-]),
-Preload::with_natives(
-"java/nio/MappedByteBufferImpl",
-&[
-("unmapImpl", "()V", java_nio_mappedbytebufferimpl::unmap_impl),
-("isLoadedImpl", "()Z", java_nio_mappedbytebufferimpl::is_loaded_impl),
-("loadImpl", "()V", java_nio_mappedbytebufferimpl::load_impl),
-("forceImpl", "()V", java_nio_mappedbytebufferimpl::force_impl),
-]),
-Preload::with_natives(
-"java/nio/VMDirectByteBuffer",
-&[
-("allocate", "(I)Lgnu/classpath/Pointer;", java_nio_vmdirectbytebuffer::allocate),
-("free", "(Lgnu/classpath/Pointer;)V", java_nio_vmdirectbytebuffer::free),
-("get", "(Lgnu/classpath/Pointer;I)B", java_nio_vmdirectbytebuffer::get),
-("get", "(Lgnu/classpath/Pointer;I[BII)V", java_nio_vmdirectbytebuffer::get),
-("put", "(Lgnu/classpath/Pointer;IB)V", java_nio_vmdirectbytebuffer::put),
-("put", "(Lgnu/classpath/Pointer;I[BII)V", java_nio_vmdirectbytebuffer::put),
-("adjustAddress", "(Lgnu/classpath/Pointer;I)Lgnu/classpath/Pointer;", java_nio_vmdirectbytebuffer::adjust_address),
-("shiftDown", "(Lgnu/classpath/Pointer;III)V", java_nio_vmdirectbytebuffer::shift_down),
-]),
-Preload::with_natives(
-"java/util/VMTimeZone",
-&[
-("getSystemTimeZoneId", "()Ljava/lang/String;", java_util_vmtimezone::get_system_time_zone_id),
 ]),
 Preload::with_natives(
 "java/util/concurrent/atomic/AtomicLong",
