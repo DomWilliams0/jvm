@@ -53,7 +53,6 @@ pub fn get_parameter_types(args: FunctionArgs) -> Result<Option<DataValue>, VmRe
     let arr = helper.collect_array(
         ArrayType::Reference(clazz.class().unwrap()),
         empty(),
-        Some(&thread),
     )?;
 
     Ok(Some(arr.into()))

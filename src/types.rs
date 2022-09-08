@@ -186,7 +186,12 @@ impl DataValue {
 
     /// Panics if null
     pub fn data_type(&self) -> DataType<'static> {
-        match self {
+        self.data_type_checked().expect("null")
+    }
+
+    /// None if null
+    pub fn data_type_checked(&self) -> Option<DataType<'static>> {
+        Some(match self {
             DataValue::Boolean(_) => DataType::Primitive(PrimitiveDataType::Boolean),
             DataValue::Byte(_) => DataType::Primitive(PrimitiveDataType::Byte),
             DataValue::Short(_) => DataType::Primitive(PrimitiveDataType::Short),
@@ -197,13 +202,13 @@ impl DataValue {
             DataValue::Double(_) => DataType::Primitive(PrimitiveDataType::Double),
             DataValue::ReturnAddress(_) => DataType::ReturnAddress,
             DataValue::Reference(o) => {
-                let cls = o.class().expect("null");
+                let cls = o.class()?;
                 DataType::Reference(Cow::Owned(cls.name().to_owned()))
             }
             DataValue::VmDataClass(_) => {
                 DataType::Reference(Cow::Borrowed("java/lang/Class".as_mstr()))
             }
-        }
+        })
     }
 
     pub fn as_int(&self) -> Option<i32> {

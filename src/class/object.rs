@@ -155,6 +155,11 @@ impl Object {
             Some(self.class.clone())
         }
     }
+    /// self is not null
+    pub fn class_not_null(&self) -> VmRef<Class> {
+        debug_assert!(!self.is_null());
+        self.class.clone()
+    }
 
     pub fn enter_monitor(&self) -> MonitorGuard {
         self.monitor.enter()

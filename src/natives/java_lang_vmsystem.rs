@@ -39,51 +39,13 @@ pub fn arraycopy(args: FunctionArgs) -> Result<Option<DataValue>, VmRef<Throwabl
     );
 
     // null check
-    let (src_cls, dst_cls) = src
-        .class()
-        .zip(dst.class())
-        .ok_or(Throwables::NullPointerException)?;
+    let src_cls = src.class().ok_or(Throwables::NullPointerException)?;
+    let dst_cls = dst.class().ok_or(Throwables::NullPointerException)?;
 
-    // array check
-    let check_elem_types = || -> Option<()> {
-        let (src_ty, dst_ty) = src_cls
-            .class_type()
-            .array_class()
-            .zip(dst_cls.class_type().array_class())?;
-
-        trace!("arraycopy: {} -> {}", src_ty.name(), dst_ty.name());
-
-        let success = if vmref_eq(src_ty, dst_ty) {
-            true
-        } else {
-            match (src_ty.class_type(), dst_ty.class_type()) {
-                (ClassType::Array(_), _) | (_, ClassType::Array(_)) => {
-                    unreachable!("nested arrays?")
-                }
-
-                (ClassType::Primitive(a), ClassType::Primitive(b)) => a == b,
-                (ClassType::Normal, ClassType::Normal) => {
-                    // succeed if one is object
-                    if src_ty.name() == "java/lang/Object".as_mstr()
-                        || dst_ty.name() == "java/lang/Object".as_mstr()
-                    {
-                        true
-                    } else {
-                        todo!(
-                            "check superclasses for assignment of {} = {}",
-                            dst_ty.name(),
-                            src_ty.name()
-                        )
-                    }
-                }
-                _ => false,
-            }
-        };
-
-        success.then_some(())
-    };
-
-    check_elem_types().ok_or(Throwables::Other("java/lang/ArrayStoreException"))?;
+    // array type check
+    if !dst_cls.can_array_be_copied_to(&src_cls) {
+        return Err(Throwables::Other("java/lang/ArrayStoreException").into());
+    }
 
     // get array contents
     let src_arr = src.array_unchecked();

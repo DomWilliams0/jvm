@@ -1,4 +1,4 @@
-use crate::alloc::{vmref_alloc_object, VmRef};
+use crate::alloc::{vmref_alloc_object, vmref_is_null, VmRef};
 use crate::class::{Class, FieldSearchType, Method, Object, WhichLoader};
 use crate::error::{Throwables, VmResult};
 use crate::interpreter::Frame;
@@ -123,7 +123,6 @@ impl<'a> ExecHelper<'a> {
         &self,
         ty: ArrayType,
         items: impl Iterator<Item = VmResult<DataValue>> + ExactSizeIterator,
-        thread: Option<&Arc<JvmThreadState>>,
     ) -> VmResult<VmRef<Object>> {
         let class_loader = self.state.global().class_loader();
 
@@ -134,11 +133,8 @@ impl<'a> ExecHelper<'a> {
             ),
             ArrayType::Reference(elem) => {
                 let ty = DataType::Reference(elem.name().to_owned().into());
-                let thread = match thread {
-                    Some(s) => Cow::Borrowed(s),
-                    None => Cow::Owned(thread::get()),
-                };
-                let loader = thread
+                let loader = self
+                    .state
                     .interpreter()
                     .state_mut()
                     .current_class()
@@ -157,9 +153,8 @@ impl<'a> ExecHelper<'a> {
 
             for (elem, dst) in items.zip(slice.iter_mut()) {
                 let elem = elem?;
-                debug_assert_eq!(
-                    elem.data_type(),
-                    elem_ty,
+                debug_assert!(
+                    elem.data_type_checked().is_none() || elem.data_type_checked() == Some(elem_ty.clone()),
                     "element mismatch, expected {:?} but got {:?}",
                     elem_ty,
                     elem.data_type()

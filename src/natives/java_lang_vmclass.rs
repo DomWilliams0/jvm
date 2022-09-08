@@ -132,7 +132,6 @@ pub fn get_declared_constructors(
                 )
                 .map(DataValue::from)
         }),
-        Some(&state),
     )?;
 
     Ok(Some(DataValue::Reference(arr)))

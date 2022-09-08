@@ -965,6 +965,75 @@ impl Class {
         }
     }
 
+    /// Self is an array class (dest), other is the source array to copy from
+    pub fn can_array_be_copied_to(&self, other: &VmRef<Class>) -> bool {
+        let (src_arr_elem, dst_arr_elem) = match self
+            .class_type()
+            .array_class()
+            .zip(other.class_type().array_class())
+        {
+            Some(tup) => tup,
+            None => return false,
+        };
+
+        dst_arr_elem.can_array_elem_be_assigned_to(src_arr_elem)
+    }
+
+    /// Self is an array class, other is the element to assign (can be null)
+    pub fn can_array_be_assigned_to(&self, other: &VmRef<Object>) -> bool {
+        let (src_arr_elem, dst_elem) = match (self.class_type().array_class(), other.class()) {
+            (Some(arr), None) => {
+                // null only for reference types?
+                if arr.class_type().as_primitive().is_some() {
+                    warn!("todo: assign null to primitive?");
+                    return false;
+                }
+
+                return true;
+            }
+            (Some(arr), Some(val)) => (arr, val),
+            _ => return false,
+        };
+
+        dst_elem.can_array_elem_be_assigned_to(src_arr_elem)
+    }
+
+    /// Self is an array element class (dest), other is the source array element class to copy from
+    fn can_array_elem_be_assigned_to(self: &VmRef<Class>, src_arr_elem: &VmRef<Class>) -> bool {
+        let dst_arr_elem = self;
+        if vmref_eq(src_arr_elem, dst_arr_elem) {
+            true
+        } else {
+            trace!(
+                "can array of {:?} be assigned to by {:?}",
+                src_arr_elem.class_type(),
+                dst_arr_elem.class_type()
+            );
+            match (src_arr_elem.class_type(), dst_arr_elem.class_type()) {
+                (ClassType::Array(_), _) | (_, ClassType::Array(_)) => {
+                    unreachable!("nested arrays?")
+                }
+
+                (ClassType::Primitive(a), ClassType::Primitive(b)) => a == b,
+                (ClassType::Normal, ClassType::Normal) => {
+                    // succeed if one is object
+                    if src_arr_elem.name() == "java/lang/Object".as_mstr()
+                        || dst_arr_elem.name() == "java/lang/Object".as_mstr()
+                    {
+                        true
+                    } else {
+                        todo!(
+                            "check superclasses for assignment of {} = {}",
+                            dst_arr_elem.name(),
+                            src_arr_elem.name()
+                        )
+                    }
+                }
+                _ => false,
+            }
+        }
+    }
+
     /*    fn implements(self: &VmRef<Class>, iface: &VmRef<Class>) -> bool {
             vmref_eq(self, iface)
                 || self
