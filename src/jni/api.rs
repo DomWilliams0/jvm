@@ -286,9 +286,11 @@ mod javavm {
     use crate::jni::api::global_env;
     use crate::jni::sys::*;
     use crate::jni::JNI_VERSION;
+    use log::trace;
     use std::ptr;
 
     pub extern "C" fn DestroyJavaVM(arg1: *mut JavaVM) -> jint {
+        trace!("javavm::DestroyJavaVM()");
         todo!("DestroyJavaVM")
     }
 
@@ -297,10 +299,12 @@ mod javavm {
         arg2: *mut *mut ::std::os::raw::c_void,
         arg3: *mut ::std::os::raw::c_void,
     ) -> jint {
+        trace!("javavm::AttachCurrentThread({:?}, {:?})", arg2, arg3);
         todo!("AttachCurrentThread")
     }
 
     pub extern "C" fn DetachCurrentThread(arg1: *mut JavaVM) -> jint {
+        trace!("javavm::DetachCurrentThread()");
         todo!("DetachCurrentThread")
     }
 
@@ -309,6 +313,7 @@ mod javavm {
         env_out: *mut *mut ::std::os::raw::c_void,
         version: jint,
     ) -> jint {
+        trace!("javavm::GetEnv({:?}, {:?})", env_out, version);
         // TODO get actual env for current thread, rather than a global
 
         // fake thread-local env by only returning a global to an already initialised jvm thread
@@ -333,6 +338,11 @@ mod javavm {
         arg2: *mut *mut ::std::os::raw::c_void,
         arg3: *mut ::std::os::raw::c_void,
     ) -> jint {
+        trace!(
+            "javavm::AttachCurrentThreadAsDaemon({:?}, {:?})",
+            arg2,
+            arg3
+        );
         todo!("AttachCurrentThreadAsDaemon")
     }
 }
@@ -364,6 +374,7 @@ mod jnienv {
     }
 
     pub extern "C" fn GetVersion(env: *mut JNIEnv) -> jint {
+        trace!("jni::GetVersion()");
         JNI_VERSION as jint
     }
 
@@ -374,10 +385,18 @@ mod jnienv {
         arg4: *const jbyte,
         arg5: jsize,
     ) -> jclass {
+        trace!(
+            "jni::DefineClass({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("DefineClass")
     }
 
     pub extern "C" fn FindClass(env: *mut JNIEnv, name: *const ::std::os::raw::c_char) -> jclass {
+        trace!("jni::FindClass({:?})", name);
         let name = unsafe { as_string(name) };
 
         debug!("FindClass({})", name);
@@ -423,10 +442,12 @@ mod jnienv {
     }
 
     pub extern "C" fn FromReflectedMethod(env: *mut JNIEnv, arg2: jobject) -> jmethodID {
+        trace!("jni::FromReflectedMethod({:?})", arg2);
         todo!("FromReflectedMethod")
     }
 
     pub extern "C" fn FromReflectedField(env: *mut JNIEnv, arg2: jobject) -> jfieldID {
+        trace!("jni::FromReflectedField({:?})", arg2);
         todo!("FromReflectedField")
     }
 
@@ -436,14 +457,17 @@ mod jnienv {
         arg3: jmethodID,
         arg4: jboolean,
     ) -> jobject {
+        trace!("jni::ToReflectedMethod({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("ToReflectedMethod")
     }
 
     pub extern "C" fn GetSuperclass(env: *mut JNIEnv, arg2: jclass) -> jclass {
+        trace!("jni::GetSuperclass({:?})", arg2);
         todo!("GetSuperclass")
     }
 
     pub extern "C" fn IsAssignableFrom(env: *mut JNIEnv, arg2: jclass, arg3: jclass) -> jboolean {
+        trace!("jni::IsAssignableFrom({:?}, {:?})", arg2, arg3);
         todo!("IsAssignableFrom")
     }
 
@@ -453,10 +477,12 @@ mod jnienv {
         arg3: jfieldID,
         arg4: jboolean,
     ) -> jobject {
+        trace!("jni::ToReflectedField({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("ToReflectedField")
     }
 
     pub extern "C" fn Throw(env: *mut JNIEnv, arg2: jthrowable) -> jint {
+        trace!("jni::Throw({:?})", arg2);
         todo!("Throw")
     }
 
@@ -465,35 +491,43 @@ mod jnienv {
         arg2: jclass,
         arg3: *const ::std::os::raw::c_char,
     ) -> jint {
+        trace!("jni::ThrowNew({:?}, {:?})", arg2, arg3);
         todo!("ThrowNew")
     }
 
     pub extern "C" fn ExceptionOccurred(env: *mut JNIEnv) -> jthrowable {
+        trace!("jni::ExceptionOccurred()");
         todo!("ExceptionOccurred")
     }
 
     pub extern "C" fn ExceptionDescribe(env: *mut JNIEnv) {
+        trace!("jni::ExceptionDescribe()");
         todo!("ExceptionDescribe")
     }
 
     pub extern "C" fn ExceptionClear(env: *mut JNIEnv) {
+        trace!("jni::ExceptionClear()");
         todo!("ExceptionClear")
     }
 
     pub extern "C" fn FatalError(env: *mut JNIEnv, arg2: *const ::std::os::raw::c_char) {
+        trace!("jni::FatalError({:?})", arg2);
         todo!("FatalError")
     }
 
     pub extern "C" fn PushLocalFrame(env: *mut JNIEnv, arg2: jint) -> jint {
+        trace!("jni::PushLocalFrame({:?})", arg2);
         todo!("PushLocalFrame")
     }
 
     pub extern "C" fn PopLocalFrame(env: *mut JNIEnv, arg2: jobject) -> jobject {
+        trace!("jni::PopLocalFrame({:?})", arg2);
         todo!("PopLocalFrame")
     }
 
     pub extern "C" fn NewGlobalRef(env: *mut JNIEnv, obj: jobject) -> jobject {
         // TODO keep track of global references in jvm or is it ok to leak them like this?
+        trace!("jni::NewGlobalRef({:?})", obj);
 
         // obj must have come from us, and is already a full reference, so ensure we dont drop it
         let vmobj = unsafe { as_vmref::<()>(obj) };
@@ -512,26 +546,32 @@ mod jnienv {
     }
 
     pub extern "C" fn DeleteGlobalRef(env: *mut JNIEnv, arg2: jobject) {
+        trace!("jni::DeleteGlobalRef({:?})", arg2);
         todo!("DeleteGlobalRef")
     }
 
     pub extern "C" fn DeleteLocalRef(env: *mut JNIEnv, arg2: jobject) {
+        trace!("jni::DeleteLocalRef({:?})", arg2);
         todo!("DeleteLocalRef")
     }
 
     pub extern "C" fn IsSameObject(env: *mut JNIEnv, arg2: jobject, arg3: jobject) -> jboolean {
+        trace!("jni::IsSameObject({:?}, {:?})", arg2, arg3);
         todo!("IsSameObject")
     }
 
     pub extern "C" fn NewLocalRef(env: *mut JNIEnv, arg2: jobject) -> jobject {
+        trace!("jni::NewLocalRef({:?})", arg2);
         todo!("NewLocalRef")
     }
 
     pub extern "C" fn EnsureLocalCapacity(env: *mut JNIEnv, arg2: jint) -> jint {
+        trace!("jni::EnsureLocalCapacity({:?})", arg2);
         todo!("EnsureLocalCapacity")
     }
 
     pub extern "C" fn AllocObject(env: *mut JNIEnv, arg2: jclass) -> jobject {
+        trace!("jni::AllocObject({:?})", arg2);
         todo!("AllocObject")
     }
 
@@ -541,6 +581,7 @@ mod jnienv {
         arg3: jmethodID,
         ...
     ) -> jobject {
+        trace!("jni::NewObject({:?}, {:?}, ...)", arg2, arg3);
         todo!("NewObject")
     }
 
@@ -550,6 +591,7 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *mut __va_list_tag,
     ) -> jobject {
+        trace!("jni::NewObjectV({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("NewObjectV")
     }
 
@@ -559,14 +601,17 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *const jvalue,
     ) -> jobject {
+        trace!("jni::NewObjectA({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("NewObjectA")
     }
 
     pub extern "C" fn GetObjectClass(env: *mut JNIEnv, arg2: jobject) -> jclass {
+        trace!("jni::GetObjectClass({:?})", arg2);
         todo!("GetObjectClass")
     }
 
     pub extern "C" fn IsInstanceOf(env: *mut JNIEnv, arg2: jobject, arg3: jclass) -> jboolean {
+        trace!("jni::IsInstanceOf({:?}, {:?})", arg2, arg3);
         todo!("IsInstanceOf")
     }
 
@@ -576,6 +621,7 @@ mod jnienv {
         name: *const ::std::os::raw::c_char,
         sig: *const ::std::os::raw::c_char,
     ) -> jmethodID {
+        trace!("jni::GetMethodID({:?}, {:?}, {:?})", class, name, sig);
         let class = unsafe { as_vmref::<Class>(class) };
         let name = unsafe { as_string(name) };
         let sig = unsafe { as_string(sig) };
@@ -607,6 +653,7 @@ mod jnienv {
         arg3: jmethodID,
         ...
     ) -> jobject {
+        trace!("jni::CallObjectMethod({:?}, {:?}, ...)", arg2, arg3);
         todo!("CallObjectMethod")
     }
 
@@ -616,6 +663,7 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *mut __va_list_tag,
     ) -> jobject {
+        trace!("jni::CallObjectMethodV({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("CallObjectMethodV")
     }
 
@@ -625,6 +673,7 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *const jvalue,
     ) -> jobject {
+        trace!("jni::CallObjectMethodA({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("CallObjectMethodA")
     }
 
@@ -634,6 +683,7 @@ mod jnienv {
         arg3: jmethodID,
         ...
     ) -> jboolean {
+        trace!("jni::CallBooleanMethod({:?}, {:?}, ...)", arg2, arg3);
         todo!("CallBooleanMethod")
     }
 
@@ -643,6 +693,12 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *mut __va_list_tag,
     ) -> jboolean {
+        trace!(
+            "jni::CallBooleanMethodV({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("CallBooleanMethodV")
     }
 
@@ -652,6 +708,12 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *const jvalue,
     ) -> jboolean {
+        trace!(
+            "jni::CallBooleanMethodA({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("CallBooleanMethodA")
     }
 
@@ -661,6 +723,7 @@ mod jnienv {
         arg3: jmethodID,
         ...
     ) -> jbyte {
+        trace!("jni::CallByteMethod({:?}, {:?}, ...)", arg2, arg3);
         todo!("CallByteMethod")
     }
 
@@ -670,6 +733,7 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *mut __va_list_tag,
     ) -> jbyte {
+        trace!("jni::CallByteMethodV({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("CallByteMethodV")
     }
 
@@ -679,6 +743,7 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *const jvalue,
     ) -> jbyte {
+        trace!("jni::CallByteMethodA({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("CallByteMethodA")
     }
 
@@ -688,6 +753,7 @@ mod jnienv {
         arg3: jmethodID,
         ...
     ) -> jchar {
+        trace!("jni::CallCharMethod({:?}, {:?}, ...)", arg2, arg3);
         todo!("CallCharMethod")
     }
 
@@ -697,6 +763,7 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *mut __va_list_tag,
     ) -> jchar {
+        trace!("jni::CallCharMethodV({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("CallCharMethodV")
     }
 
@@ -706,6 +773,7 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *const jvalue,
     ) -> jchar {
+        trace!("jni::CallCharMethodA({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("CallCharMethodA")
     }
 
@@ -715,6 +783,7 @@ mod jnienv {
         arg3: jmethodID,
         ...
     ) -> jshort {
+        trace!("jni::CallShortMethod({:?}, {:?}, ...)", arg2, arg3);
         todo!("CallShortMethod")
     }
 
@@ -724,6 +793,7 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *mut __va_list_tag,
     ) -> jshort {
+        trace!("jni::CallShortMethodV({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("CallShortMethodV")
     }
 
@@ -733,6 +803,7 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *const jvalue,
     ) -> jshort {
+        trace!("jni::CallShortMethodA({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("CallShortMethodA")
     }
 
@@ -742,6 +813,7 @@ mod jnienv {
         arg3: jmethodID,
         ...
     ) -> jint {
+        trace!("jni::CallIntMethod({:?}, {:?}, ...)", arg2, arg3);
         todo!("CallIntMethod")
     }
 
@@ -751,6 +823,7 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *mut __va_list_tag,
     ) -> jint {
+        trace!("jni::CallIntMethodV({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("CallIntMethodV")
     }
 
@@ -760,6 +833,7 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *const jvalue,
     ) -> jint {
+        trace!("jni::CallIntMethodA({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("CallIntMethodA")
     }
 
@@ -769,6 +843,7 @@ mod jnienv {
         arg3: jmethodID,
         ...
     ) -> jlong {
+        trace!("jni::CallLongMethod({:?}, {:?}, ...)", arg2, arg3);
         todo!("CallLongMethod")
     }
 
@@ -778,6 +853,7 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *mut __va_list_tag,
     ) -> jlong {
+        trace!("jni::CallLongMethodV({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("CallLongMethodV")
     }
 
@@ -787,6 +863,7 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *const jvalue,
     ) -> jlong {
+        trace!("jni::CallLongMethodA({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("CallLongMethodA")
     }
 
@@ -796,6 +873,7 @@ mod jnienv {
         arg3: jmethodID,
         ...
     ) -> jfloat {
+        trace!("jni::CallFloatMethod({:?}, {:?}, ...)", arg2, arg3);
         todo!("CallFloatMethod")
     }
 
@@ -805,6 +883,7 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *mut __va_list_tag,
     ) -> jfloat {
+        trace!("jni::CallFloatMethodV({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("CallFloatMethodV")
     }
 
@@ -814,6 +893,7 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *const jvalue,
     ) -> jfloat {
+        trace!("jni::CallFloatMethodA({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("CallFloatMethodA")
     }
 
@@ -823,6 +903,7 @@ mod jnienv {
         arg3: jmethodID,
         ...
     ) -> jdouble {
+        trace!("jni::CallDoubleMethod({:?}, {:?}, ...)", arg2, arg3);
         todo!("CallDoubleMethod")
     }
 
@@ -832,6 +913,7 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *mut __va_list_tag,
     ) -> jdouble {
+        trace!("jni::CallDoubleMethodV({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("CallDoubleMethodV")
     }
 
@@ -841,10 +923,12 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *const jvalue,
     ) -> jdouble {
+        trace!("jni::CallDoubleMethodA({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("CallDoubleMethodA")
     }
 
     pub unsafe extern "C" fn CallVoidMethod(env: *mut JNIEnv, arg2: jobject, arg3: jmethodID, ...) {
+        trace!("jni::CallVoidMethod({:?}, {:?}, ...)", arg2, arg3);
         todo!("CallVoidMethod")
     }
 
@@ -854,6 +938,7 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *mut __va_list_tag,
     ) {
+        trace!("jni::CallVoidMethodV({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("CallVoidMethodV")
     }
 
@@ -863,6 +948,7 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *const jvalue,
     ) {
+        trace!("jni::CallVoidMethodA({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("CallVoidMethodA")
     }
 
@@ -873,6 +959,12 @@ mod jnienv {
         arg4: jmethodID,
         ...
     ) -> jobject {
+        trace!(
+            "jni::CallNonvirtualObjectMethod({:?}, {:?}, {:?}, ...)",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("CallNonvirtualObjectMethod")
     }
 
@@ -883,6 +975,13 @@ mod jnienv {
         arg4: jmethodID,
         arg5: *mut __va_list_tag,
     ) -> jobject {
+        trace!(
+            "jni::CallNonvirtualObjectMethodV({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("CallNonvirtualObjectMethodV")
     }
 
@@ -893,6 +992,13 @@ mod jnienv {
         arg4: jmethodID,
         arg5: *const jvalue,
     ) -> jobject {
+        trace!(
+            "jni::CallNonvirtualObjectMethodA({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("CallNonvirtualObjectMethodA")
     }
 
@@ -903,6 +1009,12 @@ mod jnienv {
         arg4: jmethodID,
         ...
     ) -> jboolean {
+        trace!(
+            "jni::CallNonvirtualBooleanMethod({:?}, {:?}, {:?}, ...)",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("CallNonvirtualBooleanMethod")
     }
 
@@ -913,6 +1025,13 @@ mod jnienv {
         arg4: jmethodID,
         arg5: *mut __va_list_tag,
     ) -> jboolean {
+        trace!(
+            "jni::CallNonvirtualBooleanMethodV({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("CallNonvirtualBooleanMethodV")
     }
 
@@ -923,6 +1042,13 @@ mod jnienv {
         arg4: jmethodID,
         arg5: *const jvalue,
     ) -> jboolean {
+        trace!(
+            "jni::CallNonvirtualBooleanMethodA({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("CallNonvirtualBooleanMethodA")
     }
 
@@ -933,6 +1059,12 @@ mod jnienv {
         arg4: jmethodID,
         ...
     ) -> jbyte {
+        trace!(
+            "jni::CallNonvirtualByteMethod({:?}, {:?}, {:?}, ...)",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("CallNonvirtualByteMethod")
     }
 
@@ -943,6 +1075,13 @@ mod jnienv {
         arg4: jmethodID,
         arg5: *mut __va_list_tag,
     ) -> jbyte {
+        trace!(
+            "jni::CallNonvirtualByteMethodV({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("CallNonvirtualByteMethodV")
     }
 
@@ -953,6 +1092,13 @@ mod jnienv {
         arg4: jmethodID,
         arg5: *const jvalue,
     ) -> jbyte {
+        trace!(
+            "jni::CallNonvirtualByteMethodA({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("CallNonvirtualByteMethodA")
     }
 
@@ -963,6 +1109,12 @@ mod jnienv {
         arg4: jmethodID,
         ...
     ) -> jchar {
+        trace!(
+            "jni::CallNonvirtualCharMethod({:?}, {:?}, {:?}, ...)",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("CallNonvirtualCharMethod")
     }
 
@@ -973,6 +1125,13 @@ mod jnienv {
         arg4: jmethodID,
         arg5: *mut __va_list_tag,
     ) -> jchar {
+        trace!(
+            "jni::CallNonvirtualCharMethodV({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("CallNonvirtualCharMethodV")
     }
 
@@ -983,6 +1142,13 @@ mod jnienv {
         arg4: jmethodID,
         arg5: *const jvalue,
     ) -> jchar {
+        trace!(
+            "jni::CallNonvirtualCharMethodA({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("CallNonvirtualCharMethodA")
     }
 
@@ -993,6 +1159,12 @@ mod jnienv {
         arg4: jmethodID,
         ...
     ) -> jshort {
+        trace!(
+            "jni::CallNonvirtualShortMethod({:?}, {:?}, {:?}, ...)",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("CallNonvirtualShortMethod")
     }
 
@@ -1003,6 +1175,13 @@ mod jnienv {
         arg4: jmethodID,
         arg5: *mut __va_list_tag,
     ) -> jshort {
+        trace!(
+            "jni::CallNonvirtualShortMethodV({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("CallNonvirtualShortMethodV")
     }
 
@@ -1013,6 +1192,13 @@ mod jnienv {
         arg4: jmethodID,
         arg5: *const jvalue,
     ) -> jshort {
+        trace!(
+            "jni::CallNonvirtualShortMethodA({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("CallNonvirtualShortMethodA")
     }
 
@@ -1023,6 +1209,12 @@ mod jnienv {
         arg4: jmethodID,
         ...
     ) -> jint {
+        trace!(
+            "jni::CallNonvirtualIntMethod({:?}, {:?}, {:?}, ...)",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("CallNonvirtualIntMethod")
     }
 
@@ -1033,6 +1225,13 @@ mod jnienv {
         arg4: jmethodID,
         arg5: *mut __va_list_tag,
     ) -> jint {
+        trace!(
+            "jni::CallNonvirtualIntMethodV({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("CallNonvirtualIntMethodV")
     }
 
@@ -1043,6 +1242,13 @@ mod jnienv {
         arg4: jmethodID,
         arg5: *const jvalue,
     ) -> jint {
+        trace!(
+            "jni::CallNonvirtualIntMethodA({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("CallNonvirtualIntMethodA")
     }
 
@@ -1053,6 +1259,12 @@ mod jnienv {
         arg4: jmethodID,
         ...
     ) -> jlong {
+        trace!(
+            "jni::CallNonvirtualLongMethod({:?}, {:?}, {:?}, ...)",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("CallNonvirtualLongMethod")
     }
 
@@ -1063,6 +1275,13 @@ mod jnienv {
         arg4: jmethodID,
         arg5: *mut __va_list_tag,
     ) -> jlong {
+        trace!(
+            "jni::CallNonvirtualLongMethodV({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("CallNonvirtualLongMethodV")
     }
 
@@ -1073,6 +1292,13 @@ mod jnienv {
         arg4: jmethodID,
         arg5: *const jvalue,
     ) -> jlong {
+        trace!(
+            "jni::CallNonvirtualLongMethodA({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("CallNonvirtualLongMethodA")
     }
 
@@ -1083,6 +1309,12 @@ mod jnienv {
         arg4: jmethodID,
         ...
     ) -> jfloat {
+        trace!(
+            "jni::CallNonvirtualFloatMethod({:?}, {:?}, {:?}, ...)",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("CallNonvirtualFloatMethod")
     }
 
@@ -1093,6 +1325,13 @@ mod jnienv {
         arg4: jmethodID,
         arg5: *mut __va_list_tag,
     ) -> jfloat {
+        trace!(
+            "jni::CallNonvirtualFloatMethodV({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("CallNonvirtualFloatMethodV")
     }
 
@@ -1103,6 +1342,13 @@ mod jnienv {
         arg4: jmethodID,
         arg5: *const jvalue,
     ) -> jfloat {
+        trace!(
+            "jni::CallNonvirtualFloatMethodA({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("CallNonvirtualFloatMethodA")
     }
 
@@ -1113,6 +1359,12 @@ mod jnienv {
         arg4: jmethodID,
         ...
     ) -> jdouble {
+        trace!(
+            "jni::CallNonvirtualDoubleMethod({:?}, {:?}, {:?}, ...)",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("CallNonvirtualDoubleMethod")
     }
 
@@ -1123,6 +1375,13 @@ mod jnienv {
         arg4: jmethodID,
         arg5: *mut __va_list_tag,
     ) -> jdouble {
+        trace!(
+            "jni::CallNonvirtualDoubleMethodV({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("CallNonvirtualDoubleMethodV")
     }
 
@@ -1133,6 +1392,13 @@ mod jnienv {
         arg4: jmethodID,
         arg5: *const jvalue,
     ) -> jdouble {
+        trace!(
+            "jni::CallNonvirtualDoubleMethodA({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("CallNonvirtualDoubleMethodA")
     }
 
@@ -1143,6 +1409,12 @@ mod jnienv {
         arg4: jmethodID,
         ...
     ) {
+        trace!(
+            "jni::CallNonvirtualVoidMethod({:?}, {:?}, {:?}, ...)",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("CallNonvirtualVoidMethod")
     }
 
@@ -1153,6 +1425,13 @@ mod jnienv {
         arg4: jmethodID,
         arg5: *mut __va_list_tag,
     ) {
+        trace!(
+            "jni::CallNonvirtualVoidMethodV({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("CallNonvirtualVoidMethodV")
     }
 
@@ -1163,6 +1442,13 @@ mod jnienv {
         arg4: jmethodID,
         arg5: *const jvalue,
     ) {
+        trace!(
+            "jni::CallNonvirtualVoidMethodA({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("CallNonvirtualVoidMethodA")
     }
 
@@ -1172,6 +1458,7 @@ mod jnienv {
         name: *const ::std::os::raw::c_char,
         sig: *const ::std::os::raw::c_char,
     ) -> jfieldID {
+        trace!("jni::GetFieldID({:?}, {:?}, {:?})", class, name, sig);
         let class = unsafe { as_vmref::<Class>(class) };
         let name = unsafe { as_string(name) };
         let sig = unsafe { as_string(sig) };
@@ -1194,38 +1481,47 @@ mod jnienv {
     }
 
     pub extern "C" fn GetObjectField(env: *mut JNIEnv, arg2: jobject, arg3: jfieldID) -> jobject {
+        trace!("jni::GetObjectField({:?}, {:?})", arg2, arg3);
         todo!("GetObjectField")
     }
 
     pub extern "C" fn GetBooleanField(env: *mut JNIEnv, arg2: jobject, arg3: jfieldID) -> jboolean {
+        trace!("jni::GetBooleanField({:?}, {:?})", arg2, arg3);
         todo!("GetBooleanField")
     }
 
     pub extern "C" fn GetByteField(env: *mut JNIEnv, arg2: jobject, arg3: jfieldID) -> jbyte {
+        trace!("jni::GetByteField({:?}, {:?})", arg2, arg3);
         todo!("GetByteField")
     }
 
     pub extern "C" fn GetCharField(env: *mut JNIEnv, arg2: jobject, arg3: jfieldID) -> jchar {
+        trace!("jni::GetCharField({:?}, {:?})", arg2, arg3);
         todo!("GetCharField")
     }
 
     pub extern "C" fn GetShortField(env: *mut JNIEnv, arg2: jobject, arg3: jfieldID) -> jshort {
+        trace!("jni::GetShortField({:?}, {:?})", arg2, arg3);
         todo!("GetShortField")
     }
 
     pub extern "C" fn GetIntField(env: *mut JNIEnv, arg2: jobject, arg3: jfieldID) -> jint {
+        trace!("jni::GetIntField({:?}, {:?})", arg2, arg3);
         todo!("GetIntField")
     }
 
     pub extern "C" fn GetLongField(env: *mut JNIEnv, arg2: jobject, arg3: jfieldID) -> jlong {
+        trace!("jni::GetLongField({:?}, {:?})", arg2, arg3);
         todo!("GetLongField")
     }
 
     pub extern "C" fn GetFloatField(env: *mut JNIEnv, arg2: jobject, arg3: jfieldID) -> jfloat {
+        trace!("jni::GetFloatField({:?}, {:?})", arg2, arg3);
         todo!("GetFloatField")
     }
 
     pub extern "C" fn GetDoubleField(env: *mut JNIEnv, arg2: jobject, arg3: jfieldID) -> jdouble {
+        trace!("jni::GetDoubleField({:?}, {:?})", arg2, arg3);
         todo!("GetDoubleField")
     }
 
@@ -1235,6 +1531,7 @@ mod jnienv {
         arg3: jfieldID,
         arg4: jobject,
     ) {
+        trace!("jni::SetObjectField({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("SetObjectField")
     }
 
@@ -1244,30 +1541,37 @@ mod jnienv {
         arg3: jfieldID,
         arg4: jboolean,
     ) {
+        trace!("jni::SetBooleanField({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("SetBooleanField")
     }
 
     pub extern "C" fn SetByteField(env: *mut JNIEnv, arg2: jobject, arg3: jfieldID, arg4: jbyte) {
+        trace!("jni::SetByteField({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("SetByteField")
     }
 
     pub extern "C" fn SetCharField(env: *mut JNIEnv, arg2: jobject, arg3: jfieldID, arg4: jchar) {
+        trace!("jni::SetCharField({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("SetCharField")
     }
 
     pub extern "C" fn SetShortField(env: *mut JNIEnv, arg2: jobject, arg3: jfieldID, arg4: jshort) {
+        trace!("jni::SetShortField({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("SetShortField")
     }
 
     pub extern "C" fn SetIntField(env: *mut JNIEnv, arg2: jobject, arg3: jfieldID, arg4: jint) {
+        trace!("jni::SetIntField({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("SetIntField")
     }
 
     pub extern "C" fn SetLongField(env: *mut JNIEnv, arg2: jobject, arg3: jfieldID, arg4: jlong) {
+        trace!("jni::SetLongField({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("SetLongField")
     }
 
     pub extern "C" fn SetFloatField(env: *mut JNIEnv, arg2: jobject, arg3: jfieldID, arg4: jfloat) {
+        trace!("jni::SetFloatField({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("SetFloatField")
     }
 
@@ -1277,6 +1581,7 @@ mod jnienv {
         arg3: jfieldID,
         arg4: jdouble,
     ) {
+        trace!("jni::SetDoubleField({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("SetDoubleField")
     }
 
@@ -1286,6 +1591,7 @@ mod jnienv {
         name: *const ::std::os::raw::c_char,
         sig: *const ::std::os::raw::c_char,
     ) -> jmethodID {
+        trace!("jni::GetStaticMethodID({:?}, {:?}, {:?})", class, name, sig);
         let class = unsafe { as_vmref::<Class>(class) };
         let name = unsafe { as_string(name) };
         let sig = unsafe { as_string(sig) };
@@ -1324,6 +1630,7 @@ mod jnienv {
         arg3: jmethodID,
         ...
     ) -> jobject {
+        trace!("jni::CallStaticObjectMethod({:?}, {:?}, ...)", arg2, arg3);
         todo!("CallStaticObjectMethod")
     }
 
@@ -1333,6 +1640,12 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *mut __va_list_tag,
     ) -> jobject {
+        trace!(
+            "jni::CallStaticObjectMethodV({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("CallStaticObjectMethodV")
     }
 
@@ -1342,6 +1655,12 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *const jvalue,
     ) -> jobject {
+        trace!(
+            "jni::CallStaticObjectMethodA({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("CallStaticObjectMethodA")
     }
 
@@ -1351,6 +1670,7 @@ mod jnienv {
         arg3: jmethodID,
         ...
     ) -> jboolean {
+        trace!("jni::CallStaticBooleanMethod({:?}, {:?}, ...)", arg2, arg3);
         todo!("CallStaticBooleanMethod")
     }
 
@@ -1360,6 +1680,12 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *mut __va_list_tag,
     ) -> jboolean {
+        trace!(
+            "jni::CallStaticBooleanMethodV({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("CallStaticBooleanMethodV")
     }
 
@@ -1369,6 +1695,12 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *const jvalue,
     ) -> jboolean {
+        trace!(
+            "jni::CallStaticBooleanMethodA({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("CallStaticBooleanMethodA")
     }
 
@@ -1378,6 +1710,7 @@ mod jnienv {
         arg3: jmethodID,
         ...
     ) -> jbyte {
+        trace!("jni::CallStaticByteMethod({:?}, {:?}, ...)", arg2, arg3);
         todo!("CallStaticByteMethod")
     }
 
@@ -1387,6 +1720,12 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *mut __va_list_tag,
     ) -> jbyte {
+        trace!(
+            "jni::CallStaticByteMethodV({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("CallStaticByteMethodV")
     }
 
@@ -1396,6 +1735,12 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *const jvalue,
     ) -> jbyte {
+        trace!(
+            "jni::CallStaticByteMethodA({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("CallStaticByteMethodA")
     }
 
@@ -1405,6 +1750,7 @@ mod jnienv {
         arg3: jmethodID,
         ...
     ) -> jchar {
+        trace!("jni::CallStaticCharMethod({:?}, {:?}, ...)", arg2, arg3);
         todo!("CallStaticCharMethod")
     }
 
@@ -1414,6 +1760,12 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *mut __va_list_tag,
     ) -> jchar {
+        trace!(
+            "jni::CallStaticCharMethodV({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("CallStaticCharMethodV")
     }
 
@@ -1423,6 +1775,12 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *const jvalue,
     ) -> jchar {
+        trace!(
+            "jni::CallStaticCharMethodA({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("CallStaticCharMethodA")
     }
 
@@ -1432,6 +1790,7 @@ mod jnienv {
         arg3: jmethodID,
         ...
     ) -> jshort {
+        trace!("jni::CallStaticShortMethod({:?}, {:?}, ...)", arg2, arg3);
         todo!("CallStaticShortMethod")
     }
 
@@ -1441,6 +1800,12 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *mut __va_list_tag,
     ) -> jshort {
+        trace!(
+            "jni::CallStaticShortMethodV({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("CallStaticShortMethodV")
     }
 
@@ -1450,6 +1815,12 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *const jvalue,
     ) -> jshort {
+        trace!(
+            "jni::CallStaticShortMethodA({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("CallStaticShortMethodA")
     }
 
@@ -1459,6 +1830,7 @@ mod jnienv {
         arg3: jmethodID,
         ...
     ) -> jint {
+        trace!("jni::CallStaticIntMethod({:?}, {:?}, ...)", arg2, arg3);
         todo!("CallStaticIntMethod")
     }
 
@@ -1468,6 +1840,12 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *mut __va_list_tag,
     ) -> jint {
+        trace!(
+            "jni::CallStaticIntMethodV({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("CallStaticIntMethodV")
     }
 
@@ -1477,6 +1855,12 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *const jvalue,
     ) -> jint {
+        trace!(
+            "jni::CallStaticIntMethodA({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("CallStaticIntMethodA")
     }
 
@@ -1486,6 +1870,7 @@ mod jnienv {
         arg3: jmethodID,
         ...
     ) -> jlong {
+        trace!("jni::CallStaticLongMethod({:?}, {:?}, ...)", arg2, arg3);
         todo!("CallStaticLongMethod")
     }
 
@@ -1495,6 +1880,12 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *mut __va_list_tag,
     ) -> jlong {
+        trace!(
+            "jni::CallStaticLongMethodV({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("CallStaticLongMethodV")
     }
 
@@ -1504,6 +1895,12 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *const jvalue,
     ) -> jlong {
+        trace!(
+            "jni::CallStaticLongMethodA({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("CallStaticLongMethodA")
     }
 
@@ -1513,6 +1910,7 @@ mod jnienv {
         arg3: jmethodID,
         ...
     ) -> jfloat {
+        trace!("jni::CallStaticFloatMethod({:?}, {:?}, ...)", arg2, arg3);
         todo!("CallStaticFloatMethod")
     }
 
@@ -1522,6 +1920,12 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *mut __va_list_tag,
     ) -> jfloat {
+        trace!(
+            "jni::CallStaticFloatMethodV({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("CallStaticFloatMethodV")
     }
 
@@ -1531,6 +1935,12 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *const jvalue,
     ) -> jfloat {
+        trace!(
+            "jni::CallStaticFloatMethodA({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("CallStaticFloatMethodA")
     }
 
@@ -1540,6 +1950,7 @@ mod jnienv {
         arg3: jmethodID,
         ...
     ) -> jdouble {
+        trace!("jni::CallStaticDoubleMethod({:?}, {:?}, ...)", arg2, arg3);
         todo!("CallStaticDoubleMethod")
     }
 
@@ -1549,6 +1960,12 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *mut __va_list_tag,
     ) -> jdouble {
+        trace!(
+            "jni::CallStaticDoubleMethodV({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("CallStaticDoubleMethodV")
     }
 
@@ -1558,6 +1975,12 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *const jvalue,
     ) -> jdouble {
+        trace!(
+            "jni::CallStaticDoubleMethodA({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("CallStaticDoubleMethodA")
     }
 
@@ -1567,6 +1990,7 @@ mod jnienv {
         arg3: jmethodID,
         ...
     ) {
+        trace!("jni::CallStaticVoidMethod({:?}, {:?}, ...)", arg2, arg3);
         todo!("CallStaticVoidMethod")
     }
 
@@ -1576,6 +2000,12 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *mut __va_list_tag,
     ) {
+        trace!(
+            "jni::CallStaticVoidMethodV({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("CallStaticVoidMethodV")
     }
 
@@ -1585,6 +2015,12 @@ mod jnienv {
         arg3: jmethodID,
         arg4: *const jvalue,
     ) {
+        trace!(
+            "jni::CallStaticVoidMethodA({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("CallStaticVoidMethodA")
     }
 
@@ -1594,6 +2030,7 @@ mod jnienv {
         arg3: *const ::std::os::raw::c_char,
         arg4: *const ::std::os::raw::c_char,
     ) -> jfieldID {
+        trace!("jni::GetStaticFieldID({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("GetStaticFieldID")
     }
 
@@ -1602,6 +2039,7 @@ mod jnienv {
         arg2: jclass,
         arg3: jfieldID,
     ) -> jobject {
+        trace!("jni::GetStaticObjectField({:?}, {:?})", arg2, arg3);
         todo!("GetStaticObjectField")
     }
 
@@ -1610,14 +2048,17 @@ mod jnienv {
         arg2: jclass,
         arg3: jfieldID,
     ) -> jboolean {
+        trace!("jni::GetStaticBooleanField({:?}, {:?})", arg2, arg3);
         todo!("GetStaticBooleanField")
     }
 
     pub extern "C" fn GetStaticByteField(env: *mut JNIEnv, arg2: jclass, arg3: jfieldID) -> jbyte {
+        trace!("jni::GetStaticByteField({:?}, {:?})", arg2, arg3);
         todo!("GetStaticByteField")
     }
 
     pub extern "C" fn GetStaticCharField(env: *mut JNIEnv, arg2: jclass, arg3: jfieldID) -> jchar {
+        trace!("jni::GetStaticCharField({:?}, {:?})", arg2, arg3);
         todo!("GetStaticCharField")
     }
 
@@ -1626,14 +2067,17 @@ mod jnienv {
         arg2: jclass,
         arg3: jfieldID,
     ) -> jshort {
+        trace!("jni::GetStaticShortField({:?}, {:?})", arg2, arg3);
         todo!("GetStaticShortField")
     }
 
     pub extern "C" fn GetStaticIntField(env: *mut JNIEnv, arg2: jclass, arg3: jfieldID) -> jint {
+        trace!("jni::GetStaticIntField({:?}, {:?})", arg2, arg3);
         todo!("GetStaticIntField")
     }
 
     pub extern "C" fn GetStaticLongField(env: *mut JNIEnv, arg2: jclass, arg3: jfieldID) -> jlong {
+        trace!("jni::GetStaticLongField({:?}, {:?})", arg2, arg3);
         todo!("GetStaticLongField")
     }
 
@@ -1642,6 +2086,7 @@ mod jnienv {
         arg2: jclass,
         arg3: jfieldID,
     ) -> jfloat {
+        trace!("jni::GetStaticFloatField({:?}, {:?})", arg2, arg3);
         todo!("GetStaticFloatField")
     }
 
@@ -1650,6 +2095,7 @@ mod jnienv {
         arg2: jclass,
         arg3: jfieldID,
     ) -> jdouble {
+        trace!("jni::GetStaticDoubleField({:?}, {:?})", arg2, arg3);
         todo!("GetStaticDoubleField")
     }
 
@@ -1659,6 +2105,12 @@ mod jnienv {
         arg3: jfieldID,
         arg4: jobject,
     ) {
+        trace!(
+            "jni::SetStaticObjectField({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("SetStaticObjectField")
     }
 
@@ -1668,6 +2120,12 @@ mod jnienv {
         arg3: jfieldID,
         arg4: jboolean,
     ) {
+        trace!(
+            "jni::SetStaticBooleanField({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("SetStaticBooleanField")
     }
 
@@ -1677,6 +2135,12 @@ mod jnienv {
         arg3: jfieldID,
         arg4: jbyte,
     ) {
+        trace!(
+            "jni::SetStaticByteField({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("SetStaticByteField")
     }
 
@@ -1686,6 +2150,12 @@ mod jnienv {
         arg3: jfieldID,
         arg4: jchar,
     ) {
+        trace!(
+            "jni::SetStaticCharField({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("SetStaticCharField")
     }
 
@@ -1695,6 +2165,12 @@ mod jnienv {
         arg3: jfieldID,
         arg4: jshort,
     ) {
+        trace!(
+            "jni::SetStaticShortField({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("SetStaticShortField")
     }
 
@@ -1704,6 +2180,7 @@ mod jnienv {
         arg3: jfieldID,
         arg4: jint,
     ) {
+        trace!("jni::SetStaticIntField({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("SetStaticIntField")
     }
 
@@ -1713,6 +2190,12 @@ mod jnienv {
         arg3: jfieldID,
         arg4: jlong,
     ) {
+        trace!(
+            "jni::SetStaticLongField({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("SetStaticLongField")
     }
 
@@ -1722,6 +2205,12 @@ mod jnienv {
         arg3: jfieldID,
         arg4: jfloat,
     ) {
+        trace!(
+            "jni::SetStaticFloatField({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("SetStaticFloatField")
     }
 
@@ -1731,14 +2220,22 @@ mod jnienv {
         arg3: jfieldID,
         arg4: jdouble,
     ) {
+        trace!(
+            "jni::SetStaticDoubleField({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("SetStaticDoubleField")
     }
 
     pub extern "C" fn NewString(env: *mut JNIEnv, arg2: *const jchar, arg3: jsize) -> jstring {
+        trace!("jni::NewString({:?}, {:?})", arg2, arg3);
         todo!("NewString")
     }
 
     pub extern "C" fn GetStringLength(env: *mut JNIEnv, arg2: jstring) -> jsize {
+        trace!("jni::GetStringLength({:?})", arg2);
         todo!("GetStringLength")
     }
 
@@ -1747,10 +2244,12 @@ mod jnienv {
         arg2: jstring,
         arg3: *mut jboolean,
     ) -> *const jchar {
+        trace!("jni::GetStringChars({:?}, {:?})", arg2, arg3);
         todo!("GetStringChars")
     }
 
     pub extern "C" fn ReleaseStringChars(env: *mut JNIEnv, arg2: jstring, arg3: *const jchar) {
+        trace!("jni::ReleaseStringChars({:?}, {:?})", arg2, arg3);
         todo!("ReleaseStringChars")
     }
 
@@ -1758,10 +2257,12 @@ mod jnienv {
         env: *mut JNIEnv,
         arg2: *const ::std::os::raw::c_char,
     ) -> jstring {
+        trace!("jni::NewStringUTF({:?})", arg2);
         todo!("NewStringUTF")
     }
 
     pub extern "C" fn GetStringUTFLength(env: *mut JNIEnv, arg2: jstring) -> jsize {
+        trace!("jni::GetStringUTFLength({:?})", arg2);
         todo!("GetStringUTFLength")
     }
 
@@ -1806,6 +2307,7 @@ mod jnienv {
     }
 
     pub extern "C" fn GetArrayLength(env: *mut JNIEnv, arg2: jarray) -> jsize {
+        trace!("jni::GetArrayLength({:?})", arg2);
         todo!("GetArrayLength")
     }
 
@@ -1815,6 +2317,7 @@ mod jnienv {
         arg3: jclass,
         arg4: jobject,
     ) -> jobjectArray {
+        trace!("jni::NewObjectArray({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("NewObjectArray")
     }
 
@@ -1823,6 +2326,7 @@ mod jnienv {
         arg2: jobjectArray,
         arg3: jsize,
     ) -> jobject {
+        trace!("jni::GetObjectArrayElement({:?}, {:?})", arg2, arg3);
         todo!("GetObjectArrayElement")
     }
 
@@ -1832,38 +2336,52 @@ mod jnienv {
         arg3: jsize,
         arg4: jobject,
     ) {
+        trace!(
+            "jni::SetObjectArrayElement({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("SetObjectArrayElement")
     }
 
     pub extern "C" fn NewBooleanArray(env: *mut JNIEnv, arg2: jsize) -> jbooleanArray {
+        trace!("jni::NewBooleanArray({:?})", arg2);
         todo!("NewBooleanArray")
     }
 
     pub extern "C" fn NewByteArray(env: *mut JNIEnv, arg2: jsize) -> jbyteArray {
+        trace!("jni::NewByteArray({:?})", arg2);
         todo!("NewByteArray")
     }
 
     pub extern "C" fn NewCharArray(env: *mut JNIEnv, arg2: jsize) -> jcharArray {
+        trace!("jni::NewCharArray({:?})", arg2);
         todo!("NewCharArray")
     }
 
     pub extern "C" fn NewShortArray(env: *mut JNIEnv, arg2: jsize) -> jshortArray {
+        trace!("jni::NewShortArray({:?})", arg2);
         todo!("NewShortArray")
     }
 
     pub extern "C" fn NewIntArray(env: *mut JNIEnv, arg2: jsize) -> jintArray {
+        trace!("jni::NewIntArray({:?})", arg2);
         todo!("NewIntArray")
     }
 
     pub extern "C" fn NewLongArray(env: *mut JNIEnv, arg2: jsize) -> jlongArray {
+        trace!("jni::NewLongArray({:?})", arg2);
         todo!("NewLongArray")
     }
 
     pub extern "C" fn NewFloatArray(env: *mut JNIEnv, arg2: jsize) -> jfloatArray {
+        trace!("jni::NewFloatArray({:?})", arg2);
         todo!("NewFloatArray")
     }
 
     pub extern "C" fn NewDoubleArray(env: *mut JNIEnv, arg2: jsize) -> jdoubleArray {
+        trace!("jni::NewDoubleArray({:?})", arg2);
         todo!("NewDoubleArray")
     }
 
@@ -1872,6 +2390,7 @@ mod jnienv {
         arg2: jbooleanArray,
         arg3: *mut jboolean,
     ) -> *mut jboolean {
+        trace!("jni::GetBooleanArrayElements({:?}, {:?})", arg2, arg3);
         todo!("GetBooleanArrayElements")
     }
 
@@ -1880,6 +2399,7 @@ mod jnienv {
         arg2: jbyteArray,
         arg3: *mut jboolean,
     ) -> *mut jbyte {
+        trace!("jni::GetByteArrayElements({:?}, {:?})", arg2, arg3);
         todo!("GetByteArrayElements")
     }
 
@@ -1888,6 +2408,7 @@ mod jnienv {
         arg2: jcharArray,
         arg3: *mut jboolean,
     ) -> *mut jchar {
+        trace!("jni::GetCharArrayElements({:?}, {:?})", arg2, arg3);
         todo!("GetCharArrayElements")
     }
 
@@ -1896,6 +2417,7 @@ mod jnienv {
         arg2: jshortArray,
         arg3: *mut jboolean,
     ) -> *mut jshort {
+        trace!("jni::GetShortArrayElements({:?}, {:?})", arg2, arg3);
         todo!("GetShortArrayElements")
     }
 
@@ -1904,6 +2426,7 @@ mod jnienv {
         arg2: jintArray,
         arg3: *mut jboolean,
     ) -> *mut jint {
+        trace!("jni::GetIntArrayElements({:?}, {:?})", arg2, arg3);
         todo!("GetIntArrayElements")
     }
 
@@ -1912,6 +2435,7 @@ mod jnienv {
         arg2: jlongArray,
         arg3: *mut jboolean,
     ) -> *mut jlong {
+        trace!("jni::GetLongArrayElements({:?}, {:?})", arg2, arg3);
         todo!("GetLongArrayElements")
     }
 
@@ -1920,6 +2444,7 @@ mod jnienv {
         arg2: jfloatArray,
         arg3: *mut jboolean,
     ) -> *mut jfloat {
+        trace!("jni::GetFloatArrayElements({:?}, {:?})", arg2, arg3);
         todo!("GetFloatArrayElements")
     }
 
@@ -1928,6 +2453,7 @@ mod jnienv {
         arg2: jdoubleArray,
         arg3: *mut jboolean,
     ) -> *mut jdouble {
+        trace!("jni::GetDoubleArrayElements({:?}, {:?})", arg2, arg3);
         todo!("GetDoubleArrayElements")
     }
 
@@ -1937,6 +2463,12 @@ mod jnienv {
         arg3: *mut jboolean,
         arg4: jint,
     ) {
+        trace!(
+            "jni::ReleaseBooleanArrayElements({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("ReleaseBooleanArrayElements")
     }
 
@@ -1946,6 +2478,12 @@ mod jnienv {
         arg3: *mut jbyte,
         arg4: jint,
     ) {
+        trace!(
+            "jni::ReleaseByteArrayElements({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("ReleaseByteArrayElements")
     }
 
@@ -1955,6 +2493,12 @@ mod jnienv {
         arg3: *mut jchar,
         arg4: jint,
     ) {
+        trace!(
+            "jni::ReleaseCharArrayElements({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("ReleaseCharArrayElements")
     }
 
@@ -1964,6 +2508,12 @@ mod jnienv {
         arg3: *mut jshort,
         arg4: jint,
     ) {
+        trace!(
+            "jni::ReleaseShortArrayElements({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("ReleaseShortArrayElements")
     }
 
@@ -1973,6 +2523,12 @@ mod jnienv {
         arg3: *mut jint,
         arg4: jint,
     ) {
+        trace!(
+            "jni::ReleaseIntArrayElements({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("ReleaseIntArrayElements")
     }
 
@@ -1982,6 +2538,12 @@ mod jnienv {
         arg3: *mut jlong,
         arg4: jint,
     ) {
+        trace!(
+            "jni::ReleaseLongArrayElements({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("ReleaseLongArrayElements")
     }
 
@@ -1991,6 +2553,12 @@ mod jnienv {
         arg3: *mut jfloat,
         arg4: jint,
     ) {
+        trace!(
+            "jni::ReleaseFloatArrayElements({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("ReleaseFloatArrayElements")
     }
 
@@ -2000,6 +2568,12 @@ mod jnienv {
         arg3: *mut jdouble,
         arg4: jint,
     ) {
+        trace!(
+            "jni::ReleaseDoubleArrayElements({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("ReleaseDoubleArrayElements")
     }
 
@@ -2010,6 +2584,13 @@ mod jnienv {
         arg4: jsize,
         arg5: *mut jboolean,
     ) {
+        trace!(
+            "jni::GetBooleanArrayRegion({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("GetBooleanArrayRegion")
     }
 
@@ -2020,6 +2601,13 @@ mod jnienv {
         arg4: jsize,
         arg5: *mut jbyte,
     ) {
+        trace!(
+            "jni::GetByteArrayRegion({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("GetByteArrayRegion")
     }
 
@@ -2030,6 +2618,13 @@ mod jnienv {
         arg4: jsize,
         arg5: *mut jchar,
     ) {
+        trace!(
+            "jni::GetCharArrayRegion({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("GetCharArrayRegion")
     }
 
@@ -2040,6 +2635,13 @@ mod jnienv {
         arg4: jsize,
         arg5: *mut jshort,
     ) {
+        trace!(
+            "jni::GetShortArrayRegion({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("GetShortArrayRegion")
     }
 
@@ -2050,6 +2652,13 @@ mod jnienv {
         arg4: jsize,
         arg5: *mut jint,
     ) {
+        trace!(
+            "jni::GetIntArrayRegion({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("GetIntArrayRegion")
     }
 
@@ -2060,6 +2669,13 @@ mod jnienv {
         arg4: jsize,
         arg5: *mut jlong,
     ) {
+        trace!(
+            "jni::GetLongArrayRegion({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("GetLongArrayRegion")
     }
 
@@ -2070,6 +2686,13 @@ mod jnienv {
         arg4: jsize,
         arg5: *mut jfloat,
     ) {
+        trace!(
+            "jni::GetFloatArrayRegion({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("GetFloatArrayRegion")
     }
 
@@ -2080,6 +2703,13 @@ mod jnienv {
         arg4: jsize,
         arg5: *mut jdouble,
     ) {
+        trace!(
+            "jni::GetDoubleArrayRegion({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("GetDoubleArrayRegion")
     }
 
@@ -2090,6 +2720,13 @@ mod jnienv {
         arg4: jsize,
         arg5: *const jboolean,
     ) {
+        trace!(
+            "jni::SetBooleanArrayRegion({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("SetBooleanArrayRegion")
     }
 
@@ -2100,6 +2737,13 @@ mod jnienv {
         arg4: jsize,
         arg5: *const jbyte,
     ) {
+        trace!(
+            "jni::SetByteArrayRegion({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("SetByteArrayRegion")
     }
 
@@ -2110,6 +2754,13 @@ mod jnienv {
         arg4: jsize,
         arg5: *const jchar,
     ) {
+        trace!(
+            "jni::SetCharArrayRegion({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("SetCharArrayRegion")
     }
 
@@ -2120,6 +2771,13 @@ mod jnienv {
         arg4: jsize,
         arg5: *const jshort,
     ) {
+        trace!(
+            "jni::SetShortArrayRegion({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("SetShortArrayRegion")
     }
 
@@ -2130,6 +2788,13 @@ mod jnienv {
         arg4: jsize,
         arg5: *const jint,
     ) {
+        trace!(
+            "jni::SetIntArrayRegion({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("SetIntArrayRegion")
     }
 
@@ -2140,6 +2805,13 @@ mod jnienv {
         arg4: jsize,
         arg5: *const jlong,
     ) {
+        trace!(
+            "jni::SetLongArrayRegion({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("SetLongArrayRegion")
     }
 
@@ -2150,6 +2822,13 @@ mod jnienv {
         arg4: jsize,
         arg5: *const jfloat,
     ) {
+        trace!(
+            "jni::SetFloatArrayRegion({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("SetFloatArrayRegion")
     }
 
@@ -2160,6 +2839,13 @@ mod jnienv {
         arg4: jsize,
         arg5: *const jdouble,
     ) {
+        trace!(
+            "jni::SetDoubleArrayRegion({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("SetDoubleArrayRegion")
     }
 
@@ -2169,22 +2855,27 @@ mod jnienv {
         arg3: *const JNINativeMethod,
         arg4: jint,
     ) -> jint {
+        trace!("jni::RegisterNatives({:?}, {:?}, {:?})", arg2, arg3, arg4);
         todo!("RegisterNatives")
     }
 
     pub extern "C" fn UnregisterNatives(env: *mut JNIEnv, arg2: jclass) -> jint {
+        trace!("jni::UnregisterNatives({:?})", arg2);
         todo!("UnregisterNatives")
     }
 
     pub extern "C" fn MonitorEnter(env: *mut JNIEnv, arg2: jobject) -> jint {
+        trace!("jni::MonitorEnter({:?})", arg2);
         todo!("MonitorEnter")
     }
 
     pub extern "C" fn MonitorExit(env: *mut JNIEnv, arg2: jobject) -> jint {
+        trace!("jni::MonitorExit({:?})", arg2);
         todo!("MonitorExit")
     }
 
     pub extern "C" fn GetJavaVM(env: *mut JNIEnv, arg2: *mut *mut JavaVM) -> jint {
+        trace!("jni::GetJavaVM({:?})", arg2);
         todo!("GetJavaVM")
     }
 
@@ -2195,6 +2886,13 @@ mod jnienv {
         arg4: jsize,
         arg5: *mut jchar,
     ) {
+        trace!(
+            "jni::GetStringRegion({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("GetStringRegion")
     }
 
@@ -2205,6 +2903,13 @@ mod jnienv {
         arg4: jsize,
         arg5: *mut ::std::os::raw::c_char,
     ) {
+        trace!(
+            "jni::GetStringUTFRegion({:?}, {:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4,
+            arg5
+        );
         todo!("GetStringUTFRegion")
     }
 
@@ -2213,6 +2918,7 @@ mod jnienv {
         arg2: jarray,
         arg3: *mut jboolean,
     ) -> *mut ::std::os::raw::c_void {
+        trace!("jni::GetPrimitiveArrayCritical({:?}, {:?})", arg2, arg3);
         todo!("GetPrimitiveArrayCritical")
     }
 
@@ -2222,6 +2928,12 @@ mod jnienv {
         arg3: *mut ::std::os::raw::c_void,
         arg4: jint,
     ) {
+        trace!(
+            "jni::ReleasePrimitiveArrayCritical({:?}, {:?}, {:?})",
+            arg2,
+            arg3,
+            arg4
+        );
         todo!("ReleasePrimitiveArrayCritical")
     }
 
@@ -2230,22 +2942,27 @@ mod jnienv {
         arg2: jstring,
         arg3: *mut jboolean,
     ) -> *const jchar {
+        trace!("jni::GetStringCritical({:?}, {:?})", arg2, arg3);
         todo!("GetStringCritical")
     }
 
     pub extern "C" fn ReleaseStringCritical(env: *mut JNIEnv, arg2: jstring, arg3: *const jchar) {
+        trace!("jni::ReleaseStringCritical({:?}, {:?})", arg2, arg3);
         todo!("ReleaseStringCritical")
     }
 
     pub extern "C" fn NewWeakGlobalRef(env: *mut JNIEnv, arg2: jobject) -> jweak {
+        trace!("jni::NewWeakGlobalRef({:?})", arg2);
         todo!("NewWeakGlobalRef")
     }
 
     pub extern "C" fn DeleteWeakGlobalRef(env: *mut JNIEnv, arg2: jweak) {
+        trace!("jni::DeleteWeakGlobalRef({:?})", arg2);
         todo!("DeleteWeakGlobalRef")
     }
 
     pub extern "C" fn ExceptionCheck(env: *mut JNIEnv) -> jboolean {
+        trace!("jni::ExceptionCheck()");
         todo!("ExceptionCheck")
     }
 
@@ -2254,6 +2971,7 @@ mod jnienv {
         arg2: *mut ::std::os::raw::c_void,
         arg3: jlong,
     ) -> jobject {
+        trace!("jni::NewDirectByteBuffer({:?}, {:?})", arg2, arg3);
         todo!("NewDirectByteBuffer")
     }
 
@@ -2261,14 +2979,17 @@ mod jnienv {
         env: *mut JNIEnv,
         arg2: jobject,
     ) -> *mut ::std::os::raw::c_void {
+        trace!("jni::GetDirectBufferAddress({:?})", arg2);
         todo!("GetDirectBufferAddress")
     }
 
     pub extern "C" fn GetDirectBufferCapacity(env: *mut JNIEnv, arg2: jobject) -> jlong {
+        trace!("jni::GetDirectBufferCapacity({:?})", arg2);
         todo!("GetDirectBufferCapacity")
     }
 
     pub extern "C" fn GetObjectRefType(env: *mut JNIEnv, arg2: jobject) -> jobjectRefType {
+        trace!("jni::GetObjectRefType({:?})", arg2);
         todo!("GetObjectRefType")
     }
 }
