@@ -258,28 +258,51 @@ impl Object {
 
     pub fn string_value_utf8(&self) -> Option<String> {
         if self.class.name().as_bytes() == b"java/lang/String" {
-            if let Some(DataValue::Reference(chars)) = self.find_instance_field(
+            let value = self.find_instance_field(
                 "value".as_mstr(),
                 &DataType::Reference(Cow::Borrowed("[C".as_mstr())),
-            ) {
-                if !chars.is_null() {
-                    let chars = chars.array_unchecked();
-                    let chars = chars
-                        .iter()
-                        .map(|val| match val {
-                            DataValue::Char(c) => *c,
-                            DataValue::Int(i) => *i as u16,
-                            _ => unreachable!("expected char array but got {:?}", val),
-                        })
-                        .collect_vec();
+            );
 
-                    // TODO do this without all the allocations
-                    let tmp_str = String::from_utf16_lossy(&chars);
-                    return Some(tmp_str);
-                }
-            } else {
-                unreachable!("bad string class")
+            let count = self.find_instance_field(
+                "count".as_mstr(),
+                &DataType::Primitive(PrimitiveDataType::Int),
+            );
+
+            let offset = self.find_instance_field(
+                "offset".as_mstr(),
+                &DataType::Primitive(PrimitiveDataType::Int),
+            );
+
+            // validation done in string constructor
+
+            let (chars, count, offset) = match (value, count, offset) {
+                (
+                    Some(DataValue::Reference(chars)),
+                    Some(DataValue::Int(count)),
+                    Some(DataValue::Int(offset)),
+                ) => (chars, count, offset),
+                tup => unreachable!("bad string class ({:?})", tup),
+            };
+
+            if chars.is_null() {
+                return None;
             }
+
+            let chars = chars.array_unchecked();
+            let chars = chars
+                .iter()
+                .skip(offset as usize)
+                .take(count as usize)
+                .map(|val| match val {
+                    DataValue::Char(c) => *c,
+                    DataValue::Int(i) => *i as u16,
+                    _ => unreachable!("expected char array but got {:?}", val),
+                })
+                .collect_vec();
+
+            // TODO do this without all the allocations
+            let tmp_str = String::from_utf16_lossy(&chars);
+            return Some(tmp_str);
         }
 
         None
